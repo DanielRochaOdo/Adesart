@@ -57,6 +57,21 @@ interface Adesionista {
   external_id: string;
 }
 
+const PENDING_CADASTRO_STATUSES = new Set(['incompleto', 'erro_envio', 'adesoes_pendentes']);
+
+const shouldBlockByLocalPendingCadastro = (checkResult: any): boolean => {
+  if (!checkResult?.exists) return false;
+
+  const status = typeof checkResult.status === 'string'
+    ? checkResult.status.trim().toLowerCase()
+    : '';
+
+  // Backward compatibility: keep blocking if status is missing.
+  if (!status) return true;
+
+  return PENDING_CADASTRO_STATUSES.has(status);
+};
+
 export function NovoCadastroCard({ onSuccess }: NovoCadastroCardProps) {
   const draftHydratedRef = useRef(false);
   const [cpf, setCpf] = useState('');
@@ -216,19 +231,19 @@ export function NovoCadastroCard({ onSuccess }: NovoCadastroCardProps) {
         console.error('Erro ao verificar CPF existente:', checkError);
       }
 
-      // Se existe cadastro na base local
-      if (checkResult?.exists) {
+      // Consider duplicate only when there is an open/pending local cadastro.
+      if (shouldBlockByLocalPendingCadastro(checkResult)) {
         setCadastroExistente({
           cpf,
           cadastro: {
             id: checkResult.cadastro_id,
             nome: '',
-            status: checkResult.status,
+            status: checkResult.status || 'incompleto',
             created_at: checkResult.created_at,
             vendedor_nome: 'Não informado',
             empresa_razao_social: checkResult.empresa_nome || '',
           },
-          canContinue: checkResult.can_continue,
+          canContinue: Boolean(checkResult.can_continue),
         });
         setLoading(false);
         return;

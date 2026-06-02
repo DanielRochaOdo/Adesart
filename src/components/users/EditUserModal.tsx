@@ -13,6 +13,17 @@ interface EditUserModalProps {
   canEditRole: boolean;
 }
 
+type ProfileUpdateData = {
+  name: string;
+  email: string;
+  telefone: string | null;
+  is_active: boolean;
+  lemmit_limite_consultas: number | null;
+  role?: Profile['role'];
+  external_id?: string | null;
+  team_id?: string | null;
+};
+
 export function EditUserModal({ user, onClose, onSuccess, canEditRole }: EditUserModalProps) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,7 +74,7 @@ export function EditUserModal({ user, onClose, onSuccess, canEditRole }: EditUse
         throw new Error('Telefone deve estar no formato (XX) XXXXX XXXX');
       }
 
-      const updateData: any = {
+      const updateData: ProfileUpdateData = {
         name: formData.name,
         email: formData.email,
         telefone: telefone || null,
@@ -105,6 +116,7 @@ export function EditUserModal({ user, onClose, onSuccess, canEditRole }: EditUse
   const roleLabels: Record<Profile['role'], string> = {
     ADMINISTRADOR: 'Administrador',
     GERENTE: 'Gerente',
+    GESTOR: 'Gestor',
     CADASTRO: 'Cadastro',
     SUPERVISOR: 'Supervisor',
     VENDEDOR: 'Vendedor',

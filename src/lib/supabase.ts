@@ -20,6 +20,10 @@ export type Profile = {
   is_active: boolean;
   lemmit_limite_consultas: number | null;
   lemmit_consultas_mes_atual: number;
+  last_app_version_name: string | null;
+  last_app_version_code: number | null;
+  last_app_platform: string | null;
+  last_app_seen_at: string | null;
   created_at: string;
   updated_at: string;
 };

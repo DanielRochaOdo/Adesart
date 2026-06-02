@@ -12,6 +12,15 @@ import { usePersistentState } from '../hooks/usePersistentState';
 
 type UserWithTeam = Profile & { team_name?: string };
 
+type CreateUserPayload = {
+  name: string;
+  email: string;
+  password: string;
+  role: Profile['role'];
+  external_id?: string;
+  team_id?: string;
+};
+
 export function Users() {
   const { profile } = useAuth();
   const [users, setUsers] = useState<UserWithTeam[]>([]);
@@ -112,7 +121,7 @@ export function Users() {
 
       const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-user`;
 
-      const payload: any = {
+      const payload: CreateUserPayload = {
         name: formData.name,
         email: formData.email,
         password: formData.password,
@@ -160,6 +169,7 @@ export function Users() {
   const roleLabels: Record<Profile['role'], string> = {
     ADMINISTRADOR: 'Administrador',
     GERENTE: 'Gerente',
+    GESTOR: 'Gestor',
     CADASTRO: 'Cadastro',
     SUPERVISOR: 'Supervisor',
     VENDEDOR: 'Vendedor',
@@ -169,10 +179,60 @@ export function Users() {
   const roleBadgeColors: Record<Profile['role'], string> = {
     ADMINISTRADOR: 'bg-red-100 text-red-700 border-red-200',
     GERENTE: 'bg-blue-100 text-blue-700 border-blue-200',
+    GESTOR: 'bg-indigo-100 text-indigo-700 border-indigo-200',
     CADASTRO: 'bg-teal-100 text-teal-700 border-teal-200',
     SUPERVISOR: 'bg-purple-100 text-purple-700 border-purple-200',
     VENDEDOR: 'bg-green-100 text-green-700 border-green-200',
     ADESIONISTA: 'bg-amber-100 text-amber-700 border-amber-200',
+  };
+
+  const formatAppSeenAt = (dateString: string) => {
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date(dateString));
+  };
+
+  const appPlatformLabels: Record<string, string> = {
+    android: 'Android',
+  };
+
+  const renderAppUsage = (user: UserWithTeam) => {
+    const platform = user.last_app_platform?.toLowerCase() || null;
+    const isAndroid = platform === 'android';
+
+    if (!user.last_app_seen_at || !isAndroid) {
+      return (
+        <div className="space-y-1">
+          <span className="inline-flex px-2 py-1 rounded-lg text-xs font-medium border bg-slate-100 text-slate-600 border-slate-200">
+            App mobile: Não identificado
+          </span>
+          {user.last_app_seen_at && platform && (
+            <p className="text-xs text-slate-500">
+              Plataforma registrada: {appPlatformLabels[platform] || platform}
+            </p>
+          )}
+        </div>
+      );
+    }
+
+    const version = user.last_app_version_name
+      ? `Versão ${user.last_app_version_name}${user.last_app_version_code !== null ? ` (${user.last_app_version_code})` : ''}`
+      : null;
+
+    return (
+      <div className="space-y-1">
+        <span className="inline-flex px-2 py-1 rounded-lg text-xs font-medium border bg-emerald-100 text-emerald-700 border-emerald-200">
+          App mobile: Sim
+        </span>
+        <p className="text-xs text-slate-600">Plataforma: {appPlatformLabels[platform] || platform}</p>
+        {version && <p className="text-xs text-slate-600">{version}</p>}
+        <p className="text-xs text-slate-500">Último uso: {formatAppSeenAt(user.last_app_seen_at)}</p>
+      </div>
+    );
   };
 
   const requiresTeamAndExternal = ['CADASTRO', 'SUPERVISOR', 'VENDEDOR', 'ADESIONISTA'].includes(formData.role);
@@ -224,6 +284,7 @@ export function Users() {
                       <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">Função</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">Equipe</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">ID Externo</th>
+                      <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">App mobile</th>
                       <th className="text-left py-3 px-4 text-sm font-semibold text-slate-600">Status</th>
                       <th className="text-center py-3 px-4 text-sm font-semibold text-slate-600">Ações</th>
                     </tr>
@@ -246,6 +307,7 @@ export function Users() {
                           )}
                         </td>
                         <td className="py-3 px-4 text-slate-600">{user.external_id || '-'}</td>
+                        <td className="py-3 px-4">{renderAppUsage(user)}</td>
                         <td className="py-3 px-4">
                           {user.is_active ? (
                             <div className="flex items-center text-green-600">
@@ -314,6 +376,10 @@ export function Users() {
                           <span className="text-xs text-slate-700 font-medium">{user.external_id}</span>
                         </div>
                       )}
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="text-xs text-slate-500">App mobile</span>
+                        <div className="text-right">{renderAppUsage(user)}</div>
+                      </div>
                     </div>
                   </div>
                 ))}
