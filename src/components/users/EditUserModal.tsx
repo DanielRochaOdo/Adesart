@@ -74,7 +74,13 @@ export function EditUserModal({ user, onClose, onSuccess, canEditRole }: EditUse
         throw new Error('Telefone deve estar no formato (XX) XXXXX XXXX');
       }
 
-      const updateData: ProfileUpdateData = {
+      const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/update-user`;
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session) throw new Error('No session');
+
+      const payload: ProfileUpdateData & { user_id: string } = {
+        user_id: user.id,
         name: formData.name,
         email: formData.email,
         telefone: telefone || null,
@@ -83,23 +89,31 @@ export function EditUserModal({ user, onClose, onSuccess, canEditRole }: EditUse
       };
 
       if (canEditRole) {
-        updateData.role = formData.role;
+        payload.role = formData.role;
       }
 
       if (['CADASTRO', 'SUPERVISOR', 'VENDEDOR', 'ADESIONISTA'].includes(formData.role)) {
-        updateData.external_id = formData.external_id;
-        updateData.team_id = formData.team_id || null;
+        payload.external_id = formData.external_id;
+        payload.team_id = formData.team_id || null;
       } else {
-        updateData.external_id = null;
-        updateData.team_id = null;
+        payload.external_id = null;
+        payload.team_id = null;
       }
 
-      const { error } = await supabase
-        .from('profiles')
-        .update(updateData)
-        .eq('id', user.id);
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
 
-      if (error) throw error;
+      const result = await response.json();
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to update user');
+      }
 
       onSuccess();
       onClose();
