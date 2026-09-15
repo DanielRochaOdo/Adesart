@@ -27,7 +27,20 @@ type CadastroInput = {
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const money = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const moneyValue = (value: number) => Number(value || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatCpf = (cpf: string) => normalizeDigits(cpf).replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+const formatDateOnly = (value: Date) => new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Fortaleza",
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+}).format(value);
+const joinBeneficiaries = (names: string[]) => {
+  const cleanNames = names.map((name) => String(name || "").trim()).filter(Boolean);
+  if (cleanNames.length <= 1) return cleanNames[0] || "";
+  if (cleanNames.length === 2) return `${cleanNames[0]} e ${cleanNames[1]}`;
+  return `${cleanNames.slice(0, -1).join(", ")} e ${cleanNames[cleanNames.length - 1]}`;
+};
 const isValidCpf = (value?: string | null) => {
   const cpf = normalizeDigits(value);
   if (!/^\d{11}$/.test(cpf) || /^(\d)\1{10}$/.test(cpf)) return false;
@@ -150,30 +163,43 @@ Deno.serve(async (req: Request) => {
     };
 
     const uniquePlans = [...new Set(selectedCodes)];
+    const templateCodes = [...new Set([0, ...uniquePlans])];
     const { data: templateRows, error: templateError } = await supabase.from("contract_templates")
-      .select("id, plan_code, title, body_text, version, effective_from, effective_until, is_active").in("plan_code", uniquePlans).eq("is_active", true);
+      .select("id, plan_code, title, body_text, version, effective_from, effective_until, is_active").in("plan_code", templateCodes).eq("is_active", true);
     if (templateError) throw templateError;
     const activeTemplates = (templateRows || []).filter((item: any) => (!item.effective_from || new Date(item.effective_from).getTime() <= Date.now()) && (!item.effective_until || new Date(item.effective_until).getTime() >= Date.now()));
     const templateMap = new Map(activeTemplates.map((item: any) => [Number(item.plan_code), item]));
     const missingPlans = uniquePlans.filter((code) => !templateMap.has(code));
-    if (missingPlans.length > 0) return jsonResponse({ error: "O contrato deste plano ainda nao esta configurado.", code: "CONTRACT_NOT_CONFIGURED", missingPlans }, 409);
+    const defaultTemplate: any = templateMap.get(0);
+    if (missingPlans.length > 0 && !defaultTemplate) return jsonResponse({ error: "O contrato deste plano ainda nao esta configurado.", code: "CONTRACT_NOT_CONFIGURED", missingPlans }, 409);
 
     const dependentsSummary = normalizedDependents.length === 0 ? "Sem dependentes nesta adesao" : normalizedDependents.map((dep, index) => `${index + 1}. ${dep.nome} - ${dep.planoNome} - ${money(dep.planoValor)}`).join("\n");
     const plansSummary = [`Titular: ${normalizedCadastro.titularPlanoNome} - ${money(normalizedCadastro.titularPlanoValor)}`, ...normalizedDependents.map((dep) => `Dependente: ${dep.nome} - ${dep.planoNome} - ${money(dep.planoValor)}`)].join("\n");
+    const beneficiaries = joinBeneficiaries([normalizedCadastro.nome, ...normalizedDependents.map((dep) => dep.nome)]);
+    const totalMonthlyValue = Number(normalizedCadastro.titularPlanoValor || 0) + normalizedDependents.reduce((sum, dep) => sum + Number(dep.planoValor || 0), 0);
     const replacements = {
-      NOME_RF: normalizedCadastro.nome, CPF_RF: formatCpf(normalizedCadastro.cpf), DATA_NASCIMENTO_RF: normalizedCadastro.dataNascimento,
-      EMPRESA: String(link.empresa_nome || ""), EMPRESA_CODIGO: String(link.empresa_codigo || ""), EMAIL: confirmedEmail,
-      PLANOS: plansSummary, DEPENDENTES: dependentsSummary, DATA_ACEITE: new Date().toLocaleString("pt-BR", { timeZone: "America/Fortaleza" }),
+      NOME_RF: normalizedCadastro.nome,
+      CPF_RF: formatCpf(normalizedCadastro.cpf),
+      DATA_NASCIMENTO_RF: normalizedCadastro.dataNascimento,
+      EMPRESA: String(link.empresa_nome || ""),
+      EMPRESA_CODIGO: String(link.empresa_codigo || ""),
+      EMAIL: confirmedEmail,
+      PLANOS: plansSummary,
+      DEPENDENTES: dependentsSummary,
+      DATA_ACEITE: formatDateOnly(new Date()),
+      VALOR_DO_PLANO: moneyValue(totalMonthlyValue),
+      BENEFICIARIOS: beneficiaries,
     };
-    const sections = uniquePlans.map((code) => {
-      const template: any = templateMap.get(code);
-      return `\n\n${template.title}\nVersao ${template.version}\n\n${renderTemplate(template.body_text, replacements)}`;
-    });
-    const contractText = [
-      "CONTRATO DE ADESAO ODONTOART", "", `Responsavel financeiro: ${normalizedCadastro.nome}`, `CPF: ${formatCpf(normalizedCadastro.cpf)}`,
-      `Empresa: ${link.empresa_nome} (codigo ${link.empresa_codigo})`, `E-mail confirmado: ${confirmedEmail}`, "", "PLANOS E VALORES", plansSummary,
-      "", "DEPENDENTES", dependentsSummary, ...sections,
-    ].join("\n").trim();
+
+    const templatesToRender: any[] = defaultTemplate && missingPlans.length > 0
+      ? [defaultTemplate]
+      : uniquePlans.map((code) => templateMap.get(code)).filter(Boolean);
+    const contractText = templatesToRender
+      .map((template) => renderTemplate(String(template.body_text || ""), replacements).trim())
+      .filter(Boolean)
+      .join("\n\n")
+      .trim();
+    if (!contractText) return jsonResponse({ error: "O contrato deste plano ainda nao esta configurado.", code: "CONTRACT_NOT_CONFIGURED", missingPlans: uniquePlans }, 409);
 
     const snapshot = {
       version: 1, preparedAt: new Date().toISOString(),
@@ -182,13 +208,18 @@ Deno.serve(async (req: Request) => {
         empresaExigeMatricula: Number(link.empresa_exige_matricula || 0), vendedorId: link.vendedor_id || null, vendedorCodigo: String(link.vendedor_codigo || ""),
         vendedorNome: String(link.vendedor_nome || ""), createdBy: link.created_by, teamId: link.team_id || null,
       },
-      cadastro: normalizedCadastro, confirmedEmail,
+      cadastro: {
+        ...normalizedCadastro,
+        valorMensalTotal: totalMonthlyValue,
+        beneficiarios: [normalizedCadastro.nome, ...normalizedDependents.map((dep) => dep.nome)],
+      },
+      confirmedEmail,
     };
     const contractHash = await sha256(contractText);
     const dataHash = await sha256(stableStringify(snapshot));
     const contractToken = randomToken();
-    const templateIds = uniquePlans.map((code) => (templateMap.get(code) as any).id);
-    const templateVersions = Object.fromEntries(uniquePlans.map((code) => [String(code), Number((templateMap.get(code) as any).version)]));
+    const templateIds = templatesToRender.map((template) => template.id);
+    const templateVersions = Object.fromEntries(templatesToRender.map((template) => [String(template.plan_code), Number(template.version)]));
 
     await supabase.from("public_contract_sessions").update({ status: "superseded", updated_at: new Date().toISOString() }).eq("attempt_id", attempt.id).eq("status", "prepared");
     const { data: session, error: sessionError } = await supabase.from("public_contract_sessions").insert({
