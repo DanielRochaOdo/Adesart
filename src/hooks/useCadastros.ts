@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -7,8 +7,65 @@ const ERP_ABORT_FRIENDLY_MESSAGE =
 
 const ERP_SITUACOES_ATIVAS = [1, 4, 6];
 const inFlightCadastroEnvios = new Map<string, Promise<any>>();
+const PENDING_CADASTRO_STATUSES = ['incompleto', 'adesoes_pendentes'] as const;
+
+type CadastroListStatus = 'pendentes' | 'enviados';
+
+// As listas nao precisam dos payloads brutos usados apenas no detalhamento.
+// Buscar somente os campos de exibicao reduz bastante o tempo e o tamanho da resposta.
+const CADASTRO_LIST_COLUMNS = [
+  'id',
+  'status',
+  'tipo_cadastro',
+  'created_by',
+  'team_id',
+  'cpf',
+  'nome',
+  'data_nascimento',
+  'sexo',
+  'sexo_codigo',
+  'nome_mae',
+  'contatos',
+  'endereco',
+  'cliente_sera_usuario',
+  'motivo_bloqueio',
+  'erp_dados_associado',
+  'empresa_id',
+  'empresa_nome',
+  'empresa_cnpj',
+  'empresa_codigo',
+  'empresa_exige_matricula',
+  'numero_matricula',
+  'dependentes',
+  'contatos_responsavel_financeiro',
+  'responsavel_financeiro_codigo',
+  'responsavel_financeiro_nome',
+  'responsavel_financeiro_cpf',
+  'parentesco',
+  'plano_codigo',
+  'plano_nome',
+  'status_adesao_id',
+  'codigo_contrato',
+  'created_at',
+  'updated_at',
+  'vendedor_id',
+  'vendedor_codigo',
+  'vendedor_nome',
+  'adesionista_id',
+  'adesionista_codigo',
+  'adesionista_nome',
+  'arquivo_path',
+].join(', ');
 
 const normalizeCpf = (value?: string | null) => (value || '').replace(/\D/g, '');
+
+const sortCadastrosByUpdatedAt = (items: Cadastro[]) => (
+  [...items].sort((a, b) => {
+    const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+    const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+    return dateB - dateA;
+  })
+);
 
 const isAbortLikeError = (error: unknown): boolean => {
   if (!error) return false;
@@ -46,7 +103,7 @@ const isAbortLikeError = (error: unknown): boolean => {
 
 export interface Cadastro {
   id: string;
-  status: 'incompleto' | 'enviado';
+  status: 'incompleto' | 'enviado' | 'erro_envio' | 'adesoes_pendentes';
   tipo_cadastro: 'cadastro' | 'inclusao_dependente';
   created_by: string;
   team_id: string | null;
@@ -88,6 +145,7 @@ export interface Cadastro {
   plano_codigo: number | null;
   plano_nome: string | null;
   status_adesao_id: string | null;
+  codigo_contrato: string | null;
   data_envio?: string | null;
   created_at: string;
   updated_at: string;
@@ -138,15 +196,11 @@ export function useCadastros() {
   });
   const [loading, setLoading] = useState(false);
   const [loadingStats, setLoadingStats] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const loadedStatusesRef = useRef<Set<CadastroListStatus>>(new Set());
+  const inFlightListRequestsRef = useRef<Map<CadastroListStatus, Promise<void>>>(new Map());
+  const activeListRequestsRef = useRef(0);
   const { profile } = useAuth();
-
-  const sortCadastrosByUpdatedAt = (items: Cadastro[]) => (
-    [...items].sort((a, b) => {
-      const dateA = a.updated_at ? new Date(a.updated_at).getTime() : 0;
-      const dateB = b.updated_at ? new Date(b.updated_at).getTime() : 0;
-      return dateB - dateA;
-    })
-  );
 
   const upsertCadastroState = (cadastro: Cadastro) => {
     setCadastros((prev) => {
@@ -165,47 +219,84 @@ export function useCadastros() {
     setCadastros((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const fetchCadastros = async () => {
-    try {
-      setLoading(true);
-
-      let allData: any[] = [];
-      let rangeStart = 0;
-      const rangeSize = 1000;
-      let hasMore = true;
-
-      while (hasMore) {
-        const { data: chunk, error } = await supabase
-          .from('cadastros')
-          .select('*')
-          .order('updated_at', { ascending: false })
-          .range(rangeStart, rangeStart + rangeSize - 1);
-
-        if (error) {
-          console.error('Erro ao buscar cadastros:', error);
-          throw error;
-        }
-
-        if (chunk && chunk.length > 0) {
-          allData = [...allData, ...chunk];
-
-          if (chunk.length < rangeSize) {
-            hasMore = false;
-          } else {
-            rangeStart += rangeSize;
-          }
-        } else {
-          hasMore = false;
-        }
-      }
-
-      setCadastros(allData || []);
-    } catch (error) {
-      console.error('Erro fatal ao buscar cadastros:', error);
-    } finally {
-      setLoading(false);
+  const fetchCadastros = useCallback(async (listStatus: CadastroListStatus, force = false) => {
+    if (!force && loadedStatusesRef.current.has(listStatus)) {
+      return;
     }
-  };
+
+    const inFlightRequest = inFlightListRequestsRef.current.get(listStatus);
+    if (inFlightRequest) {
+      return inFlightRequest;
+    }
+
+    const request = (async () => {
+      activeListRequestsRef.current += 1;
+      setLoading(true);
+      setError(null);
+
+      try {
+        const statuses = listStatus === 'pendentes' ? PENDING_CADASTRO_STATUSES : ['enviado'];
+        const allData: Cadastro[] = [];
+        const rangeSize = 1000;
+        let rangeStart = 0;
+
+        // O range continua necessario para bases maiores que o limite padrao do Supabase.
+        while (true) {
+          let query = supabase
+            .from('cadastros')
+            .select(CADASTRO_LIST_COLUMNS)
+            .order('updated_at', { ascending: false })
+            .order('id', { ascending: false })
+            .range(rangeStart, rangeStart + rangeSize - 1);
+
+          query = query.in('status', statuses);
+
+          const { data: chunk, error: queryError } = await query;
+
+          if (queryError) {
+            throw queryError;
+          }
+
+          if (!chunk || chunk.length === 0) {
+            break;
+          }
+
+          allData.push(...(chunk as unknown as Cadastro[]));
+          if (chunk.length < rangeSize) {
+            break;
+          }
+
+          rangeStart += rangeSize;
+        }
+
+        setCadastros((previous) => {
+          const belongsToLoadedStatus = (cadastro: Cadastro) => (
+            listStatus === 'pendentes'
+              ? PENDING_CADASTRO_STATUSES.includes(cadastro.status as (typeof PENDING_CADASTRO_STATUSES)[number])
+              : cadastro.status === 'enviado'
+          );
+
+          return sortCadastrosByUpdatedAt([
+            ...previous.filter((cadastro) => !belongsToLoadedStatus(cadastro)),
+            ...allData,
+          ]);
+        });
+        loadedStatusesRef.current.add(listStatus);
+      } catch (fetchError) {
+        console.error('Erro ao buscar cadastros:', fetchError);
+        setError('Não foi possível carregar os cadastros. Tente novamente.');
+      } finally {
+        activeListRequestsRef.current = Math.max(0, activeListRequestsRef.current - 1);
+        if (activeListRequestsRef.current === 0) {
+          setLoading(false);
+        }
+        inFlightListRequestsRef.current.delete(listStatus);
+      }
+    })();
+
+    inFlightListRequestsRef.current.set(listStatus, request);
+    return request;
+  }, []);
 
   const fetchStats = async () => {
     if (!profile?.id) {
@@ -940,12 +1031,10 @@ export function useCadastros() {
 
   const canDelete = profile?.role === 'ADMINISTRADOR';
 
-  // Carrega cadastros sob demanda
-  const loadCadastros = async () => {
-    if (cadastros.length === 0) {
-      await fetchCadastros();
-    }
-  };
+  // Carrega somente a lista solicitada e reaproveita o resultado ao trocar de aba.
+  const loadCadastros = useCallback(async (listStatus: CadastroListStatus, force = false) => {
+    await fetchCadastros(listStatus, force);
+  }, [fetchCadastros]);
 
   // Carrega stats automaticamente quando o profile está disponível
   useEffect(() => {
@@ -960,7 +1049,8 @@ export function useCadastros() {
   };
 
   const refresh = async () => {
-    await fetchCadastros();
+    const loadedStatuses = Array.from(loadedStatusesRef.current);
+    await Promise.all(loadedStatuses.map((listStatus) => fetchCadastros(listStatus, true)));
     await fetchStats();
   };
 
@@ -969,6 +1059,7 @@ export function useCadastros() {
     stats,
     loading,
     loadingStats,
+    error,
     canDelete,
     checkERPAssociado,
     consultarCPF,
