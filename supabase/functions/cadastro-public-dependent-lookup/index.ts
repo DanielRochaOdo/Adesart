@@ -31,6 +31,64 @@ const safeLog = async (supabase: any, payload: Record<string, unknown>) => {
   }
 };
 
+const isActiveErpStatus = (dep: any) => {
+  const statusCode = Number(dep?.codigoSituacao);
+  const statusName = String(dep?.nomeSituacao || "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  return statusCode === 1 || statusName === "ATIVO";
+};
+
+const checkErpEligibility = async (cpf: string) => {
+  const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
+  let ERP_BASE_URL = Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
+
+  if (!ERP_TOKEN) throw new Error("ERP_TOKEN not configured");
+  if (!/^https?:\/\//i.test(ERP_BASE_URL)) ERP_BASE_URL = `https://${ERP_BASE_URL}`;
+  ERP_BASE_URL = ERP_BASE_URL.replace(/\/+$/, "");
+
+  const url = `${ERP_BASE_URL}/v2/api/associados?token=${encodeURIComponent(ERP_TOKEN)}&cpfAssociado=${cpf}&incluirAns=true`;
+  const response = await fetch(url, { headers: { Accept: "application/json" } });
+  if (!response.ok) throw new Error("ERP_VALIDATION_UNAVAILABLE");
+
+  const result = await response.json();
+  const records = Array.isArray(result?.dados) ? result.dados : [];
+
+  for (const associado of records) {
+    const dependentes = Array.isArray(associado?.dependentes) ? associado.dependentes : [];
+    const exactMatches = dependentes.filter(
+      (dep: any) => normalizeDigits(dep?.numeroCpfDependendente ?? dep?.numeroCpfDependente) === cpf,
+    );
+
+    let candidates = exactMatches;
+
+    if (candidates.length === 0 && normalizeDigits(associado?.cpf) === cpf && dependentes.length > 0) {
+      candidates = [dependentes[0]];
+    }
+
+    for (const dep of candidates) {
+      if (isActiveErpStatus(dep)) {
+        return {
+          eligible: false,
+          activeRecord: {
+            codigoAssociado: associado?.codigo ?? null,
+            codigoEmpresa: associado?.codigoDaEmpresa ?? null,
+            codigoDependente: dep?.codigoDependente ?? null,
+            codigoPlano: dep?.codigoPlano ?? null,
+            codigoSituacao: dep?.codigoSituacao ?? null,
+            nomeSituacao: dep?.nomeSituacao ?? null,
+          },
+        };
+      }
+    }
+  }
+
+  return { eligible: true, activeRecord: null };
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Metodo nao permitido" }, 405);
@@ -54,6 +112,44 @@ Deno.serve(async (req: Request) => {
     const titularCpf = normalizeDigits(attempt.profile_snapshot?.cpf);
     if (titularCpf && titularCpf === cpf) {
       return jsonResponse({ error: "O CPF do dependente nao pode ser o mesmo do responsavel financeiro", code: "SAME_AS_HOLDER" }, 400);
+    }
+
+    let erpEligibility: Awaited<ReturnType<typeof checkErpEligibility>>;
+    try {
+      erpEligibility = await checkErpEligibility(cpf);
+    } catch (erpError) {
+      await safeLog(supabase, {
+        endpoint: "cadastro-public-dependent-lookup:erp-eligibility",
+        method: "GET",
+        request_body: { attempt_id: attempt.id, cpf_hash: await hashSensitiveValue(cpf) },
+        response_body: { eligible: null },
+        status_code: 503,
+        success: false,
+        error_message: erpError instanceof Error ? erpError.message : "ERP_VALIDATION_UNAVAILABLE",
+        duration_ms: Date.now() - startedAt,
+      });
+      return jsonResponse({
+        error: "Nao foi possivel verificar a situacao do dependente no ERP. Tente novamente.",
+        code: "ERP_UNAVAILABLE",
+      }, 503);
+    }
+
+    await safeLog(supabase, {
+      endpoint: "cadastro-public-dependent-lookup:erp-eligibility",
+      method: "GET",
+      request_body: { attempt_id: attempt.id, cpf_hash: await hashSensitiveValue(cpf) },
+      response_body: { eligible: erpEligibility.eligible, activeRecord: erpEligibility.activeRecord },
+      status_code: 200,
+      success: true,
+      duration_ms: Date.now() - startedAt,
+    });
+
+    if (!erpEligibility.eligible) {
+      return jsonResponse({
+        error: "Este CPF ja possui plano ativo no sistema e nao pode ser incluido como dependente por este link.",
+        code: "ACTIVE_IN_ERP",
+        activeRecord: erpEligibility.activeRecord,
+      }, 409);
     }
 
     const apiKey = Deno.env.get("LEMMIT_API_KEY");
