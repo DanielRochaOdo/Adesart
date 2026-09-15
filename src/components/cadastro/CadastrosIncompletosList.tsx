@@ -64,7 +64,8 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
   const [currentPage, setCurrentPage] = useState(1);
 
   const ITEMS_PER_PAGE = 12;
-  const incompletos = cadastros.filter((c) => c.status === 'incompleto');
+  // "adesoes_pendentes" e "incompleto" representam a mesma fila na tela.
+  const incompletos = cadastros.filter((c) => c.status === 'incompleto' || c.status === 'adesoes_pendentes');
 
   const vendedoresUnicos = useMemo(() => {
     const vendedoresSet = new Map<string, string>();

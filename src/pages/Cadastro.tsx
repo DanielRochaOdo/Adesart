@@ -24,7 +24,7 @@ export function Cadastro() {
   console.log('[Cadastro] 🔄 Componente renderizado');
 
   const { profile } = useAuth();
-  const { cadastros, stats, loading, loadCadastros, loadStats, refresh } = useCadastros();
+  const { cadastros, stats, loading, error, loadCadastros, refresh } = useCadastros();
   const [activeTab, setActiveTab] = useState<'novo' | 'link' | 'dependente' | 'incompletos' | 'completos'>('novo');
   const [selectedCadastro, setSelectedCadastro] = useState<CadastroType | null>(null);
   const [showInclusaoDependente, setShowInclusaoDependente] = useState(false);
@@ -33,12 +33,6 @@ export function Cadastro() {
   console.log('[Cadastro] 📊 Stats:', stats);
   console.log('[Cadastro] 📋 Cadastros length:', cadastros.length);
   console.log('[Cadastro] ⏳ Loading:', loading);
-
-  // Carrega stats apenas quando abrir as abas que precisam dos badges
-  useEffect(() => {
-    console.log('[Cadastro] 🔄 useEffect loadStats iniciado');
-    loadStats();
-  }, []);
 
   useEffect(() => {
     if (!profile?.id || pageStateHydratedRef.current) return;
@@ -91,6 +85,20 @@ export function Cadastro() {
     localStorage.setItem(storageKey, JSON.stringify(pageState));
   }, [profile?.id, activeTab, selectedCadastro?.id, showInclusaoDependente]);
 
+  useEffect(() => {
+    if (!pageStateHydratedRef.current) return;
+
+    const listStatus = activeTab === 'incompletos'
+      ? 'pendentes'
+      : activeTab === 'completos'
+        ? 'enviados'
+        : null;
+
+    if (listStatus) {
+      void loadCadastros(listStatus);
+    }
+  }, [activeTab, loadCadastros]);
+
   const handleNewCadastroSuccess = async (cadastro: CadastroType, isBlocked: boolean = false) => {
     await refresh();
 
@@ -101,20 +109,18 @@ export function Cadastro() {
     }
   };
 
-  const handleTabChange = async (tab: 'novo' | 'link' | 'dependente' | 'incompletos' | 'completos') => {
+  const handleTabChange = (tab: 'novo' | 'link' | 'dependente' | 'incompletos' | 'completos') => {
     console.log('[Cadastro] 🔄 handleTabChange para tab:', tab);
     console.log('[Cadastro] 📋 Cadastros length atual:', cadastros.length);
 
     setActiveTab(tab);
-
-    // Carrega cadastros apenas quando abrir abas que precisam deles
-    if ((tab === 'incompletos' || tab === 'completos') && cadastros.length === 0) {
-      console.log('[Cadastro] 📥 Chamando loadCadastros...');
-      await loadCadastros();
-    } else {
-      console.log('[Cadastro] ⏭️ Pulando loadCadastros');
-    }
   };
+
+  const activeListStatus = activeTab === 'incompletos'
+    ? 'pendentes'
+    : activeTab === 'completos'
+      ? 'enviados'
+      : null;
 
   const handleSelectCadastro = (cadastro: CadastroType) => {
     setSelectedCadastro(cadastro);
@@ -218,6 +224,17 @@ export function Cadastro() {
         {loading ? (
           <div className="flex items-center justify-center py-8 sm:py-12">
             <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-emerald-600 animate-spin" />
+          </div>
+        ) : error && activeListStatus ? (
+          <div className="bg-white rounded-xl shadow-sm border border-red-200 p-8 text-center">
+            <p className="text-red-700 font-medium">{error}</p>
+            <button
+              type="button"
+              onClick={() => void loadCadastros(activeListStatus, true)}
+              className="mt-4 px-4 py-2 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 transition-colors"
+            >
+              Tentar novamente
+            </button>
           </div>
         ) : (
           <div className="pb-4 sm:pb-8">

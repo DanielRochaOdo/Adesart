@@ -1,7 +1,8 @@
 import { ReactNode, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, Users, Briefcase, User as UserIcon, LayoutDashboard, Menu, X, FileText, Settings, Activity, Upload, ChevronDown, Trash2 } from 'lucide-react';
+import { LogOut, Users, Briefcase, User as UserIcon, LayoutDashboard, Menu, X, FileText, Settings, Activity, Upload, ChevronDown, Trash2, Sun, Moon } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface LayoutProps {
   children: ReactNode;
@@ -9,6 +10,7 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const { profile, signOut } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -53,7 +55,7 @@ export function Layout({ children }: LayoutProps) {
   const isConfigActive = configMenuItems.some(item => item.show && location.pathname === item.path);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 text-slate-800">
       <nav className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
         <div className="mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex justify-between h-14 sm:h-16">
@@ -137,6 +139,15 @@ export function Layout({ children }: LayoutProps) {
                 <div className="text-sm font-medium text-slate-900 truncate max-w-[120px]">{profile?.name}</div>
                 <div className="text-xs text-slate-500">{profile?.role}</div>
               </div>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 rounded-lg transition-colors"
+                aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
+                title={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
+              >
+                {theme === 'dark' ? <Sun className="w-4 h-4 sm:w-5 sm:h-5" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />}
+              </button>
               <button
                 onClick={handleSignOut}
                 className="flex items-center px-2 sm:px-3 py-1.5 sm:py-2 text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 rounded-lg transition-colors"
