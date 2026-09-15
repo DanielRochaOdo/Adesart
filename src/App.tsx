@@ -35,6 +35,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/adesao/:token" element={<PublicCadastroLink />} />
+      <Route path="/adesao" element={<PublicCadastroLink />} />
       <Route path="/preview/link-plano" element={<PublicCadastroLinkPreview />} />
       <Route
         path="/login"

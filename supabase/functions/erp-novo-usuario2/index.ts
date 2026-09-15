@@ -1,208 +1,37 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { corsHeaders, createServiceClient, jsonResponse, requireInternalUser } from "../_shared/public-flow.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, X-Idempotency-Key, X-Cadastro-Id",
-};
-
-async function saveLog(
-  supabase: any,
-  logData: {
-    user_id?: string;
-    user_email?: string;
-    endpoint: string;
-    method: string;
-    request_body: any;
-    response_body?: any;
-    status_code?: number;
-    success: boolean;
-    error_message?: string;
-    duration_ms: number;
+const extractMessage = (payload: any) => {
+  for (const value of [payload?.message, payload?.mensagem, payload?.error, payload?.dados?.mensagem, payload?.data?.mensagem]) {
+    if (typeof value === "string" && value.trim()) return value.trim();
   }
-) {
-  try {
-    await supabase.from("api_logs").insert(logData);
-  } catch (error) {
-    console.error("Error saving log:", error);
-  }
-}
-
-const isUuid = (value: string) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-
-const extractErpMessage = (payload: any): string | null => {
-  if (!payload || typeof payload !== "object") return null;
-
-  const candidates = [
-    payload.message,
-    payload.mensagem,
-    payload.error,
-    payload.data?.message,
-    payload.data?.mensagem,
-    payload.details?.message,
-    payload.details?.mensagem,
-    Array.isArray(payload.errors) ? payload.errors[0] : null,
-    Array.isArray(payload.data?.errors) ? payload.data.errors[0] : null,
-    Array.isArray(payload.details?.errors) ? payload.details.errors[0] : null,
-  ];
-
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
-
-  return null;
+  return "Erro ao enviar cadastro para o ERP";
 };
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
-  }
+  if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
+  if (req.method !== "POST") return jsonResponse({ error: "Metodo nao permitido" }, 405);
 
-  const startTime = Date.now();
-  let userId: string | undefined;
-  let userEmail: string | undefined;
-  let requestBody: any = {};
-  let responseBody: any;
-  let statusCode = 200;
-  let errorMessage: string | undefined;
-
-  const idempotencyKey = req.headers.get("X-Idempotency-Key")?.trim() || req.headers.get("x-idempotency-key")?.trim() || "";
-  const cadastroIdHeader = req.headers.get("X-Cadastro-Id")?.trim() || req.headers.get("x-cadastro-id")?.trim() || "";
-
-  const enrichRequestBodyForLog = (body: any) => {
-    if (body && typeof body === "object" && !Array.isArray(body)) {
-      return {
-        ...body,
-        ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
-        ...(cadastroIdHeader ? { cadastro_id: cadastroIdHeader } : {}),
-      };
-    }
-
-    return {
-      payload: body,
-      ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
-      ...(cadastroIdHeader ? { cadastro_id: cadastroIdHeader } : {}),
-    };
-  };
-
-  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const supabase = createServiceClient();
+  const auth = await requireInternalUser(req, supabase);
+  if (!auth) return jsonResponse({ error: "Autenticacao obrigatoria" }, 401);
 
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (authHeader) {
-      const token = authHeader.replace("Bearer ", "");
-      const {
-        data: { user },
-      } = await supabase.auth.getUser(token);
-      if (user) {
-        userId = user.id;
-        userEmail = user.email;
-      }
-    }
+    const requestBody = await req.json();
+    if (!requestBody?.dados?.responsavelFinanceiro) return jsonResponse({ error: "Payload invalido" }, 400);
 
-    const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
-    const ERP_URL = Deno.env.get("ERP_URL") || "https://odontoart.s4e.com.br/api/vendedor/NovoUsuario2";
+    const cadastroId = (req.headers.get("X-Cadastro-Id") || req.headers.get("x-cadastro-id") || "").trim();
+    const idempotencyKey = (req.headers.get("X-Idempotency-Key") || req.headers.get("x-idempotency-key") || "").trim();
 
-    if (!ERP_TOKEN) {
-      throw new Error("ERP_TOKEN not configured");
-    }
-
-    requestBody = await req.json();
-
-    if (!requestBody || !requestBody.dados) {
-      statusCode = 400;
-      errorMessage = "Payload invalido: campo 'dados' e obrigatorio";
-      responseBody = { error: errorMessage };
-
-      await saveLog(supabase, {
-        user_id: userId,
-        user_email: userEmail,
-        endpoint: "erp-novo-usuario2",
-        method: "POST",
-        request_body: enrichRequestBodyForLog(requestBody),
-        response_body: responseBody,
-        status_code: statusCode,
-        success: false,
-        error_message: errorMessage,
-        duration_ms: Date.now() - startTime,
-      });
-
-      return new Response(JSON.stringify(responseBody), {
-        status: statusCode,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (!requestBody.dados.responsavelFinanceiro) {
-      statusCode = 400;
-      errorMessage = "Payload invalido: 'responsavelFinanceiro' e obrigatorio";
-      responseBody = { error: errorMessage };
-
-      await saveLog(supabase, {
-        user_id: userId,
-        user_email: userEmail,
-        endpoint: "erp-novo-usuario2",
-        method: "POST",
-        request_body: enrichRequestBodyForLog(requestBody),
-        response_body: responseBody,
-        status_code: statusCode,
-        success: false,
-        error_message: errorMessage,
-        duration_ms: Date.now() - startTime,
-      });
-
-      return new Response(JSON.stringify(responseBody), {
-        status: statusCode,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (cadastroIdHeader && isUuid(cadastroIdHeader)) {
-      const { data: existingCadastro, error: existingCadastroError } = await supabase
-        .from("cadastros")
-        .select("status, erp_response")
-        .eq("id", cadastroIdHeader)
-        .maybeSingle();
-
-      if (!existingCadastroError && existingCadastro?.status === "enviado" && existingCadastro?.erp_response) {
-        const existingResponse = existingCadastro.erp_response;
-
-        responseBody =
-          typeof existingResponse === "object" && existingResponse !== null
-            ? { ...existingResponse, idempotent: true, reused: true, reuseSource: "cadastros" }
-            : { success: true, data: existingResponse, idempotent: true, reused: true, reuseSource: "cadastros" };
-
-        await saveLog(supabase, {
-          user_id: userId,
-          user_email: userEmail,
-          endpoint: "erp-novo-usuario2",
-          method: "POST",
-          request_body: enrichRequestBodyForLog(requestBody),
-          response_body: responseBody,
-          status_code: 200,
-          success: true,
-          duration_ms: Date.now() - startTime,
-        });
-
-        return new Response(JSON.stringify(responseBody), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+    if (cadastroId) {
+      const { data: existing } = await supabase.from("cadastros").select("status, erp_response").eq("id", cadastroId).maybeSingle();
+      if (existing?.status === "enviado" && existing?.erp_response) {
+        return jsonResponse({ ...(existing.erp_response as Record<string, unknown>), idempotent: true, reused: true });
       }
     }
 
     if (idempotencyKey) {
-      const { data: existingLog } = await supabase
-        .from("api_logs")
+      const { data: existingLog } = await supabase.from("api_logs")
         .select("response_body")
         .eq("endpoint", "erp-novo-usuario2")
         .eq("success", true)
@@ -210,123 +39,42 @@ Deno.serve(async (req: Request) => {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-
       if (existingLog?.response_body) {
-        responseBody =
-          typeof existingLog.response_body === "object" && existingLog.response_body !== null
-            ? { ...existingLog.response_body, idempotent: true, reused: true, reuseSource: "api_logs" }
-            : { success: true, data: existingLog.response_body, idempotent: true, reused: true, reuseSource: "api_logs" };
-
-        await saveLog(supabase, {
-          user_id: userId,
-          user_email: userEmail,
-          endpoint: "erp-novo-usuario2",
-          method: "POST",
-          request_body: enrichRequestBodyForLog(requestBody),
-          response_body: responseBody,
-          status_code: 200,
-          success: true,
-          duration_ms: Date.now() - startTime,
-        });
-
-        return new Response(JSON.stringify(responseBody), {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        return jsonResponse({ ...(existingLog.response_body as Record<string, unknown>), idempotent: true, reused: true });
       }
     }
 
-    const erpResponse = await fetch(ERP_URL, {
+    const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
+    const ERP_URL = Deno.env.get("ERP_URL") || "https://odontoart.s4e.com.br/api/vendedor/NovoUsuario2";
+    if (!ERP_TOKEN) throw new Error("ERP_TOKEN not configured");
+
+    const startedAt = Date.now();
+    const response = await fetch(ERP_URL, {
       method: "POST",
-      headers: {
-        token: ERP_TOKEN,
-        "Content-Type": "application/json",
-      },
+      headers: { token: ERP_TOKEN, "Content-Type": "application/json" },
       body: JSON.stringify(requestBody),
     });
+    const result = await response.json().catch(() => ({}));
+    const hasCode = result?.dados?.codigo || result?.data?.dados?.codigo;
+    const ok = response.ok && Boolean(hasCode);
+    const responseBody = ok ? { success: true, data: result } : { error: extractMessage(result), details: result };
 
-    const responseData = await erpResponse.json();
-    statusCode = erpResponse.status;
-
-    const hasDadosCodigo = responseData?.dados?.codigo || responseData?.data?.dados?.codigo;
-
-    if (!hasDadosCodigo) {
-      if (!erpResponse.ok) {
-        errorMessage = extractErpMessage(responseData) || "Erro ao enviar cadastro para o ERP";
-      } else {
-        errorMessage = extractErpMessage(responseData) || "Erro no cadastro: dados invalidos retornados pelo ERP";
-      }
-
-      responseBody = {
-        error: errorMessage,
-        details: responseData,
-        status: statusCode,
-      };
-
-      await saveLog(supabase, {
-        user_id: userId,
-        user_email: userEmail,
-        endpoint: "erp-novo-usuario2",
-        method: "POST",
-        request_body: enrichRequestBodyForLog(requestBody),
-        response_body: responseBody,
-        status_code: statusCode,
-        success: false,
-        error_message: errorMessage,
-        duration_ms: Date.now() - startTime,
-      });
-
-      return new Response(JSON.stringify(responseBody), {
-        status: statusCode,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    responseBody = {
-      success: true,
-      data: responseData,
-    };
-
-    await saveLog(supabase, {
-      user_id: userId,
-      user_email: userEmail,
+    await supabase.from("api_logs").insert({
+      user_id: auth.user.id,
+      user_email: auth.user.email,
       endpoint: "erp-novo-usuario2",
       method: "POST",
-      request_body: enrichRequestBodyForLog(requestBody),
-      response_body: responseBody,
-      status_code: 200,
-      success: true,
-      duration_ms: Date.now() - startTime,
-    });
+      request_body: { cadastro_id: cadastroId || null, idempotency_key: idempotencyKey || null },
+      response_body: ok ? { success: true, erp_code: hasCode } : { error: responseBody.error },
+      status_code: ok ? 200 : response.status,
+      success: ok,
+      error_message: ok ? null : responseBody.error,
+      duration_ms: Date.now() - startedAt,
+    }).catch(() => undefined);
 
-    return new Response(JSON.stringify(responseBody), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse(responseBody, ok ? 200 : Math.max(response.status, 400));
   } catch (error) {
-    console.error("Error in erp-novo-usuario2:", error);
-    statusCode = 500;
-    errorMessage = error instanceof Error ? error.message : "Erro interno do servidor";
-    responseBody = {
-      error: errorMessage,
-    };
-
-    await saveLog(supabase, {
-      user_id: userId,
-      user_email: userEmail,
-      endpoint: "erp-novo-usuario2",
-      method: "POST",
-      request_body: enrichRequestBodyForLog(requestBody),
-      response_body: responseBody,
-      status_code: statusCode,
-      success: false,
-      error_message: errorMessage,
-      duration_ms: Date.now() - startTime,
-    });
-
-    return new Response(JSON.stringify(responseBody), {
-      status: statusCode,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("[erp-novo-usuario2]", error);
+    return jsonResponse({ error: "Erro interno do servidor" }, 500);
   }
 });
