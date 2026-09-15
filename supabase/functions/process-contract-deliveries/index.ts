@@ -1,0 +1,102 @@
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import nodemailer from "npm:nodemailer@6.9.16";
+import { Buffer } from "node:buffer";
+import { corsHeaders, createServiceClient, jsonResponse, normalizeDigits, sha256 } from "../_shared/public-flow.ts";
+
+const retryMinutes = [5, 30, 120, 360, 720];
+const authorizeServiceRole = (req: Request) => {
+  const expected = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const received = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  return Boolean(expected && received && expected === received);
+};
+const toBase64 = (bytes: Uint8Array) => {
+  let binary = ""; const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunk, bytes.length)));
+  return btoa(binary);
+};
+const downloadContract = async (supabase: any, payload: any) => {
+  const { data, error } = await supabase.storage.from("contracts").download(String(payload.storagePath || ""));
+  if (error || !data) throw new Error(`CONTRACT_DOWNLOAD_FAILED:${error?.message || "arquivo ausente"}`);
+  const bytes = new Uint8Array(await data.arrayBuffer());
+  if (payload.pdfHash && await sha256(bytes) !== String(payload.pdfHash)) throw new Error("CONTRACT_HASH_MISMATCH");
+  return bytes;
+};
+
+const sendEmail = async (supabase: any, payload: any, jobId: string) => {
+  const username = Deno.env.get("SMTP_USERNAME"); const password = Deno.env.get("SMTP_PASSWORD"); const from = Deno.env.get("SMTP_FROM");
+  if (!username || !password || !from) throw new Error("SMTP secrets not configured");
+  const bytes = await downloadContract(supabase, payload);
+  const transporter = nodemailer.createTransport({ host: "smtp.gmail.com", port: 465, secure: true, auth: { user: username, pass: password } });
+  const host = String(username).split("@")[1] || "odontoart.local";
+  const info = await transporter.sendMail({
+    from, to: String(payload.email || ""), subject: "Seu contrato Odontoart",
+    messageId: `<contrato-${jobId}@${host}>`,
+    text: `Ola, ${String(payload.nome || "associado(a)")}!\n\nSua adesao a Odontoart foi concluida com sucesso. Conforme os termos aceitos durante o processo de adesao, encaminhamos em anexo o seu contrato.\n\nGuarde este documento para futuras consultas.\n\nAtenciosamente,\nOdontoart`,
+    attachments: [{ filename: String(payload.fileName || "Contrato-Odontoart.pdf"), content: Buffer.from(bytes), contentType: "application/pdf" }],
+  });
+  return { messageId: info.messageId, accepted: info.accepted, rejected: info.rejected, pdfHash: payload.pdfHash };
+};
+
+const resolveErpIds = async (cpf: string, empresaCodigo: number) => {
+  const ERP_TOKEN = Deno.env.get("ERP_TOKEN"); const ERP_BASE_URL = Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
+  if (!ERP_TOKEN) throw new Error("ERP_TOKEN not configured");
+  const normalizedCpf = normalizeDigits(cpf);
+  const response = await fetch(`${ERP_BASE_URL}/v2/api/associados?token=${encodeURIComponent(ERP_TOKEN)}&cpfAssociado=${normalizedCpf}&incluirAns=true`, { headers: { Accept: "application/json" } });
+  if (!response.ok) throw new Error("ERP_ASSOCIADO_LOOKUP_FAILED");
+  const result = await response.json(); const records = Array.isArray(result?.dados) ? result.dados : [];
+  const associado = records.find((item: any) => Number(item?.codigoDaEmpresa) === Number(empresaCodigo)) || records[0];
+  if (!associado?.codigo) throw new Error("ERP_ASSOCIADO_ID_NOT_FOUND");
+  const deps = Array.isArray(associado?.dependentes) ? associado.dependentes : [];
+  const titular = deps.find((dep: any) => normalizeDigits(dep?.numeroCpfDependente) === normalizedCpf) || deps[0];
+  if (!titular?.codigoDependente) throw new Error("ERP_DEPENDENTE_ID_NOT_FOUND");
+  return { idFuncionario: Number(associado.codigo), idDependente: Number(titular.codigoDependente) };
+};
+
+const sendErpDocument = async (supabase: any, payload: any) => {
+  const ERP_TOKEN = Deno.env.get("ERP_TOKEN"); const ERP_BASE_URL = Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
+  if (!ERP_TOKEN) throw new Error("ERP_TOKEN not configured");
+  const bytes = await downloadContract(supabase, payload); const ids = await resolveErpIds(String(payload.cpf || ""), Number(payload.empresaCodigo || 0));
+  const response = await fetch(`${ERP_BASE_URL}/api/dependente/UploadDocDependente?token=${encodeURIComponent(ERP_TOKEN)}`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idFuncionario: ids.idFuncionario, idDependente: ids.idDependente, arquivo: toBase64(bytes), arquivoNome: String(payload.fileName || "Contrato-Odontoart.pdf") }),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(String(result?.message || result?.mensagem || "ERP_DOCUMENT_UPLOAD_FAILED"));
+  return { ids, result, pdfHash: payload.pdfHash };
+};
+
+const finishJob = async (supabase: any, job: any, response: any) => {
+  await supabase.from("contract_delivery_jobs").update({ status: "sent", attempts: Number(job.attempts || 0) + 1, sent_at: new Date().toISOString(), processing_token: null, processing_started_at: null, last_error: null, response, updated_at: new Date().toISOString() }).eq("id", job.id);
+  const { data: remaining } = await supabase.from("contract_delivery_jobs").select("id").eq("contract_session_id", job.contract_session_id).neq("status", "sent").limit(1);
+  if (!remaining || remaining.length === 0) await supabase.from("public_contract_sessions").update({ status: "completed", updated_at: new Date().toISOString() }).eq("id", job.contract_session_id);
+};
+const failJob = async (supabase: any, job: any, error: unknown) => {
+  const attempts = Number(job.attempts || 0) + 1; const finalFailure = attempts >= 5; const minutes = retryMinutes[Math.min(attempts - 1, retryMinutes.length - 1)];
+  const message = error instanceof Error ? error.message : String(error);
+  await supabase.from("contract_delivery_jobs").update({ status: finalFailure ? "failed" : "retry", attempts, next_attempt_at: finalFailure ? new Date().toISOString() : new Date(Date.now() + minutes * 60000).toISOString(), processing_token: null, processing_started_at: null, last_error: message.slice(0, 1000), updated_at: new Date().toISOString() }).eq("id", job.id);
+  if (finalFailure) await supabase.from("public_contract_sessions").update({ status: "needs_attention", updated_at: new Date().toISOString() }).eq("id", job.contract_session_id);
+};
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
+  if (req.method !== "POST") return jsonResponse({ error: "Metodo nao permitido" }, 405);
+  if (!authorizeServiceRole(req)) return jsonResponse({ error: "Nao autorizado" }, 401);
+  const supabase = createServiceClient();
+  try {
+    await supabase.rpc("reset_stuck_contract_delivery_jobs", { p_minutes: 15 });
+    const { data: jobs, error } = await supabase.rpc("claim_contract_delivery_jobs", { p_limit: 10 });
+    if (error) throw error;
+    const results: Array<Record<string, unknown>> = [];
+    for (const job of jobs || []) {
+      try {
+        const response = job.channel === "email" ? await sendEmail(supabase, job.payload, job.id) : await sendErpDocument(supabase, job.payload);
+        await finishJob(supabase, job, response); results.push({ id: job.id, channel: job.channel, status: "sent" });
+      } catch (jobError) {
+        console.error(`[process-contract-deliveries] ${job.id}`, jobError); await failJob(supabase, job, jobError); results.push({ id: job.id, channel: job.channel, status: "retry_or_failed" });
+      }
+    }
+    return jsonResponse({ ok: true, processed: results.length, results });
+  } catch (error) {
+    console.error("[process-contract-deliveries]", error); return jsonResponse({ error: "Falha ao processar entregas" }, 500);
+  }
+});
