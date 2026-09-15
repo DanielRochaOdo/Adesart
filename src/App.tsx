@@ -33,83 +33,18 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/adesao/:token" element={<PublicCadastroLink />} />
+      <Route path="/adesao" element={<PublicCadastroLink />} />
       <Route path="/preview/link-plano" element={<PublicCadastroLinkPreview />} />
-      <Route
-        path="/login"
-        element={user ? <Navigate to="/dashboard" replace /> : <Login />}
-      />
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/users"
-        element={
-          <ProtectedRoute allowedRoles={['ADMINISTRADOR', 'GERENTE', 'SUPERVISOR']}>
-            <Users />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/teams"
-        element={
-          <ProtectedRoute>
-            <Teams />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/cadastro"
-        element={
-          <ProtectedRoute>
-            <Cadastro />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/configuracoes"
-        element={
-          <ProtectedRoute>
-            <ConfiguracoesCadastro />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/auditoria-lemmit"
-        element={
-          <ProtectedRoute allowedRoles={['ADMINISTRADOR']}>
-            <AuditoriaLemmit />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/fila-upload-erp"
-        element={
-          <ProtectedRoute allowedRoles={['ADMINISTRADOR']}>
-            <FilaUploadERP />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/adesoes-excluidas"
-        element={
-          <ProtectedRoute allowedRoles={['ADMINISTRADOR']}>
-            <AdesoesExcluidas />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/profile"
-        element={
-          <ProtectedRoute>
-            <Profile />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+      <Route path="/users" element={<ProtectedRoute allowedRoles={['ADMINISTRADOR', 'GERENTE', 'SUPERVISOR']}><Users /></ProtectedRoute>} />
+      <Route path="/teams" element={<ProtectedRoute><Teams /></ProtectedRoute>} />
+      <Route path="/cadastro" element={<ProtectedRoute><Cadastro /></ProtectedRoute>} />
+      <Route path="/configuracoes" element={<ProtectedRoute><ConfiguracoesCadastro /></ProtectedRoute>} />
+      <Route path="/auditoria-lemmit" element={<ProtectedRoute allowedRoles={['ADMINISTRADOR']}><AuditoriaLemmit /></ProtectedRoute>} />
+      <Route path="/fila-upload-erp" element={<ProtectedRoute allowedRoles={['ADMINISTRADOR']}><FilaUploadERP /></ProtectedRoute>} />
+      <Route path="/adesoes-excluidas" element={<ProtectedRoute allowedRoles={['ADMINISTRADOR']}><AdesoesExcluidas /></ProtectedRoute>} />
+      <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
