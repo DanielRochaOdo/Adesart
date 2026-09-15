@@ -61,7 +61,7 @@ async function reconcile(snapshot:any) {
   return null;
 }
 
-async function makePdf(text:string, acceptance:{acceptedAt:string;acceptanceId:string;contractHash:string}) {
+async function makePdf(text:string, acceptance:{acceptedAt:string}) {
   const pdf=await PDFDocument.create(), font=await pdf.embedFont(StandardFonts.Helvetica), bold=await pdf.embedFont(StandardFonts.HelveticaBold);
   const W=595.28,H=841.89,M=48,S=9.5,L=13,MAX=W-M*2;
   const clean=(v:string)=>v.replace(/[\u2018\u2019]/g,"'").replace(/[\u201C\u201D]/g,'"').replace(/[\u2013\u2014]/g,"-").replace(/[^\x09\x0A\x0D\x20-\xFF]/g,"");
@@ -69,8 +69,8 @@ async function makePdf(text:string, acceptance:{acceptedAt:string;acceptanceId:s
   let page=pdf.addPage([W,H]),y=H-M; const ensure=()=>{if(y<M+L*2){page=pdf.addPage([W,H]);y=H-M;}};
   page.drawText("ODONTOART - CONTRATO DE ADESAO",{x:M,y,size:13,font:bold}); y-=24;
   for(const p of clean(text).split("\n")){ensure();if(!p.trim()){y-=L;continue;}for(const line of wrap(p)){ensure();page.drawText(line,{x:M,y,size:S,font});y-=L;}y-=3;}
-  y-=8;ensure();page.drawText("ACEITE ELETRONICO",{x:M,y,size:10.5,font:bold});y-=18;
-  for(const t of [`Aceito eletronicamente em: ${acceptance.acceptedAt}`,`Identificador do aceite: ${acceptance.acceptanceId}`,`Hash SHA-256 do contrato apresentado: ${acceptance.contractHash}`]) for(const line of wrap(t)){ensure();page.drawText(line,{x:M,y,size:S,font});y-=L;}
+  y-=8;
+  for(const line of wrap(`Aceite eletrônico realizado em ${acceptance.acceptedAt}`)){ensure();page.drawText(line,{x:M,y,size:S,font});y-=L;}
   return new Uint8Array(await pdf.save());
 }
 
@@ -111,7 +111,8 @@ Deno.serve(async(req:Request)=>{
     await supabase.from("cadastro_links").update({used_at:new Date().toISOString(),used_cpf:c.cpf,used_cadastro_id:cadastroId}).eq("id",l.id);
     await supabase.from("public_contract_sessions").update({status:"erp_registered",erp_response:erpResult,updated_at:new Date().toISOString()}).eq("id",claimed.id);
 
-    const pdf=await makePdf(claimed.contract_text,{acceptedAt:new Date(claimed.accepted_at||now).toLocaleString("pt-BR",{timeZone:"America/Fortaleza"}),acceptanceId:claimed.id,contractHash:claimed.contract_hash});
+    const acceptedAt=new Intl.DateTimeFormat("pt-BR",{timeZone:"America/Fortaleza",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).format(new Date(claimed.accepted_at||now)).replace(",","");
+    const pdf=await makePdf(claimed.contract_text,{acceptedAt});
     const pdfHash=await sha256(pdf), path=`${new Date().getUTCFullYear()}/${cadastroId}/contrato-${claimed.id}.pdf`;
     const {error:uErr}=await supabase.storage.from("contracts").upload(path,pdf,{contentType:"application/pdf",upsert:true});
     if(uErr){await supabase.from("public_contract_sessions").update({status:"needs_attention",updated_at:new Date().toISOString()}).eq("id",claimed.id);return jsonResponse({ok:true,cadastroId,warning:"Cadastro concluido no ERP, mas o contrato precisa de reprocessamento."});}
