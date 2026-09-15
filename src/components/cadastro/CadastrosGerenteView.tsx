@@ -60,7 +60,11 @@ export function CadastrosGerenteView({ cadastros, onSelect, statusFilter }: Prop
     fetchData();
   }, []);
 
-  const cadastrosFiltrados = cadastros.filter((c) => c.status === statusFilter);
+  const cadastrosFiltrados = cadastros.filter((c) => (
+    statusFilter === 'incompleto'
+      ? c.status === 'incompleto' || c.status === 'adesoes_pendentes'
+      : c.status === statusFilter
+  ));
 
   const equipesGrouped: EquipeGroup[] = useMemo(() => {
     const equipesMap = new Map<string, Map<string, Map<string, Cadastro[]>>>();

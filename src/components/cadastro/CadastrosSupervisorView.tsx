@@ -35,7 +35,11 @@ export function CadastrosSupervisorView({ cadastros, onSelect, statusFilter }: P
   const [viewERPData, setViewERPData] = useState<Cadastro | null>(null);
   const [users, setUsers] = useState<UserProfile[]>([]);
 
-  const cadastrosFiltrados = cadastros.filter((c) => c.status === statusFilter);
+  const cadastrosFiltrados = cadastros.filter((c) => (
+    statusFilter === 'incompleto'
+      ? c.status === 'incompleto' || c.status === 'adesoes_pendentes'
+      : c.status === statusFilter
+  ));
 
   useEffect(() => {
     fetchUsers();
