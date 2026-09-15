@@ -15,6 +15,15 @@ import {
 
 const LEMMIT_COST = 0.12;
 
+const safeInsertLog = async (supabase: any, payload: Record<string, unknown>) => {
+  try {
+    const { error } = await supabase.from("api_logs").insert(payload);
+    if (error) console.warn("[cadastro-public-authenticate] Falha ao gravar api_logs:", error.message);
+  } catch (error) {
+    console.warn("[cadastro-public-authenticate] Falha inesperada ao gravar api_logs:", error);
+  }
+};
+
 const validateCpf = (cpf: string) => {
   if (!/^\d{11}$/.test(cpf) || /^(\d)\1{10}$/.test(cpf)) return false;
   const digit = (baseLength: number) => {
@@ -77,8 +86,10 @@ const mapLemmitPessoa = (pessoa: any) => {
 
 const checkErpEligibility = async (supabase: any, cpf: string) => {
   const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
-  const ERP_BASE_URL = Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
+  let ERP_BASE_URL = Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
   if (!ERP_TOKEN) throw new Error("ERP_TOKEN not configured");
+  if (!/^https?:\/\//i.test(ERP_BASE_URL)) ERP_BASE_URL = `https://${ERP_BASE_URL}`;
+  ERP_BASE_URL = ERP_BASE_URL.replace(/\/+$/, "");
 
   const url = `${ERP_BASE_URL}/v2/api/associados?token=${encodeURIComponent(ERP_TOKEN)}&cpfAssociado=${cpf}&incluirAns=true`;
   const response = await fetch(url, { headers: { Accept: "application/json" } });
@@ -199,7 +210,7 @@ Deno.serve(async (req: Request) => {
     if (insertError || !attempt) throw insertError || new Error("ATTEMPT_CREATE_FAILED");
 
     const LEMMIT_API_KEY = Deno.env.get("LEMMIT_API_KEY");
-    const LEMMIT_ENDPOINT = Deno.env.get("LEMMIT_ENDPOINT") || "http://189.84.127.130:8080/webhook/5e534e38-6f87-400b-a441-821559c6c2e9";
+    const LEMMIT_ENDPOINT = Deno.env.get("LEMMIT_ENDPOINT") || Deno.env.get("LEMMIT_API_URL") || "http://189.84.127.130:8080/webhook/5e534e38-6f87-400b-a441-821559c6c2e9";
     if (!LEMMIT_API_KEY) throw new Error("LEMMIT_API_KEY not configured");
 
     const startedAt = Date.now();
@@ -208,11 +219,11 @@ Deno.serve(async (req: Request) => {
     });
     const lemmitData = await lemmitResponse.json().catch(() => ({}));
 
-    await supabase.from("api_logs").insert({
+    await safeInsertLog(supabase, {
       endpoint: "cadastro-public-authenticate:lemmit", method: "POST", request_body: { cpf_hash: cpfHash, link_id: link.id },
       response_body: { ok: lemmitResponse.ok, has_person: Boolean(lemmitData?.pessoa) }, status_code: lemmitResponse.status,
       success: lemmitResponse.ok && Boolean(lemmitData?.pessoa), duration_ms: Date.now() - startedAt, cost: LEMMIT_COST,
-    }).catch(() => undefined);
+    });
 
     if (!lemmitResponse.ok || !lemmitData?.pessoa) {
       await supabase.from("public_adesao_attempts").update({ lemmit_checked_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", attempt.id);

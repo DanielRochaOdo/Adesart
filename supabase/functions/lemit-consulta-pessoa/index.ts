@@ -10,6 +10,15 @@ import {
 
 const LEMMIT_COST = 0.12;
 
+const safeInsertLog = async (supabase: any, payload: Record<string, unknown>) => {
+  try {
+    const { error } = await supabase.from("api_logs").insert(payload);
+    if (error) console.warn("[lemit-consulta-pessoa] Falha ao gravar api_logs:", error.message);
+  } catch (error) {
+    console.warn("[lemit-consulta-pessoa] Falha inesperada ao gravar api_logs:", error);
+  }
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Metodo nao permitido" }, 405);
@@ -27,7 +36,7 @@ Deno.serve(async (req: Request) => {
     if (canUse === false) return jsonResponse({ error: "Limite de consultas Lemmit atingido", code: "LEMMIT_LIMIT_EXCEEDED" }, 429);
 
     const apiKey = Deno.env.get("LEMMIT_API_KEY");
-    const endpoint = Deno.env.get("LEMMIT_ENDPOINT") || "http://189.84.127.130:8080/webhook/5e534e38-6f87-400b-a441-821559c6c2e9";
+    const endpoint = Deno.env.get("LEMMIT_ENDPOINT") || Deno.env.get("LEMMIT_API_URL") || "http://189.84.127.130:8080/webhook/5e534e38-6f87-400b-a441-821559c6c2e9";
     if (!apiKey) throw new Error("LEMMIT_API_KEY not configured");
 
     const startedAt = Date.now();
@@ -39,7 +48,7 @@ Deno.serve(async (req: Request) => {
     const result = await response.json().catch(() => ({}));
 
     await supabase.rpc("decrement_lemmit_balance", { user_id: auth.user.id, amount: LEMMIT_COST });
-    await supabase.from("api_logs").insert({
+    await safeInsertLog(supabase, {
       user_id: auth.user.id,
       user_email: auth.user.email,
       endpoint: "lemit-consulta-pessoa",
@@ -50,7 +59,7 @@ Deno.serve(async (req: Request) => {
       success: response.ok && Boolean(result?.pessoa),
       duration_ms: Date.now() - startedAt,
       cost: LEMMIT_COST,
-    }).catch(() => undefined);
+    });
 
     if (!response.ok) {
       if (response.status === 404) return jsonResponse({ error: "CPF nao encontrado", notFound: true, canContinue: true }, 404);

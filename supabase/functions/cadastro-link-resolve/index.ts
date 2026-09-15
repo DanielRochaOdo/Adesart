@@ -41,9 +41,18 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    await supabase.rpc("increment_cadastro_link_click", { p_link_id: link.id }).catch(async () => {
-      await supabase.from("cadastro_links").update({ last_clicked_at: new Date().toISOString() }).eq("id", link.id);
-    });
+    try {
+      const { error: clickError } = await supabase.rpc("increment_cadastro_link_click", { p_link_id: link.id });
+      if (clickError) {
+        const { error: fallbackError } = await supabase
+          .from("cadastro_links")
+          .update({ last_clicked_at: new Date().toISOString() })
+          .eq("id", link.id);
+        if (fallbackError) console.warn("[cadastro-link-resolve] falha ao registrar clique", fallbackError);
+      }
+    } catch (clickError) {
+      console.warn("[cadastro-link-resolve] falha ao registrar clique", clickError);
+    }
 
     return jsonResponse({
       ok: true,
