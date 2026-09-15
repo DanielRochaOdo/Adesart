@@ -30,11 +30,11 @@ BEGIN
     VALUES (
       0,
       'CONTRATO DE ADESÃO ODONTOART',
-      $$Eu, {{NOME_RF}}, portador(a) do CPF {{CPF_RF}}, registrado(a) na empresa {{EMPRESA}}, confirmo, na data de hoje ({{DATA_ACEITE}}), que autorizo a averbação para desconto mensal em minha folha de pagamento, em favor da Odontoart Planos Odontológicos Ltda., no valor de R$ {{VALOR_DO_PLANO}}, referente aos beneficiários: {{BENEFICIARIOS}}, pelo período de 12 (doze) meses, renovável automaticamente por prazo indeterminado, sem necessidade de solicitação expressa.
+      $contract$Eu, {{NOME_RF}}, portador(a) do CPF {{CPF_RF}}, registrado(a) na empresa {{EMPRESA}}, confirmo, na data de hoje ({{DATA_ACEITE}}), que autorizo a averbação para desconto mensal em minha folha de pagamento, em favor da Odontoart Planos Odontológicos Ltda., no valor de R$ {{VALOR_DO_PLANO}}, referente aos beneficiários: {{BENEFICIARIOS}}, pelo período de 12 (doze) meses, renovável automaticamente por prazo indeterminado, sem necessidade de solicitação expressa.
 
 Declaro ter conhecimento e estar de acordo com as condições regulamentares da Odontoart Planos Odontológicos Ltda., bem como assumo total responsabilidade pelas informações por mim prestadas.
 
-Sr(a). {{NOME_RF}}, confirma?$$,
+Sr(a). {{NOME_RF}}, confirma?$contract$,
       v_next_version,
       true,
       now(),
