@@ -84,7 +84,18 @@ const mapLemmitPessoa = (pessoa: any) => {
   };
 };
 
-const checkErpEligibility = async (supabase: any, cpf: string) => {
+const isActiveErpStatus = (dep: any) => {
+  const statusCode = Number(dep?.codigoSituacao);
+  const statusName = String(dep?.nomeSituacao || "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  return statusCode === 1 || statusName === "ATIVO";
+};
+
+const checkErpEligibility = async (cpf: string) => {
   const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
   let ERP_BASE_URL = Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
   if (!ERP_TOKEN) throw new Error("ERP_TOKEN not configured");
@@ -95,23 +106,40 @@ const checkErpEligibility = async (supabase: any, cpf: string) => {
   const response = await fetch(url, { headers: { Accept: "application/json" } });
   if (!response.ok) throw new Error("ERP_VALIDATION_UNAVAILABLE");
   const result = await response.json();
+  const records = Array.isArray(result?.dados) ? result.dados : [];
 
-  const { data: config } = await supabase
-    .from("cadastro_config")
-    .select("situacoes_que_barram, planos_validos")
-    .eq("id", 1)
-    .maybeSingle();
+  for (const associado of records) {
+    const dependentes = Array.isArray(associado?.dependentes) ? associado.dependentes : [];
+    const exactMatches = dependentes.filter(
+      (dep: any) => normalizeDigits(dep?.numeroCpfDependente) === cpf,
+    );
 
-  const blockStatuses: number[] = config?.situacoes_que_barram || [1, 4, 6];
-  const validPlans: number[] = config?.planos_validos || [4, 11, 3, 26];
-  for (const associado of Array.isArray(result?.dados) ? result.dados : []) {
-    for (const dep of Array.isArray(associado?.dependentes) ? associado.dependentes : []) {
-      if (blockStatuses.includes(Number(dep?.codigoSituacao)) && !validPlans.includes(Number(dep?.codigoPlano))) {
-        return { eligible: false };
+    let candidates = exactMatches;
+
+    if (candidates.length === 0 && normalizeDigits(associado?.cpf) === cpf && dependentes.length > 0) {
+      // No retorno do ERP o titular costuma ser o primeiro item de dependentes.
+      // O fallback so e usado quando o CPF do registro principal e exatamente o CPF consultado.
+      candidates = [dependentes[0]];
+    }
+
+    for (const dep of candidates) {
+      if (isActiveErpStatus(dep)) {
+        return {
+          eligible: false,
+          activeRecord: {
+            codigoAssociado: associado?.codigo ?? null,
+            codigoEmpresa: associado?.codigoDaEmpresa ?? null,
+            codigoDependente: dep?.codigoDependente ?? null,
+            codigoPlano: dep?.codigoPlano ?? null,
+            codigoSituacao: dep?.codigoSituacao ?? null,
+            nomeSituacao: dep?.nomeSituacao ?? null,
+          },
+        };
       }
     }
   }
-  return { eligible: true };
+
+  return { eligible: true, activeRecord: null };
 };
 
 Deno.serve(async (req: Request) => {
@@ -140,26 +168,6 @@ Deno.serve(async (req: Request) => {
     const cpfHash = await hashSensitiveValue(cpf);
     const ipHash = await hashSensitiveValue(getRequestIp(req));
 
-    const { data: completed } = await supabase
-      .from("cadastros")
-      .select("id, data_nascimento")
-      .eq("cpf", cpf)
-      .eq("status", "enviado")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (completed) {
-      const storedBirthDate = normalizeDate(completed.data_nascimento);
-      if (!storedBirthDate || storedBirthDate !== birthDate) {
-        return jsonResponse({ error: "CPF ou data de nascimento nao conferem", code: "IDENTIFICATION_MISMATCH" }, 401);
-      }
-      return jsonResponse({ ok: true, state: "completed" });
-    }
-
-    const { data: locallyBlocked } = await supabase.rpc("check_public_link_blocked_cpf", { p_cpf: cpf });
-    if (locallyBlocked?.blocked) return jsonResponse({ ok: true, state: "not_eligible" });
-
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const { count: cpfAttempts } = await supabase.from("public_adesao_attempts")
       .select("id", { count: "exact", head: true }).eq("link_id", link.id).eq("cpf_hash", cpfHash).gte("created_at", oneHourAgo);
@@ -169,12 +177,20 @@ Deno.serve(async (req: Request) => {
       .select("id", { count: "exact", head: true }).eq("link_id", link.id).eq("ip_hash", ipHash).gte("created_at", oneHourAgo);
     if ((ipAttempts || 0) >= 25) return jsonResponse({ error: "Muitas tentativas neste dispositivo/rede. Tente novamente mais tarde.", code: "RATE_LIMITED" }, 429);
 
-    const now = new Date();
-    const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
-    const { count: dailyQueries } = await supabase.from("public_adesao_attempts")
-      .select("id", { count: "exact", head: true }).eq("link_id", link.id).not("lemmit_checked_at", "is", null).gte("lemmit_checked_at", dayStart);
-    if ((dailyQueries || 0) >= Number(link.lemmit_daily_limit || 100)) {
-      return jsonResponse({ error: "Limite temporario de consultas deste link atingido", code: "LINK_BUDGET_EXCEEDED" }, 429);
+    // A elegibilidade do QR deve refletir a situacao ATUAL do proprio CPF no ERP.
+    // Historico local enviado/cancelado nao bloqueia e a situacao de outro dependente tambem nao bloqueia.
+    const erpEligibility = await checkErpEligibility(cpf);
+    if (!erpEligibility.eligible) {
+      await safeInsertLog(supabase, {
+        endpoint: "cadastro-public-authenticate:erp-eligibility",
+        method: "POST",
+        request_body: { cpf_hash: cpfHash, link_id: link.id },
+        response_body: { eligible: false, activeRecord: erpEligibility.activeRecord },
+        status_code: 200,
+        success: true,
+        duration_ms: 0,
+      });
+      return jsonResponse({ ok: true, state: "not_eligible", reason: "ACTIVE_IN_ERP" });
     }
 
     const { data: cachedAttempt } = await supabase.from("public_adesao_attempts")
@@ -200,8 +216,13 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ ok: true, state: "authenticated", attemptToken, person: cachedAttempt.profile_snapshot });
     }
 
-    const erpEligibility = await checkErpEligibility(supabase, cpf);
-    if (!erpEligibility.eligible) return jsonResponse({ ok: true, state: "not_eligible" });
+    const now = new Date();
+    const dayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
+    const { count: dailyQueries } = await supabase.from("public_adesao_attempts")
+      .select("id", { count: "exact", head: true }).eq("link_id", link.id).not("lemmit_checked_at", "is", null).gte("lemmit_checked_at", dayStart);
+    if ((dailyQueries || 0) >= Number(link.lemmit_daily_limit || 100)) {
+      return jsonResponse({ error: "Limite temporario de consultas deste link atingido", code: "LINK_BUDGET_EXCEEDED" }, 429);
+    }
 
     const attemptToken = randomToken();
     const { data: attempt, error: insertError } = await supabase.from("public_adesao_attempts").insert({
