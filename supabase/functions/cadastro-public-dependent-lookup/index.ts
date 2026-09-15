@@ -60,7 +60,7 @@ const checkErpEligibility = async (cpf: string) => {
   for (const associado of records) {
     const dependentes = Array.isArray(associado?.dependentes) ? associado.dependentes : [];
     const exactMatches = dependentes.filter(
-      (dep: any) => normalizeDigits(dep?.numeroCpfDependendente ?? dep?.numeroCpfDependente) === cpf,
+      (dep: any) => normalizeDigits(dep?.numeroCpfDependente) === cpf,
     );
 
     let candidates = exactMatches;
