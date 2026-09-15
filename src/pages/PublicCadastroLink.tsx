@@ -209,6 +209,8 @@ export function PublicCadastroLink() {
   const [attemptToken, setAttemptToken] = useState('');
   const [form, setForm] = useState<FormState>(emptyForm);
   const [dependents, setDependents] = useState<Dependent[]>([]);
+  const [dependentLookupId, setDependentLookupId] = useState<string | null>(null);
+  const dependentLookupCpfRef = useRef<Record<string, string>>({});
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [emailToConfirm, setEmailToConfirm] = useState('');
   const [contractToken, setContractToken] = useState('');
@@ -374,16 +376,87 @@ export function PublicCadastroLink() {
     setDependents((prev) => prev.map((item) => item.id === id ? { ...item, ...patch } : item));
   };
 
-  const removeDependent = (id: string) => setDependents((prev) => prev.filter((item) => item.id !== id));
+  const lookupDependentCpf = async (id: string, rawCpf: string) => {
+    const normalizedCpf = removeCPFMask(rawCpf);
+    if (normalizedCpf.length !== 11) return;
+
+    if (!validateCPF(normalizedCpf)) {
+      setError('Informe um CPF valido para o dependente.');
+      return;
+    }
+    if (normalizedCpf === removeCPFMask(cpf)) {
+      setError('O CPF do dependente nao pode ser o mesmo do responsavel financeiro.');
+      return;
+    }
+    if (dependentLookupCpfRef.current[id] === normalizedCpf) return;
+
+    dependentLookupCpfRef.current[id] = normalizedCpf;
+    setDependentLookupId(id);
+    setError('');
+
+    try {
+      const response = await fetch(apiUrl('cadastro-public-dependent-lookup'), {
+        method: 'POST',
+        headers: publicHeaders(),
+        body: JSON.stringify({ attemptToken, cpf: normalizedCpf }),
+      });
+      const result = await response.json();
+
+      if (!response.ok || !result?.pessoa) {
+        delete dependentLookupCpfRef.current[id];
+        if (result?.canContinue) {
+          setError(`${result.error || 'Dados nao encontrados na Lemmit'}. Preencha os dados do dependente manualmente.`);
+          return;
+        }
+        throw new Error(result.error || 'Nao foi possivel consultar o CPF do dependente.');
+      }
+
+      const pessoa = result.pessoa;
+      const rawDate = String(pessoa?.data_nascimento || '');
+      const dataNascimento = /^\d{4}-\d{2}-\d{2}/.test(rawDate) ? rawDate.slice(0, 10) : '';
+      const sexoRaw = String(pessoa?.sexo || '').trim().toLowerCase();
+      const sexo = sexoRaw.includes('masculino') || sexoRaw === 'm' || sexoRaw === '1'
+        ? 1
+        : sexoRaw.includes('feminino') || sexoRaw === 'f' || sexoRaw === '2' || sexoRaw === '0'
+          ? 0
+          : -1;
+
+      updateDependent(id, {
+        cpf: normalizedCpf,
+        nome: String(pessoa?.nome || '').trim(),
+        dataNascimento,
+        sexo,
+        nomeMae: String(pessoa?.nome_mae || '').trim(),
+      });
+    } catch (lookupError) {
+      delete dependentLookupCpfRef.current[id];
+      setError(lookupError instanceof Error ? lookupError.message : 'Nao foi possivel consultar o CPF do dependente.');
+    } finally {
+      setDependentLookupId(null);
+    }
+  };
+
+  const handleDependentCpfChange = (id: string, value: string) => {
+    updateDependent(id, { cpf: value });
+    const normalizedCpf = removeCPFMask(value);
+    if (normalizedCpf.length === 11) void lookupDependentCpf(id, normalizedCpf);
+  };
+
+  const removeDependent = (id: string) => {
+    delete dependentLookupCpfRef.current[id];
+    setDependents((prev) => prev.filter((item) => item.id !== id));
+  };
 
   const dependentsValid = () => {
+    const seenCpfs = new Set<string>([removeCPFMask(cpf)]);
     for (const dep of dependents) {
+      const depCpf = removeCPFMask(dep.cpf);
+      if (!depCpf || !validateCPF(depCpf)) return `Informe um CPF valido para ${dep.nome || 'o dependente'}.`;
+      if (seenCpfs.has(depCpf)) return 'Existem CPFs duplicados no cadastro.';
+      seenCpfs.add(depCpf);
       if (!dep.tipo || !dep.nome.trim() || !dep.dataNascimento || ![0, 1].includes(dep.sexo) || !dep.nomeMae.trim() || !dep.plano) {
         return 'Preencha todos os campos obrigatorios dos dependentes.';
       }
-      const depCpf = removeCPFMask(dep.cpf);
-      if (depCpf && !validateCPF(depCpf)) return `CPF invalido para ${dep.nome || 'um dependente'}.`;
-      if (depCpf && depCpf === removeCPFMask(cpf)) return 'O CPF do dependente nao pode ser o mesmo do responsavel financeiro.';
     }
     return '';
   };
@@ -587,10 +660,13 @@ export function PublicCadastroLink() {
               <div key={dep.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="mb-4 flex items-center justify-between"><strong className="text-sm text-slate-800">Dependente {index + 1}</strong><button type="button" onClick={() => removeDependent(dep.id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button></div>
                 <div className="space-y-4">
+                  <div>
+                    <Input label="CPF" inputMode="numeric" value={formatCPF(dep.cpf)} onChange={(event) => handleDependentCpfChange(dep.id, event.target.value)} maxLength={14} required className="min-h-12" />
+                    {dependentLookupId === dep.id && <p className="mt-2 flex items-center gap-2 text-xs font-medium text-emerald-700"><Loader2 className="h-4 w-4 animate-spin" />Consultando dados na Lemmit...</p>}
+                  </div>
                   <Select label="Grau de parentesco" value={String(dep.tipo || '')} onChange={(event) => updateDependent(dep.id, { tipo: Number(event.target.value) })} required className="min-h-12"><option value="">Selecione</option>{activeRelationships.map((item) => <option key={item.id} value={item.parentesco_id}>{item.label}</option>)}</Select>
                   <Input label="Nome completo" value={dep.nome} onChange={(event) => updateDependent(dep.id, { nome: event.target.value })} required className="min-h-12" />
                   <div className="grid gap-4 sm:grid-cols-2"><Input label="Data de nascimento" type="date" value={dep.dataNascimento} onChange={(event) => updateDependent(dep.id, { dataNascimento: event.target.value })} required className="min-h-12" /><Select label="Sexo" value={String(dep.sexo)} onChange={(event) => updateDependent(dep.id, { sexo: Number(event.target.value) })} required className="min-h-12"><option value="-1">Selecione</option><option value="1">Masculino</option><option value="0">Feminino</option></Select></div>
-                  <Input label="CPF (quando aplicavel)" inputMode="numeric" value={formatCPF(dep.cpf)} onChange={(event) => updateDependent(dep.id, { cpf: event.target.value })} className="min-h-12" />
                   <Input label="Nome da mae" value={dep.nomeMae} onChange={(event) => updateDependent(dep.id, { nomeMae: event.target.value })} required className="min-h-12" />
                   <Select label="Plano" value={String(dep.plano || '')} onChange={(event) => updateDependent(dep.id, { plano: Number(event.target.value) })} required className="min-h-12"><option value="">Selecione</option>{plans.map((plan) => <option key={plan.Plano} value={plan.Plano}>{plan.nomeExibicao} - {currency(plan.ValorDependente)}</option>)}</Select>
                 </div>
