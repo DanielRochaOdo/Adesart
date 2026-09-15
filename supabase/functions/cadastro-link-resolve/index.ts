@@ -16,9 +16,37 @@ Deno.serve(async (req: Request) => {
     if (resolved.error === "LINK_EXPIRED") return jsonResponse({ error: "Link expirado" }, 410);
     const link = resolved.link!;
 
-    const plans = (Array.isArray(link.planos_raw) ? link.planos_raw : [])
+    const rawPlans = (Array.isArray(link.planos_raw) ? link.planos_raw : [])
       .map(sanitizePlan)
       .filter((item: any) => item.Plano > 0);
+
+    // O ERP retorna PrecoPlano principalmente com o codigo do plano e os valores.
+    // Assim como os modulos internos, o fluxo publico usa cadastro_planos_map como
+    // fonte do nome exibido ao usuario. O codigo permanece apenas como identificador.
+    const planIds = Array.from(new Set(rawPlans.map((item: any) => Number(item.Plano)).filter((id: number) => id > 0)));
+    let planNameById = new Map<number, string>();
+
+    if (planIds.length > 0) {
+      const { data: planRows, error: planError } = await supabase
+        .from("cadastro_planos_map")
+        .select("plano_id, nome_exibicao, ativo")
+        .in("plano_id", planIds);
+
+      if (planError) {
+        console.warn("[cadastro-link-resolve] nao foi possivel carregar nomes dos planos", planError);
+      } else {
+        planNameById = new Map(
+          (planRows || [])
+            .filter((item: any) => item.ativo !== false && String(item.nome_exibicao || "").trim() !== "")
+            .map((item: any) => [Number(item.plano_id), String(item.nome_exibicao).trim()]),
+        );
+      }
+    }
+
+    const plans = rawPlans.map((plan: any) => ({
+      ...plan,
+      nomeExibicao: planNameById.get(Number(plan.Plano)) || plan.nomeExibicao,
+    }));
 
     const { data: relationshipRows } = await supabase
       .from("cadastro_parentesco_map")
