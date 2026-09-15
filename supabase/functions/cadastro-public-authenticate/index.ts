@@ -14,6 +14,7 @@ import {
 } from "../_shared/public-flow.ts";
 
 const LEMMIT_COST = 0.12;
+const LEMMIT_ENDPOINT = "http://189.84.127.130:8080/webhook/5e534e38-6f87-400b-a441-821559c6c2e9";
 
 const safeInsertLog = async (supabase: any, payload: Record<string, unknown>) => {
   try {
@@ -117,8 +118,6 @@ const checkErpEligibility = async (cpf: string) => {
     let candidates = exactMatches;
 
     if (candidates.length === 0 && normalizeDigits(associado?.cpf) === cpf && dependentes.length > 0) {
-      // No retorno do ERP o titular costuma ser o primeiro item de dependentes.
-      // O fallback so e usado quando o CPF do registro principal e exatamente o CPF consultado.
       candidates = [dependentes[0]];
     }
 
@@ -177,8 +176,6 @@ Deno.serve(async (req: Request) => {
       .select("id", { count: "exact", head: true }).eq("link_id", link.id).eq("ip_hash", ipHash).gte("created_at", oneHourAgo);
     if ((ipAttempts || 0) >= 25) return jsonResponse({ error: "Muitas tentativas neste dispositivo/rede. Tente novamente mais tarde.", code: "RATE_LIMITED" }, 429);
 
-    // A elegibilidade do QR deve refletir a situacao ATUAL do proprio CPF no ERP.
-    // Historico local enviado/cancelado nao bloqueia e a situacao de outro dependente tambem nao bloqueia.
     const erpEligibility = await checkErpEligibility(cpf);
     if (!erpEligibility.eligible) {
       await safeInsertLog(supabase, {
@@ -231,12 +228,16 @@ Deno.serve(async (req: Request) => {
     if (insertError || !attempt) throw insertError || new Error("ATTEMPT_CREATE_FAILED");
 
     const LEMMIT_API_KEY = Deno.env.get("LEMMIT_API_KEY");
-    const LEMMIT_ENDPOINT = Deno.env.get("LEMMIT_ENDPOINT") || Deno.env.get("LEMMIT_API_URL") || "http://189.84.127.130:8080/webhook/5e534e38-6f87-400b-a441-821559c6c2e9";
     if (!LEMMIT_API_KEY) throw new Error("LEMMIT_API_KEY not configured");
 
     const startedAt = Date.now();
     const lemmitResponse = await fetch(LEMMIT_ENDPOINT, {
-      method: "POST", headers: { ApiKey: LEMMIT_API_KEY, "Content-Type": "application/json" }, body: JSON.stringify({ documento: cpf }),
+      method: "POST",
+      headers: {
+        "ApiKey": LEMMIT_API_KEY,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ documento: cpf }),
     });
     const lemmitData = await lemmitResponse.json().catch(() => ({}));
 
