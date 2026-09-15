@@ -19,7 +19,7 @@ type Address = {
   bairro: string; cidade: string; uf: string; idTipoLogradouro?: number; idBairro?: number;
   idMunicipio?: number; idUf?: number; ufSigla?: string;
 };
-type Dep = { tipo: number; nome: string; dataNascimento: string; cpf?: string; sexo: number; nomeMae: string; plano: number };
+type Dep = { tipo: number; nome: string; dataNascimento: string; cpf: string; sexo: number; nomeMae: string; plano: number };
 type CadastroInput = {
   cpf?: string; nome: string; dataNascimento: string; sexoCodigo: number; nomeMae: string; numeroMatricula?: string;
   contatos: Contact[]; endereco: Address; titularPlano: number; dependentes: Dep[];
@@ -28,6 +28,17 @@ type CadastroInput = {
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const money = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const formatCpf = (cpf: string) => normalizeDigits(cpf).replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+const isValidCpf = (value?: string | null) => {
+  const cpf = normalizeDigits(value);
+  if (!/^\d{11}$/.test(cpf) || /^(\d)\1{10}$/.test(cpf)) return false;
+  const digit = (baseLength: number) => {
+    let sum = 0;
+    for (let i = 0; i < baseLength; i += 1) sum += Number(cpf[i]) * (baseLength + 1 - i);
+    const result = (sum * 10) % 11;
+    return result === 10 ? 0 : result;
+  };
+  return digit(9) === Number(cpf[9]) && digit(10) === Number(cpf[10]);
+};
 
 const validateCadastro = (cadastro: CadastroInput, cpf: string, link: any) => {
   if (cpf.length !== 11) return "Sessao de identificacao invalida";
@@ -48,11 +59,9 @@ const validateCadastro = (cadastro: CadastroInput, cpf: string, link: any) => {
     if (!dep.nome?.trim() || !normalizeDate(dep.dataNascimento) || !dep.nomeMae?.trim() || !Number(dep.tipo) || !Number(dep.plano) || ![0, 1].includes(Number(dep.sexo))) return "Preencha todos os dados obrigatorios dos dependentes";
     if (Number(dep.tipo) === 1) return "O titular nao deve ser incluido novamente na lista de dependentes";
     const depCpf = normalizeDigits(dep.cpf);
-    if (depCpf) {
-      if (depCpf.length !== 11) return "CPF de dependente invalido";
-      if (seenCpfs.has(depCpf)) return "Existem CPFs duplicados no cadastro";
-      seenCpfs.add(depCpf);
-    }
+    if (!isValidCpf(depCpf)) return "CPF valido e obrigatorio para todos os dependentes";
+    if (seenCpfs.has(depCpf)) return "Existem CPFs duplicados no cadastro";
+    seenCpfs.add(depCpf);
   }
   return null;
 };
@@ -188,11 +197,16 @@ Deno.serve(async (req: Request) => {
     }).select("id").single();
     if (sessionError || !session) throw sessionError || new Error("CONTRACT_SESSION_CREATE_FAILED");
 
-    await supabase.from("api_logs").insert({
-      endpoint: "cadastro-public-contract-prepare", method: "POST",
-      request_body: { attempt_id: attempt.id, cpf_hash: await hashSensitiveValue(cpf), plan_codes: uniquePlans },
-      response_body: { contract_session_id: session.id, contract_hash: contractHash }, status_code: 200, success: true, duration_ms: 0,
-    }).catch(() => undefined);
+    try {
+      const { error: logError } = await supabase.from("api_logs").insert({
+        endpoint: "cadastro-public-contract-prepare", method: "POST",
+        request_body: { attempt_id: attempt.id, cpf_hash: await hashSensitiveValue(cpf), plan_codes: uniquePlans },
+        response_body: { contract_session_id: session.id, contract_hash: contractHash }, status_code: 200, success: true, duration_ms: 0,
+      });
+      if (logError) console.warn("[cadastro-public-contract-prepare] log", logError.message);
+    } catch (logError) {
+      console.warn("[cadastro-public-contract-prepare] log inesperado", logError);
+    }
 
     return jsonResponse({
       ok: true, contractToken, contractHash, contractText,
