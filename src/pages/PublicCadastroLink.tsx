@@ -114,36 +114,73 @@ const normalizePhone = (value: string) => value.replace(/\D/g, '');
 const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 const currency = (value: number) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
+const ASSOCIADO_APP_STORE_URL = 'https://apps.apple.com/br/app/odontoart-associado/id1206858386?l=en';
+const ASSOCIADO_GOOGLE_PLAY_URL = 'https://play.google.com/store/apps/details?id=com.odontoart.associado&pli=1';
+
+function detectMobileOs(): 'ios' | 'android' | 'other' {
+  const userAgent = navigator.userAgent || '';
+  const platform = navigator.platform || '';
+  const isIPadOs = platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+
+  if (/android/i.test(userAgent)) return 'android';
+  if (/iPad|iPhone|iPod/i.test(userAgent) || isIPadOs) return 'ios';
+  return 'other';
+}
+
 function AppButtons() {
-  const appStoreUrl = import.meta.env.VITE_ASSOCIADO_APP_STORE_URL as string | undefined;
-  const googlePlayUrl = import.meta.env.VITE_ASSOCIADO_GOOGLE_PLAY_URL as string | undefined;
+  const [showFallback, setShowFallback] = useState(false);
+  const appStoreUrl = (import.meta.env.VITE_ASSOCIADO_APP_STORE_URL as string | undefined) || ASSOCIADO_APP_STORE_URL;
+  const googlePlayUrl = (import.meta.env.VITE_ASSOCIADO_GOOGLE_PLAY_URL as string | undefined) || ASSOCIADO_GOOGLE_PLAY_URL;
+
+  const handleInstall = () => {
+    const os = detectMobileOs();
+    if (os === 'ios') {
+      window.location.assign(appStoreUrl);
+      return;
+    }
+    if (os === 'android') {
+      window.location.assign(googlePlayUrl);
+      return;
+    }
+    setShowFallback(true);
+  };
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <a
-        href={appStoreUrl || undefined}
-        target="_blank"
-        rel="noreferrer"
-        aria-disabled={!appStoreUrl}
-        className={`min-h-14 rounded-2xl border px-4 py-3 flex items-center gap-3 transition ${
-          appStoreUrl ? 'border-slate-900 bg-slate-900 text-white hover:bg-slate-800' : 'border-slate-200 bg-slate-100 text-slate-400 pointer-events-none'
-        }`}
+    <div className="space-y-3">
+      <button
+        type="button"
+        onClick={handleInstall}
+        className="flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl border border-emerald-700 bg-emerald-700 px-4 py-3 font-semibold text-white transition hover:bg-emerald-800"
       >
-        <Apple className="w-6 h-6 shrink-0" />
-        <span><span className="block text-xs">Baixar na</span><strong className="block">App Store</strong></span>
-      </a>
-      <a
-        href={googlePlayUrl || undefined}
-        target="_blank"
-        rel="noreferrer"
-        aria-disabled={!googlePlayUrl}
-        className={`min-h-14 rounded-2xl border px-4 py-3 flex items-center gap-3 transition ${
-          googlePlayUrl ? 'border-emerald-700 bg-emerald-700 text-white hover:bg-emerald-800' : 'border-slate-200 bg-slate-100 text-slate-400 pointer-events-none'
-        }`}
-      >
-        <Smartphone className="w-6 h-6 shrink-0" />
-        <span><span className="block text-xs">Disponivel no</span><strong className="block">Google Play</strong></span>
-      </a>
+        <Smartphone className="h-6 w-6 shrink-0" />
+        <span>Instalar aplicativo</span>
+      </button>
+
+      {showFallback && (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
+          <p className="text-sm leading-6 text-slate-600">
+            Nao foi possivel identificar automaticamente o sistema deste aparelho. Escolha a loja abaixo.
+          </p>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <a
+              href={appStoreUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100"
+            >
+              <Apple className="h-5 w-5" />App Store
+            </a>
+            <a
+              href={googlePlayUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="flex min-h-12 items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-100"
+            >
+              <Smartphone className="h-5 w-5" />Google Play
+            </a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
