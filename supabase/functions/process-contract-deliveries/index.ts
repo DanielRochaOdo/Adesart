@@ -138,16 +138,26 @@ const sendErpDocument = async (supabase: any, payload: any) => {
   const ERP_BASE_URL = Deno.env.get("ERP_ENDPOINT") || Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
   if (!ERP_TOKEN) throw new Error("ERP_TOKEN not configured");
 
-  const idFuncionario = Number(payload.idFuncionario || payload.vendedorCodigo || 0);
-  if (idFuncionario <= 0) throw new Error("ERP_FUNCIONARIO_ID_NOT_FOUND");
+  // No fluxo por link, idFuncionario e o codigo externo do vendedor que criou o link.
+  // Nao deve ser substituido pelo codigo do associado criado no ERP.
+  const idFuncionario = Number(payload.idFuncionario || 0);
+  if (!Number.isInteger(idFuncionario) || idFuncionario <= 0) {
+    throw new Error("ERP_FUNCIONARIO_ID_NOT_FOUND");
+  }
 
   let idDependente = Number(payload.idDependente || 0);
-  if (idDependente <= 0) {
+  if (!Number.isInteger(idDependente) || idDependente <= 0) {
     idDependente = await resolveErpDependentId(
       String(payload.cpf || ""),
       Number(payload.empresaCodigo || 0),
     );
   }
+
+  console.info("[process-contract-deliveries] ERP document upload", {
+    idFuncionario,
+    idDependente,
+    empresaCodigo: Number(payload.empresaCodigo || 0),
+  });
 
   const bytes = await downloadContract(supabase, payload);
   const response = await fetch(
@@ -165,12 +175,28 @@ const sendErpDocument = async (supabase: any, payload: any) => {
   );
 
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    throw new Error(String(result?.message || result?.mensagem || `ERP_DOCUMENT_UPLOAD_FAILED:${response.status}`));
+  const rawCode = result?.codigo;
+  const erpCode = rawCode === null || rawCode === undefined || rawCode === ""
+    ? null
+    : Number(rawCode);
+  const erpMessage = String(result?.message || result?.mensagem || "").trim();
+  const hasErros = Array.isArray(result?.erros)
+    ? result.erros.length > 0
+    : Boolean(result?.erros);
+  const functionalFailure =
+    (erpCode !== null && Number.isFinite(erpCode) && erpCode !== 1)
+    || result?.success === false
+    || hasErros;
+
+  if (!response.ok || functionalFailure) {
+    const reason = erpMessage
+      || (erpCode !== null ? `ERP_DOCUMENT_UPLOAD_REJECTED:${erpCode}` : `ERP_DOCUMENT_UPLOAD_FAILED:${response.status}`);
+    throw new Error(reason);
   }
 
   return {
     ids: { idFuncionario, idDependente },
+    erpCode,
     result,
     pdfHash: payload.pdfHash,
   };
