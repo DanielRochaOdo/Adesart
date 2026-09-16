@@ -12,12 +12,41 @@ import {
 const retryMinutes = [5, 30, 120, 360, 720];
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-const authorizeServiceRole = (req: Request) => {
-  const expected = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  const received = (req.headers.get("Authorization") || "")
+const configuredSecretKeys = () => {
+  const keys: string[] = [];
+  const raw = Deno.env.get("SUPABASE_SECRET_KEYS") || "";
+
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        for (const value of Object.values(parsed)) {
+          if (typeof value === "string" && value.trim()) keys.push(value.trim());
+        }
+      }
+    } catch (error) {
+      console.warn("[process-contract-deliveries] SUPABASE_SECRET_KEYS invalido", error);
+    }
+  }
+
+  const single = (Deno.env.get("SUPABASE_SECRET_KEY") || "").trim();
+  if (single) keys.push(single);
+
+  return [...new Set(keys)];
+};
+
+const authorizeServiceRequest = (req: Request) => {
+  const legacy = (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "").trim();
+  const bearer = (req.headers.get("Authorization") || "")
     .replace(/^Bearer\s+/i, "")
     .trim();
-  return Boolean(expected && received && expected === received);
+  const apiKey = (req.headers.get("apikey") || "").trim();
+
+  // Compatibilidade com a chave service_role legada.
+  if (legacy && (bearer === legacy || apiKey === legacy)) return true;
+
+  // Chaves atuais do Supabase (sb_secret_...) devem chegar pelo header apikey.
+  return Boolean(apiKey && configuredSecretKeys().includes(apiKey));
 };
 
 const toBase64 = (bytes: Uint8Array) => {
@@ -258,7 +287,7 @@ const failJob = async (supabase: any, job: any, error: unknown) => {
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Metodo nao permitido" }, 405);
-  if (!authorizeServiceRole(req)) return jsonResponse({ error: "Nao autorizado" }, 401);
+  if (!authorizeServiceRequest(req)) return jsonResponse({ error: "Nao autorizado" }, 401);
 
   const supabase = createServiceClient();
   try {
