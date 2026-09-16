@@ -125,6 +125,65 @@ async function erpCreate(payload: any) {
   return data;
 }
 
+function isActiveErpStatus(dep: any) {
+  const statusCode = Number(dep?.codigoSituacao);
+  const statusName = String(dep?.nomeSituacao || "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  return statusCode === 1 || statusName === "ATIVO";
+}
+
+async function checkErpEligibility(cpfValue: string) {
+  const token = Deno.env.get("ERP_TOKEN");
+  let base = Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
+  if (!token) throw new Error("ERP_TOKEN not configured");
+  if (!/^https?:\/\//i.test(base)) base = `https://${base}`;
+  base = base.replace(/\/+$/, "");
+
+  const cpf = normalizeDigits(cpfValue);
+  const response = await fetch(
+    `${base}/v2/api/associados?token=${encodeURIComponent(token)}&cpfAssociado=${cpf}&incluirAns=true`,
+    { headers: { Accept: "application/json" } },
+  );
+  if (!response.ok) throw new Error("ERP_VALIDATION_UNAVAILABLE");
+
+  const result = await response.json();
+  const records = Array.isArray(result?.dados) ? result.dados : [];
+
+  for (const associado of records) {
+    const dependentes = Array.isArray(associado?.dependentes) ? associado.dependentes : [];
+    const exactMatches = dependentes.filter(
+      (dep: any) => normalizeDigits(dep?.numeroCpfDependente) === cpf,
+    );
+
+    let candidates = exactMatches;
+    if (candidates.length === 0 && normalizeDigits(associado?.cpf) === cpf && dependentes.length > 0) {
+      candidates = [dependentes[0]];
+    }
+
+    for (const dep of candidates) {
+      if (isActiveErpStatus(dep)) {
+        return {
+          eligible: false,
+          activeRecord: {
+            codigoAssociado: associado?.codigo ?? null,
+            codigoEmpresa: associado?.codigoDaEmpresa ?? null,
+            codigoDependente: dep?.codigoDependente ?? null,
+            codigoPlano: dep?.codigoPlano ?? null,
+            codigoSituacao: dep?.codigoSituacao ?? null,
+            nomeSituacao: dep?.nomeSituacao ?? null,
+          },
+        };
+      }
+    }
+  }
+
+  return { eligible: true, activeRecord: null };
+}
+
 async function reconcile(snapshot: any) {
   const token = Deno.env.get("ERP_TOKEN");
   const base = Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
@@ -349,13 +408,34 @@ Deno.serve(async (req: Request) => {
     const c = snapshot.cadastro;
     const l = snapshot.link;
 
-    const { data: blocked } = await supabase.rpc("check_public_link_blocked_cpf", { p_cpf: c.cpf });
-    if (blocked?.blocked) {
+    let erpEligibility: { eligible: boolean; activeRecord: any };
+    try {
+      erpEligibility = await checkErpEligibility(c.cpf);
+    } catch (eligibilityError) {
+      await supabase.from("public_contract_sessions").update({
+        status: previousStatus,
+        updated_at: new Date().toISOString(),
+      }).eq("id", claimed.id);
+
+      const eligibilityMessage = eligibilityError instanceof Error ? eligibilityError.message : "ERP_VALIDATION_UNAVAILABLE";
+      if (eligibilityMessage === "ERP_VALIDATION_UNAVAILABLE") {
+        return jsonResponse({
+          error: "Nao foi possivel validar a situacao atual do CPF no ERP. Tente novamente.",
+          code: "ERP_VALIDATION_UNAVAILABLE",
+        }, 503);
+      }
+      throw eligibilityError;
+    }
+
+    if (!erpEligibility.eligible) {
       await supabase.from("public_contract_sessions").update({
         status: "needs_attention",
         updated_at: new Date().toISOString(),
       }).eq("id", claimed.id);
-      return jsonResponse({ error: "Este CPF ja possui uma adesao concluida", code: "CPF_ALREADY_COMPLETED" }, 409);
+      return jsonResponse({
+        error: "Este CPF ja possui uma adesao ativa no ERP",
+        code: "CPF_ACTIVE_IN_ERP",
+      }, 409);
     }
 
     const erpPayload = await buildErpPayload(supabase, snapshot);
