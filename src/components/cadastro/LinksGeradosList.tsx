@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
+  Download,
   ExternalLink,
   History,
   Link2,
@@ -14,6 +15,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { generateCadastroLinkToken, hashCadastroLinkToken } from '../../lib/cadastroLink';
@@ -93,6 +95,7 @@ interface LinksGeradosListProps {
 }
 
 const PAGE_SIZE = 5;
+const HISTORY_PAGE_SIZE = 10;
 
 const formatDateTime = (value: string) => {
   try {
@@ -136,6 +139,13 @@ const normalizeSearch = (value: unknown) => String(value || '')
   .replace(/[\u0300-\u036f]/g, '')
   .toLowerCase()
   .trim();
+
+const safeFilePart = (value: unknown) => String(value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-zA-Z0-9_-]+/g, '-')
+  .replace(/^-+|-+$/g, '')
+  .toLowerCase();
 
 const countDependentesCadastrados = (dependentes: unknown) => {
   if (!Array.isArray(dependentes)) return 0;
@@ -204,6 +214,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
   const [historySummary, setHistorySummary] = useState<LinkHistorySummary | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
+  const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
 
   const loadLinks = async () => {
     setLoading(true);
@@ -301,6 +312,10 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
   const pagedLinks = filteredLinks.slice(pageStart, pageStart + PAGE_SIZE);
   const groupedLinks = useMemo(() => groupLinksByEmpresa(pagedLinks), [pagedLinks]);
 
+  const historyTotalPages = Math.max(1, Math.ceil(historyRows.length / HISTORY_PAGE_SIZE));
+  const historyPageStart = (historyCurrentPage - 1) * HISTORY_PAGE_SIZE;
+  const pagedHistoryRows = historyRows.slice(historyPageStart, historyPageStart + HISTORY_PAGE_SIZE);
+
   useEffect(() => {
     loadLinks();
   }, [reloadKey]);
@@ -312,6 +327,10 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
   useEffect(() => {
     if (currentPage > totalPages) setCurrentPage(totalPages);
   }, [currentPage, totalPages]);
+
+  useEffect(() => {
+    if (historyCurrentPage > historyTotalPages) setHistoryCurrentPage(historyTotalPages);
+  }, [historyCurrentPage, historyTotalPages]);
 
   const handleCopyLink = async (link: CadastroLinkRow) => {
     if (!link.link_url) return;
@@ -395,6 +414,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
     setHistoryRows([]);
     setHistorySummary(null);
     setHistoryError('');
+    setHistoryCurrentPage(1);
     setHistoryLoading(true);
 
     try {
@@ -413,6 +433,47 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
     } finally {
       setHistoryLoading(false);
     }
+  };
+
+  const handleExportHistory = () => {
+    if (!selectedHistoryLink || historyRows.length === 0) return;
+
+    const exportRows = historyRows.map((row) => ({
+      Data: formatDate(row.timestamp),
+      Horario: formatTime(row.timestamp),
+      'Nome do RF': row.nomeRf || '',
+      Dependentes: row.dependentes.length > 0 ? row.dependentes.join(', ') : '',
+      Telefone: row.telefone ? formatPhone(row.telefone) : '',
+      Status: row.status,
+      Vendedor: row.vendedor,
+      'Codigo do vendedor': row.vendedorCodigo || '',
+      Empresa: row.empresaNome,
+      'Codigo da empresa': row.empresaCodigo,
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    worksheet['!cols'] = [
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 32 },
+      { wch: 42 },
+      { wch: 18 },
+      { wch: 42 },
+      { wch: 34 },
+      { wch: 18 },
+      { wch: 34 },
+      { wch: 18 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Historico');
+
+    const companyPart = safeFilePart(selectedHistoryLink.empresa_nome) || 'empresa';
+    const datePart = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(
+      workbook,
+      `historico-link-${selectedHistoryLink.empresa_codigo}-${companyPart}-${datePart}.xlsx`
+    );
   };
 
   const toggleGroup = (groupKey: string) => {
@@ -681,7 +742,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
             className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+            <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-slate-800">Historico do link</h3>
                 <p className="mt-1 text-sm text-slate-600">
@@ -691,14 +752,25 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                   Vendedor: {selectedHistoryLink.vendedor_nome} (Codigo {selectedHistoryLink.vendedor_codigo})
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedHistoryLink(null)}
-                className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                aria-label="Fechar historico"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-2 self-end sm:self-start">
+                <button
+                  type="button"
+                  onClick={handleExportHistory}
+                  disabled={historyLoading || historyRows.length === 0}
+                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-600 bg-emerald-600 px-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Download className="h-4 w-4" />
+                  Exportar XLSX
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedHistoryLink(null)}
+                  className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                  aria-label="Fechar historico"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
             {historySummary && (
@@ -753,7 +825,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {historyRows.map((row) => (
+                    {pagedHistoryRows.map((row) => (
                       <tr key={row.id} className="align-top hover:bg-slate-50">
                         <td className="whitespace-nowrap px-3 py-3 text-slate-700">{formatDate(row.timestamp)}</td>
                         <td className="whitespace-nowrap px-3 py-3 text-slate-700">{formatTime(row.timestamp)}</td>
@@ -778,6 +850,35 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                 </table>
               )}
             </div>
+
+            {!historyLoading && !historyError && historyRows.length > 0 && (
+              <div className="flex flex-col gap-3 border-t border-slate-200 bg-white px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-slate-500">
+                  Mostrando {historyPageStart + 1}-{Math.min(historyPageStart + HISTORY_PAGE_SIZE, historyRows.length)} de {historyRows.length} registros • 10 por pagina
+                </p>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setHistoryCurrentPage((page) => Math.max(1, page - 1))}
+                    disabled={historyCurrentPage === 1}
+                    className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-4 w-4" />Anterior
+                  </button>
+                  <span className="min-w-20 text-center text-xs font-medium text-slate-600">
+                    {historyCurrentPage} de {historyTotalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setHistoryCurrentPage((page) => Math.min(historyTotalPages, page + 1))}
+                    disabled={historyCurrentPage === historyTotalPages}
+                    className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Proxima<ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="border-t border-slate-200 bg-slate-50 px-5 py-3 text-xs leading-5 text-slate-500">
               A identificacao detalhada de quem apenas abriu o link passa a ser registrada a partir desta atualizacao. Acessos anteriores continuam preservados no contador total de cliques.
