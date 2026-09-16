@@ -13,7 +13,7 @@ const jsonResponse = (body: unknown, status = 200) => new Response(JSON.stringif
   headers: { ...corsHeaders, "Content-Type": "application/json" },
 });
 
-const ALLOWED_RECIPIENT = "daniel.rocha@odontoart.com";
+const TEST_RECIPIENT = "daniel.rocha@odontoart.com";
 
 async function createTestPdf() {
   const pdf = await PDFDocument.create();
@@ -33,13 +33,6 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return jsonResponse({ error: "Metodo nao permitido" }, 405);
 
   try {
-    const body = await req.json().catch(() => ({})) as { email?: string };
-    const email = String(body.email || "").trim().toLowerCase();
-
-    if (email !== ALLOWED_RECIPIENT) {
-      return jsonResponse({ error: "Destinatario nao autorizado para este teste" }, 403);
-    }
-
     const username = Deno.env.get("SMTP_USERNAME") || Deno.env.get("SMTP_USER");
     const password = Deno.env.get("SMTP_PASSWORD") || Deno.env.get("SMTP_PASS");
     const from = Deno.env.get("SMTP_FROM") || Deno.env.get("SMTP_FROM_EMAIL");
@@ -68,7 +61,7 @@ Deno.serve(async (req: Request) => {
     const host = String(username).split("@")[1] || "odontoart.local";
     const info = await transporter.sendMail({
       from,
-      to: email,
+      to: TEST_RECIPIENT,
       subject: "Teste de envio de contrato - Adesart",
       messageId: `<teste-contrato-${Date.now()}@${host}>`,
       text: "Teste do fluxo de envio de contrato do Adesart.\n\nSe voce recebeu esta mensagem com o PDF em anexo, a conexao SMTP e o envio de anexos estao funcionando corretamente.",
@@ -81,7 +74,7 @@ Deno.serve(async (req: Request) => {
 
     return jsonResponse({
       ok: true,
-      recipient: email,
+      recipient: TEST_RECIPIENT,
       messageId: info.messageId,
       accepted: info.accepted,
       rejected: info.rejected,
