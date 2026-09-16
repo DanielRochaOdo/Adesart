@@ -72,11 +72,30 @@ Deno.serve(async (req: Request) => {
     try {
       const { error: clickError } = await supabase.rpc("increment_cadastro_link_click", { p_link_id: link.id });
       if (clickError) {
-        const { error: fallbackError } = await supabase
+        console.warn("[cadastro-link-resolve] RPC de clique indisponivel; usando fallback", clickError);
+
+        // Fallback defensivo: mantem o contador funcionando mesmo se a migracao
+        // da RPC ainda nao tiver sido aplicada no ambiente.
+        const { data: currentClick, error: readClickError } = await supabase
           .from("cadastro_links")
-          .update({ last_clicked_at: new Date().toISOString() })
-          .eq("id", link.id);
-        if (fallbackError) console.warn("[cadastro-link-resolve] falha ao registrar clique", fallbackError);
+          .select("click_count")
+          .eq("id", link.id)
+          .maybeSingle();
+
+        if (readClickError) {
+          console.warn("[cadastro-link-resolve] falha ao ler contador de clique", readClickError);
+        } else {
+          const nextClickCount = Math.max(0, Number(currentClick?.click_count || 0)) + 1;
+          const { error: fallbackError } = await supabase
+            .from("cadastro_links")
+            .update({
+              click_count: nextClickCount,
+              last_clicked_at: new Date().toISOString(),
+            })
+            .eq("id", link.id);
+
+          if (fallbackError) console.warn("[cadastro-link-resolve] falha ao registrar clique", fallbackError);
+        }
       }
     } catch (clickError) {
       console.warn("[cadastro-link-resolve] falha ao registrar clique", clickError);
