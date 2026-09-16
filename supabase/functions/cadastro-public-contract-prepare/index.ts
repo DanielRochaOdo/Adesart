@@ -26,6 +26,7 @@ type CadastroInput = {
 };
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const ORTHODONTIC_PLAN_CODES = new Set([4, 11]);
 const money = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const moneyValue = (value: number) => Number(value || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatCpf = (cpf: string) => normalizeDigits(cpf).replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
@@ -98,6 +99,14 @@ const renderTemplate = (body: string, values: Record<string, string>) => {
   return rendered;
 };
 
+const applyContractDuration = (text: string, hasOrthodonticPlan: boolean) => {
+  if (!hasOrthodonticPlan) return text;
+  return text.replace(
+    /pelo per[ií]odo de 12\s*\(doze\)\s*meses/giu,
+    "pelo período de 18 (dezoito) meses",
+  );
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Metodo nao permitido" }, 405);
@@ -128,6 +137,7 @@ Deno.serve(async (req: Request) => {
     const linkPlans = (Array.isArray(link.planos_raw) ? link.planos_raw : []).map(sanitizePlan);
     const allowedCodes = new Set(linkPlans.map((item: any) => Number(item.Plano)));
     const selectedCodes = [Number(cadastro.titularPlano), ...cadastro.dependentes.map((item) => Number(item.plano))];
+    const hasOrthodonticPlan = selectedCodes.some((code) => ORTHODONTIC_PLAN_CODES.has(code));
     if (selectedCodes.some((code) => !allowedCodes.has(code))) return jsonResponse({ error: "Plano nao permitido para este link", code: "PLAN_NOT_ALLOWED" }, 400);
 
     const currentPlans = await fetchCurrentPlans(link);
@@ -177,6 +187,7 @@ Deno.serve(async (req: Request) => {
     const plansSummary = [`Titular: ${normalizedCadastro.titularPlanoNome} - ${money(normalizedCadastro.titularPlanoValor)}`, ...normalizedDependents.map((dep) => `Dependente: ${dep.nome} - ${dep.planoNome} - ${money(dep.planoValor)}`)].join("\n");
     const beneficiaries = joinBeneficiaries([normalizedCadastro.nome, ...normalizedDependents.map((dep) => dep.nome)]);
     const totalMonthlyValue = Number(normalizedCadastro.titularPlanoValor || 0) + normalizedDependents.reduce((sum, dep) => sum + Number(dep.planoValor || 0), 0);
+    const contractDurationMonths = hasOrthodonticPlan ? 18 : 12;
     const replacements = {
       NOME_RF: normalizedCadastro.nome,
       CPF_RF: formatCpf(normalizedCadastro.cpf),
@@ -189,16 +200,18 @@ Deno.serve(async (req: Request) => {
       DATA_ACEITE: formatDateOnly(new Date()),
       VALOR_DO_PLANO: moneyValue(totalMonthlyValue),
       BENEFICIARIOS: beneficiaries,
+      PERIODO_CONTRATO: hasOrthodonticPlan ? "18 (dezoito) meses" : "12 (doze) meses",
     };
 
     const templatesToRender: any[] = defaultTemplate && missingPlans.length > 0
       ? [defaultTemplate]
       : uniquePlans.map((code) => templateMap.get(code)).filter(Boolean);
-    const contractText = templatesToRender
+    const renderedContractText = templatesToRender
       .map((template) => renderTemplate(String(template.body_text || ""), replacements).trim())
       .filter(Boolean)
       .join("\n\n")
       .trim();
+    const contractText = applyContractDuration(renderedContractText, hasOrthodonticPlan);
     if (!contractText) return jsonResponse({ error: "O contrato deste plano ainda nao esta configurado.", code: "CONTRACT_NOT_CONFIGURED", missingPlans: uniquePlans }, 409);
 
     const snapshot = {
@@ -212,6 +225,7 @@ Deno.serve(async (req: Request) => {
         ...normalizedCadastro,
         valorMensalTotal: totalMonthlyValue,
         beneficiarios: [normalizedCadastro.nome, ...normalizedDependents.map((dep) => dep.nome)],
+        duracaoContratoMeses: contractDurationMonths,
       },
       confirmedEmail,
     };
@@ -232,7 +246,7 @@ Deno.serve(async (req: Request) => {
       const { error: logError } = await supabase.from("api_logs").insert({
         endpoint: "cadastro-public-contract-prepare", method: "POST",
         request_body: { attempt_id: attempt.id, cpf_hash: await hashSensitiveValue(cpf), plan_codes: uniquePlans },
-        response_body: { contract_session_id: session.id, contract_hash: contractHash }, status_code: 200, success: true, duration_ms: 0,
+        response_body: { contract_session_id: session.id, contract_hash: contractHash, contract_duration_months: contractDurationMonths }, status_code: 200, success: true, duration_ms: 0,
       });
       if (logError) console.warn("[cadastro-public-contract-prepare] log", logError.message);
     } catch (logError) {
@@ -241,7 +255,7 @@ Deno.serve(async (req: Request) => {
 
     return jsonResponse({
       ok: true, contractToken, contractHash, contractText,
-      summary: { empresa: link.empresa_nome, titular: normalizedCadastro.nome, titularPlano: normalizedCadastro.titularPlanoNome, titularValor: normalizedCadastro.titularPlanoValor, dependentes: normalizedDependents.map((dep) => ({ nome: dep.nome, plano: dep.planoNome, valor: dep.planoValor })), confirmedEmail },
+      summary: { empresa: link.empresa_nome, titular: normalizedCadastro.nome, titularPlano: normalizedCadastro.titularPlanoNome, titularValor: normalizedCadastro.titularPlanoValor, dependentes: normalizedDependents.map((dep) => ({ nome: dep.nome, plano: dep.planoNome, valor: dep.planoValor })), confirmedEmail, duracaoContratoMeses: contractDurationMonths },
     });
   } catch (error) {
     console.error("[cadastro-public-contract-prepare]", error);
