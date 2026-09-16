@@ -11,12 +11,67 @@ import {
   sha256,
 } from "../_shared/public-flow.ts";
 
+const ERP_REQUEST_TIMEOUT_MS = 20_000;
+const ERP_VALIDATION_TIMEOUT_MS = 15_000;
+const ERP_RECONCILE_TIMEOUT_MS = 8_000;
+const STALE_ERP_PROCESSING_MS = 2 * 60_000;
+const RECONCILE_DELAYS_MS = [0, 1200, 2500];
+const ERP_ABORT_FRIENDLY_MESSAGE =
+  "A conexao foi interrompida durante o envio ao ERP. Nao foi possivel confirmar automaticamente o resultado.";
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const cpfFmt = (v: string) => normalizeDigits(v).replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
 const dateFmt = (v: string) => {
   const [y, m, d] = String(v || "").split("-");
   return y && m && d ? `${d}/${m}/${y}` : v;
 };
 const moneyFmt = (v: number) => Number(v || 0).toFixed(2).replace(".", ",");
+
+class ErpSubmitError extends Error {
+  uncertain: boolean;
+  details: any;
+  httpStatus: number | null;
+
+  constructor(
+    message: string,
+    options: { uncertain?: boolean; details?: any; httpStatus?: number | null } = {},
+  ) {
+    super(message);
+    this.name = "ErpSubmitError";
+    this.uncertain = Boolean(options.uncertain);
+    this.details = options.details ?? null;
+    this.httpStatus = options.httpStatus ?? null;
+  }
+}
+
+const extractErpMessage = (payload: any) => {
+  for (const value of [
+    payload?.message,
+    payload?.mensagem,
+    payload?.error,
+    payload?.dados?.mensagem,
+    payload?.data?.mensagem,
+  ]) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return "Erro ao cadastrar no ERP";
+};
+
+const erpBaseUrl = () => {
+  let base = Deno.env.get("ERP_BASE_URL") || Deno.env.get("ERP_ENDPOINT") || "https://odontoart.s4e.com.br";
+  if (!/^https?:\/\//i.test(base)) base = `https://${base}`;
+  return base.replace(/\/+$/, "");
+};
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 async function sellerCode(supabase: any, link: any) {
   const direct = Number.parseInt(String(link.vendedorCodigo || ""), 10);
@@ -113,14 +168,33 @@ async function erpCreate(payload: any) {
   const url = Deno.env.get("ERP_URL") || "https://odontoart.s4e.com.br/api/vendedor/NovoUsuario2";
   if (!token) throw new Error("ERP_TOKEN not configured");
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { token, "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(
+      url,
+      {
+        method: "POST",
+        headers: { token, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      ERP_REQUEST_TIMEOUT_MS,
+    );
+  } catch (error) {
+    console.warn("[cadastro-public-submit] ERP transport", error);
+    throw new ErpSubmitError(ERP_ABORT_FRIENDLY_MESSAGE, {
+      uncertain: true,
+      details: { cause: error instanceof Error ? error.message : String(error) },
+    });
+  }
+
   const data = await res.json().catch(() => ({}));
-  if (!res.ok || !(data?.dados?.codigo || data?.data?.dados?.codigo)) {
-    throw new Error(String(data?.message || data?.mensagem || data?.error || "Erro ao cadastrar no ERP"));
+  const hasCode = data?.dados?.codigo || data?.data?.dados?.codigo;
+  if (!res.ok || !hasCode) {
+    throw new ErpSubmitError(extractErpMessage(data), {
+      uncertain: false,
+      details: data,
+      httpStatus: res.status,
+    });
   }
   return data;
 }
@@ -133,21 +207,27 @@ function isActiveErpStatus(dep: any) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
+  // Regra exclusiva do fluxo por link: bloqueia somente situacao ATIVO.
   return statusCode === 1 || statusName === "ATIVO";
 }
 
 async function checkErpEligibility(cpfValue: string) {
   const token = Deno.env.get("ERP_TOKEN");
-  let base = Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
   if (!token) throw new Error("ERP_TOKEN not configured");
-  if (!/^https?:\/\//i.test(base)) base = `https://${base}`;
-  base = base.replace(/\/+$/, "");
 
   const cpf = normalizeDigits(cpfValue);
-  const response = await fetch(
-    `${base}/v2/api/associados?token=${encodeURIComponent(token)}&cpfAssociado=${cpf}&incluirAns=true`,
-    { headers: { Accept: "application/json" } },
-  );
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      `${erpBaseUrl()}/v2/api/associados?token=${encodeURIComponent(token)}&cpfAssociado=${cpf}&incluirAns=true`,
+      { headers: { Accept: "application/json" } },
+      ERP_VALIDATION_TIMEOUT_MS,
+    );
+  } catch (error) {
+    console.warn("[cadastro-public-submit] ERP eligibility transport", error);
+    throw new Error("ERP_VALIDATION_UNAVAILABLE");
+  }
+
   if (!response.ok) throw new Error("ERP_VALIDATION_UNAVAILABLE");
 
   const result = await response.json();
@@ -186,35 +266,44 @@ async function checkErpEligibility(cpfValue: string) {
 
 async function reconcile(snapshot: any) {
   const token = Deno.env.get("ERP_TOKEN");
-  const base = Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
   if (!token) return null;
 
-  try {
-    const cpf = normalizeDigits(snapshot.cadastro.cpf);
-    const res = await fetch(
-      `${base}/v2/api/associados?token=${encodeURIComponent(token)}&cpfAssociado=${cpf}&incluirAns=true`,
-      { headers: { Accept: "application/json" } },
-    );
-    if (!res.ok) return null;
+  const cpf = normalizeDigits(snapshot.cadastro.cpf);
 
-    const raw = await res.json();
-    for (const a of Array.isArray(raw?.dados) ? raw.dados : []) {
-      if (Number(a?.codigoDaEmpresa) !== Number(snapshot.link.empresaCodigo)) continue;
-      const titular = (Array.isArray(a?.dependentes) ? a.dependentes : []).find(
-        (d: any) => normalizeDigits(d?.numeroCpfDependente) === cpf && Number(d?.codigoPlano) === Number(snapshot.cadastro.titularPlano),
+  for (const delay of RECONCILE_DELAYS_MS) {
+    if (delay > 0) await sleep(delay);
+
+    try {
+      const res = await fetchWithTimeout(
+        `${erpBaseUrl()}/v2/api/associados?token=${encodeURIComponent(token)}&cpfAssociado=${cpf}&incluirAns=true`,
+        { headers: { Accept: "application/json" } },
+        ERP_RECONCILE_TIMEOUT_MS,
       );
-      if (titular) {
-        return {
-          reconciled: true,
-          dados: { codigo: a.codigo },
-          titularCodigo: Number(titular?.codigoDependente || titular?.codigo || 0) || null,
-          source: raw,
-        };
+      if (!res.ok) continue;
+
+      const raw = await res.json();
+      for (const a of Array.isArray(raw?.dados) ? raw.dados : []) {
+        if (Number(a?.codigoDaEmpresa) !== Number(snapshot.link.empresaCodigo)) continue;
+        const titular = (Array.isArray(a?.dependentes) ? a.dependentes : []).find(
+          (d: any) =>
+            normalizeDigits(d?.numeroCpfDependente) === cpf
+            && Number(d?.codigoPlano) === Number(snapshot.cadastro.titularPlano)
+            && isActiveErpStatus(d),
+        );
+        if (titular) {
+          return {
+            reconciled: true,
+            dados: { codigo: a.codigo },
+            titularCodigo: Number(titular?.codigoDependente || titular?.codigo || 0) || null,
+            source: raw,
+          };
+        }
       }
+    } catch (error) {
+      console.warn("[cadastro-public-submit] reconcile", error);
     }
-  } catch (e) {
-    console.warn("[cadastro-public-submit] reconcile", e);
   }
+
   return null;
 }
 
@@ -235,9 +324,66 @@ function extractTitularErpId(erpResult: any, cpf: string, empresaCodigo: number)
   const records = Array.isArray(erpResult?.source?.dados) ? erpResult.source.dados : [];
   const associado = records.find((item: any) => Number(item?.codigoDaEmpresa) === Number(empresaCodigo)) || records[0];
   const deps = Array.isArray(associado?.dependentes) ? associado.dependentes : [];
-  const titular = deps.find((dep: any) => normalizeDigits(dep?.numeroCpfDependente) === normalizedCpf) || deps[0];
+  const titular = deps.find(
+    (dep: any) => normalizeDigits(dep?.numeroCpfDependente) === normalizedCpf && isActiveErpStatus(dep),
+  ) || deps.find((dep: any) => normalizeDigits(dep?.numeroCpfDependente) === normalizedCpf) || deps[0];
   const fallback = Number(titular?.codigoDependente || titular?.codigo || 0);
   return fallback > 0 ? fallback : null;
+}
+
+async function syncCadastroEnviado(supabase: any, cadastroId: string, erpResult: any) {
+  const basePayload = {
+    status: "enviado",
+    erp_response: erpResult,
+  };
+
+  let update = await supabase
+    .from("cadastros")
+    .update({
+      ...basePayload,
+      data_envio: new Date().toISOString(),
+    })
+    .eq("id", cadastroId)
+    .select("id")
+    .maybeSingle();
+
+  if (update.error?.message?.includes("data_envio")) {
+    console.warn("[cadastro-public-submit] coluna data_envio ausente; sincronizando sem a coluna");
+    update = await supabase
+      .from("cadastros")
+      .update(basePayload)
+      .eq("id", cadastroId)
+      .select("id")
+      .maybeSingle();
+  }
+
+  if (update.error || !update.data) {
+    throw update.error || new Error("CADASTRO_SYNC_FAILED");
+  }
+}
+
+async function resetProcessingSession(
+  supabase: any,
+  sessionId: string | null,
+  stage: string,
+  error: unknown,
+) {
+  if (!sessionId) return;
+
+  const message = error instanceof Error ? error.message : String(error || "Erro inesperado");
+  await supabase
+    .from("public_contract_sessions")
+    .update({
+      status: "erp_failed",
+      erp_response: {
+        error: message.slice(0, 500),
+        stage,
+        failed_at: new Date().toISOString(),
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", sessionId)
+    .eq("status", "erp_processing");
 }
 
 async function makePdf(text: string, acceptance: { acceptedAt: string }) {
@@ -347,6 +493,10 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Metodo nao permitido" }, 405);
 
+  const supabase = createServiceClient();
+  let claimedSessionId: string | null = null;
+  let stage = "request";
+
   try {
     const body = await req.json() as {
       attemptToken?: string;
@@ -359,25 +509,59 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "O aceite dos termos e a confirmacao dos dados sao obrigatorios" }, 400);
     }
 
-    const supabase = createServiceClient();
+    stage = "resolve_attempt";
     const attempt = await resolveAttempt(supabase, body.attemptToken);
     if (!attempt || attempt.status !== "authenticated") return jsonResponse({ error: "Sessao expirada" }, 401);
 
+    stage = "load_contract_session";
     const tokenHash = await sha256(body.contractToken.trim());
-    const { data: session, error: sessionError } = await supabase
+    const { data: initialSession, error: sessionError } = await supabase
       .from("public_contract_sessions")
       .select("*")
       .eq("attempt_id", attempt.id)
       .eq("contract_token_hash", tokenHash)
       .maybeSingle();
 
-    if (sessionError || !session) return jsonResponse({ error: "Contrato nao encontrado ou expirado" }, 404);
+    if (sessionError || !initialSession) return jsonResponse({ error: "Contrato nao encontrado ou expirado" }, 404);
+
+    let session = initialSession;
     if (["erp_registered", "deliveries_pending", "completed"].includes(session.status)) {
       return jsonResponse({ ok: true, cadastroId: session.cadastro_id, state: session.status, message: "Adesao ja processada" });
     }
+
     if (session.status === "erp_processing") {
-      return jsonResponse({ ok: true, cadastroId: session.cadastro_id, state: "processing", message: "Sua adesao esta sendo processada" }, 202);
+      const updatedAt = new Date(session.updated_at || session.created_at || 0).getTime();
+      const isStale = Number.isFinite(updatedAt) && Date.now() - updatedAt >= STALE_ERP_PROCESSING_MS;
+
+      if (!isStale) {
+        return jsonResponse({ ok: true, cadastroId: session.cadastro_id, state: "processing", message: "Sua adesao esta sendo processada" }, 202);
+      }
+
+      stage = "recover_stale_processing";
+      const { data: recovered, error: recoverError } = await supabase
+        .from("public_contract_sessions")
+        .update({
+          status: "erp_failed",
+          erp_response: {
+            error: "STALE_ERP_PROCESSING_RECOVERED",
+            stage: "erp_processing",
+            recovered_at: new Date().toISOString(),
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", session.id)
+        .eq("status", "erp_processing")
+        .select("*")
+        .maybeSingle();
+
+      if (recoverError) throw recoverError;
+      if (!recovered) {
+        return jsonResponse({ ok: true, cadastroId: session.cadastro_id, state: "processing", message: "Sua adesao esta sendo processada" }, 202);
+      }
+
+      session = recovered;
     }
+
     if (!["prepared", "erp_failed"].includes(session.status)) {
       return jsonResponse({ error: "Este contrato nao pode mais ser utilizado" }, 409);
     }
@@ -385,6 +569,8 @@ Deno.serve(async (req: Request) => {
     const previousStatus = session.status;
     const now = new Date().toISOString();
     const ipHash = await hashSensitiveValue(getRequestIp(req));
+
+    stage = "claim_session";
     const { data: claimed, error: claimError } = await supabase
       .from("public_contract_sessions")
       .update({
@@ -404,44 +590,60 @@ Deno.serve(async (req: Request) => {
     if (claimError) throw claimError;
     if (!claimed) return jsonResponse({ ok: true, state: "processing", message: "Sua adesao esta sendo processada" }, 202);
 
+    claimedSessionId = claimed.id;
     const snapshot = claimed.snapshot;
     const c = snapshot.cadastro;
     const l = snapshot.link;
 
-    let erpEligibility: { eligible: boolean; activeRecord: any };
-    try {
-      erpEligibility = await checkErpEligibility(c.cpf);
-    } catch (eligibilityError) {
-      await supabase.from("public_contract_sessions").update({
-        status: previousStatus,
-        updated_at: new Date().toISOString(),
-      }).eq("id", claimed.id);
+    // O fluxo interno reconcilia uma tentativa incerta antes de reenviar ao ERP.
+    // No link fazemos isso apenas quando ja existe cadastro local, evitando reaproveitar historico antigo.
+    let erpResult: any = null;
+    if (previousStatus === "erp_failed" && claimed.cadastro_id) {
+      stage = "reconcile_previous_attempt";
+      erpResult = await reconcile(snapshot);
+    }
 
-      const eligibilityMessage = eligibilityError instanceof Error ? eligibilityError.message : "ERP_VALIDATION_UNAVAILABLE";
-      if (eligibilityMessage === "ERP_VALIDATION_UNAVAILABLE") {
-        return jsonResponse({
-          error: "Nao foi possivel validar a situacao atual do CPF no ERP. Tente novamente.",
-          code: "ERP_VALIDATION_UNAVAILABLE",
-        }, 503);
+    if (!erpResult) {
+      stage = "erp_eligibility";
+      let erpEligibility: { eligible: boolean; activeRecord: any };
+      try {
+        erpEligibility = await checkErpEligibility(c.cpf);
+      } catch (eligibilityError) {
+        await supabase.from("public_contract_sessions").update({
+          status: previousStatus,
+          updated_at: new Date().toISOString(),
+        }).eq("id", claimed.id).eq("status", "erp_processing");
+        claimedSessionId = null;
+
+        const eligibilityMessage = eligibilityError instanceof Error ? eligibilityError.message : "ERP_VALIDATION_UNAVAILABLE";
+        if (eligibilityMessage === "ERP_VALIDATION_UNAVAILABLE") {
+          return jsonResponse({
+            error: "Nao foi possivel validar a situacao atual do CPF no ERP. Tente novamente.",
+            code: "ERP_VALIDATION_UNAVAILABLE",
+          }, 503);
+        }
+        throw eligibilityError;
       }
-      throw eligibilityError;
+
+      if (!erpEligibility.eligible) {
+        await supabase.from("public_contract_sessions").update({
+          status: "needs_attention",
+          updated_at: new Date().toISOString(),
+        }).eq("id", claimed.id);
+        claimedSessionId = null;
+        return jsonResponse({
+          error: "Este CPF ja possui uma adesao ativa no ERP",
+          code: "CPF_ACTIVE_IN_ERP",
+        }, 409);
+      }
     }
 
-    if (!erpEligibility.eligible) {
-      await supabase.from("public_contract_sessions").update({
-        status: "needs_attention",
-        updated_at: new Date().toISOString(),
-      }).eq("id", claimed.id);
-      return jsonResponse({
-        error: "Este CPF ja possui uma adesao ativa no ERP",
-        code: "CPF_ACTIVE_IN_ERP",
-      }, 409);
-    }
-
+    stage = "build_erp_payload";
     const erpPayload = await buildErpPayload(supabase, snapshot);
     let cadastroId = claimed.cadastro_id as string | null;
 
     if (!cadastroId) {
+      stage = "create_local_cadastro";
       const vendedor = await sellerCode(supabase, l);
       const stored = [
         {
@@ -494,7 +696,11 @@ Deno.serve(async (req: Request) => {
         empresa_exige_matricula: l.empresaExigeMatricula,
         planos_raw: [
           { Plano: c.titularPlano, nomeExibicao: c.titularPlanoNome, ValorTitular: c.titularPlanoValor },
-          ...(c.dependentes || []).map((d: any) => ({ Plano: d.plano, nomeExibicao: d.planoNome, ValorDependente: d.planoValor })),
+          ...(c.dependentes || []).map((d: any) => ({
+            Plano: d.plano,
+            nomeExibicao: d.planoNome,
+            ValorDependente: d.planoValor,
+          })),
         ],
         dependentes: stored,
         numero_matricula: c.numeroMatricula || null,
@@ -508,41 +714,70 @@ Deno.serve(async (req: Request) => {
 
       if (insertError || !created) throw insertError || new Error("CADASTRO_CREATE_FAILED");
       cadastroId = created.id;
-      await supabase.from("public_contract_sessions").update({ cadastro_id: cadastroId }).eq("id", claimed.id);
+
+      const { error: sessionCadastroError } = await supabase
+        .from("public_contract_sessions")
+        .update({ cadastro_id: cadastroId, updated_at: new Date().toISOString() })
+        .eq("id", claimed.id);
+      if (sessionCadastroError) throw sessionCadastroError;
     }
 
-    let erpResult: any = previousStatus === "erp_failed" ? await reconcile(snapshot) : null;
     if (!erpResult) {
+      stage = "erp_submit";
       try {
         erpResult = await erpCreate(erpPayload);
       } catch (error) {
-        erpResult = await reconcile(snapshot);
+        const uncertain = error instanceof ErpSubmitError && error.uncertain;
+        if (uncertain) {
+          stage = "erp_reconcile_after_transport";
+          erpResult = await reconcile(snapshot);
+        }
+
         if (!erpResult) {
           const message = error instanceof Error ? error.message : "Erro ao cadastrar no ERP";
-          await supabase.from("cadastros").update({ status: "incompleto", erp_response: { error: message } }).eq("id", cadastroId);
-          await supabase.from("public_contract_sessions").update({ status: "erp_failed", updated_at: new Date().toISOString() }).eq("id", claimed.id);
+          await supabase.from("cadastros").update({
+            status: "incompleto",
+            erp_response: error instanceof ErpSubmitError && error.details
+              ? { error: message, details: error.details }
+              : { error: message },
+          }).eq("id", cadastroId);
+
+          await supabase.from("public_contract_sessions").update({
+            status: "erp_failed",
+            erp_response: {
+              error: message,
+              uncertain,
+              stage: "erp_submit",
+              failed_at: new Date().toISOString(),
+            },
+            updated_at: new Date().toISOString(),
+          }).eq("id", claimed.id).eq("status", "erp_processing");
+          claimedSessionId = null;
+
           return jsonResponse({ error: message, code: "ERP_SUBMIT_FAILED", cadastroId }, 502);
         }
       }
     }
 
-    await supabase.from("cadastros").update({
-      status: "enviado",
-      erp_response: erpResult,
-      data_envio: new Date().toISOString(),
-    }).eq("id", cadastroId);
+    stage = "sync_local_cadastro";
+    await syncCadastroEnviado(supabase, cadastroId, erpResult);
 
-    await supabase.from("cadastro_links").update({
+    stage = "mark_link_used";
+    const { error: linkUpdateError } = await supabase.from("cadastro_links").update({
       used_at: new Date().toISOString(),
       used_cpf: c.cpf,
       used_cadastro_id: cadastroId,
     }).eq("id", l.id);
+    if (linkUpdateError) throw linkUpdateError;
 
-    await supabase.from("public_contract_sessions").update({
+    stage = "mark_erp_registered";
+    const { error: registeredError } = await supabase.from("public_contract_sessions").update({
       status: "erp_registered",
       erp_response: erpResult,
       updated_at: new Date().toISOString(),
     }).eq("id", claimed.id);
+    if (registeredError) throw registeredError;
+    claimedSessionId = null;
 
     const acceptedAt = new Intl.DateTimeFormat("pt-BR", {
       timeZone: "America/Fortaleza",
@@ -554,6 +789,7 @@ Deno.serve(async (req: Request) => {
       hourCycle: "h23",
     }).format(new Date(claimed.accepted_at || now)).replace(",", "");
 
+    stage = "generate_contract_pdf";
     const pdf = await makePdf(claimed.contract_text, { acceptedAt });
     const pdfHash = await sha256(pdf);
     const path = `${new Date().getUTCFullYear()}/${cadastroId}/contrato-${claimed.id}.pdf`;
@@ -574,16 +810,20 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    await supabase.from("public_contract_sessions").update({
+    stage = "prepare_deliveries";
+    const { error: pendingError } = await supabase.from("public_contract_sessions").update({
       status: "deliveries_pending",
       pdf_storage_path: path,
       pdf_hash: pdfHash,
       updated_at: new Date().toISOString(),
     }).eq("id", claimed.id);
+    if (pendingError) throw pendingError;
 
     const fileName = `Contrato-Odontoart-${cadastroId}.pdf`;
     const idFuncionario = await sellerCode(supabase, l);
     const idDependente = extractTitularErpId(erpResult, c.cpf, l.empresaCodigo);
+
+    if (!idFuncionario) throw new Error("ERP_FUNCIONARIO_ID_NOT_FOUND");
 
     const { error: jobsError } = await supabase.from("contract_delivery_jobs").upsert([
       {
@@ -620,14 +860,15 @@ Deno.serve(async (req: Request) => {
 
     if (jobsError) throw jobsError;
 
-    await supabase.from("public_adesao_attempts").update({
+    stage = "complete_attempt";
+    const { error: attemptUpdateError } = await supabase.from("public_adesao_attempts").update({
       status: "completed",
       completed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("id", attempt.id);
+    if (attemptUpdateError) throw attemptUpdateError;
 
-    // Processa imediatamente a sessao que acabou de ser concluida.
-    // A fila continua existindo para retry caso algum canal esteja temporariamente indisponivel.
+    stage = "deliver_contract";
     const deliveryResult = await triggerDeliveryWorker(claimed.id);
     const results = Array.isArray(deliveryResult?.results) ? deliveryResult.results : [];
     const deliveryPending = !deliveryResult?.ok || results.some((item: any) => item?.status !== "sent");
@@ -644,11 +885,21 @@ Deno.serve(async (req: Request) => {
         : "Adesao concluida com sucesso. O contrato foi enviado ao e-mail confirmado e ao ERP.",
     });
   } catch (error) {
-    console.error("[cadastro-public-submit]", error);
+    console.error("[cadastro-public-submit]", {
+      stage,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    await resetProcessingSession(supabase, claimedSessionId, stage, error);
+
     const message = error instanceof Error ? error.message : "Erro inesperado";
     if (message === "SELLER_CODE_MISSING") {
       return jsonResponse({ error: "Link sem codigo de vendedor valido" }, 400);
     }
-    return jsonResponse({ error: "Nao foi possivel concluir a adesao", code: "PUBLIC_SUBMIT_FAILED" }, 500);
+    return jsonResponse({
+      error: "Nao foi possivel concluir a adesao",
+      code: "PUBLIC_SUBMIT_FAILED",
+      stage,
+    }, 500);
   }
 });
