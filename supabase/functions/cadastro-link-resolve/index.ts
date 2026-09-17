@@ -1,5 +1,13 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { corsHeaders, createServiceClient, jsonResponse, resolveLinkByToken, sanitizePlan } from "../_shared/public-flow.ts";
+import {
+  corsHeaders,
+  createServiceClient,
+  getRequestIp,
+  hashSensitiveValue,
+  jsonResponse,
+  resolveLinkByToken,
+  sanitizePlan,
+} from "../_shared/public-flow.ts";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
@@ -67,6 +75,21 @@ Deno.serve(async (req: Request) => {
       } else {
         vendedorTelefone = vendedorProfile?.telefone ?? null;
       }
+    }
+
+    // Historico detalhado de abertura do link. Esta gravacao e independente do
+    // contador para que uma falha de telemetria nunca bloqueie o fluxo publico.
+    try {
+      const ipHash = await hashSensitiveValue(getRequestIp(req));
+      const { error: accessEventError } = await supabase
+        .from("cadastro_link_access_events")
+        .insert({ link_id: link.id, ip_hash: ipHash });
+
+      if (accessEventError) {
+        console.warn("[cadastro-link-resolve] falha ao registrar evento de acesso", accessEventError);
+      }
+    } catch (accessEventError) {
+      console.warn("[cadastro-link-resolve] falha inesperada ao registrar evento de acesso", accessEventError);
     }
 
     try {

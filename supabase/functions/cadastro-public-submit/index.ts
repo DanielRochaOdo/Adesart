@@ -118,7 +118,7 @@ async function buildErpPayload(supabase: any, snapshot: any) {
       descricaoUf: c.endereco.ufSigla || c.endereco.uf,
     },
     contatoResponsavelFinanceiro: contacts,
-    fl_AlteraSituacao: 1,
+    fl_AlteraSituacao: 16,
     dataApresentacao: new Date().toISOString(),
   };
 
