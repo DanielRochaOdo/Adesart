@@ -5,6 +5,7 @@ on:
     paths:
       - 'src/pages/PublicCadastroLink.tsx'
       - 'tsconfig.link-web.json'
+      - 'supabase/functions/_shared/**'
       - 'supabase/functions/cadastro-link-resolve/**'
       - 'supabase/functions/cadastro-public-contract-prepare/**'
       - 'supabase/functions/cadastro-public-submit/**'
@@ -37,3 +38,4 @@ jobs:
             supabase/functions/cadastro-public-contract-prepare/index.ts \
             supabase/functions/cadastro-public-submit/index.ts \
             supabase/functions/process-contract-deliveries/index.ts
+      - run: deno test --node-modules-dir=auto supabase/functions/_shared/plan-coverages.test.ts
