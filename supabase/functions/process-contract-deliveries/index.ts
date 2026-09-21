@@ -84,8 +84,8 @@ const tutorialLinks = [
 const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 const loadCoverageAttachments = async (supabase: any, payload: any) => {
-  const codes = Array.from(new Set((Array.isArray(payload.coveragePlanCodes) ? payload.coveragePlanCodes : [])
-    .map(Number).filter((code: number) => [18, 19, 20].includes(code))));
+  const codes: number[] = [...new Set<number>((Array.isArray(payload.coveragePlanCodes) ? payload.coveragePlanCodes : [])
+    .map(Number).filter((code: number) => [18, 19, 20].includes(code)))];
   if (codes.length === 0) throw new Error("PLAN_COVERAGE_CODE_MISSING");
   const names: Record<number, string> = { 18: "Multiprev", 19: "Multiplus", 20: "Multimaster" };
   const attachments = [];
