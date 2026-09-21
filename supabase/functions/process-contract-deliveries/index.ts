@@ -84,36 +84,41 @@ const tutorialLinks = [
 const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 const loadCoverageAttachments = async (supabase: any, payload: any) => {
-  // Novos contratos preservam os nomes reais dos PDFs verificados na preparacao.
-  // A compatibilidade numerica so se aplica aos contratos antigos ja preparados.
-  const files = Array.isArray(payload.coverageFiles) && payload.coverageFiles.length
-    ? payload.coverageFiles.map((entry: any) => ({
-      family: String(entry.familia || ""),
-      fileName: String(entry.arquivo || ""),
-    }))
-    : [...new Set<number>((Array.isArray(payload.coveragePlanCodes) ? payload.coveragePlanCodes : [])
-      .map(Number).filter((code: number) => [18, 19, 20].includes(code)))]
-      .map((code) => ({
-        family: ({ 18: "multiprev", 19: "multiplus", 20: "multimaster" } as Record<number, string>)[code],
-        fileName: `${code}.pdf`,
-      }));
-  if (!files.length) throw new Error("PLAN_COVERAGE_FILE_MISSING");
-  const attachments = [];
+  // Um array explicito vazio significa "adesao sem cobertura associada".
+  // Nunca deduzir anexos pela lista de codigos quando esse array estiver presente.
+  const files: Array<{ family: string; fileName: string }> =
+    Array.isArray(payload.coverageFiles)
+      ? payload.coverageFiles.map((entry: any) => ({
+        family: String(entry?.familia || ""),
+        fileName: String(entry?.arquivo || ""),
+      }))
+      : []; // Jobs historicos sem lista de PDFs nao autorizam documento presumido.
+
+  const attachments: Array<{ filename: string; content: Uint8Array; contentType: string }> = [];
   const downloaded = new Set<string>();
   for (const { family, fileName } of files) {
     if (!["multimaster", "multiplus", "multiprev"].includes(family) ||
-      !fileName || /[\/\\]/.test(fileName) || !/\.pdf$/i.test(fileName)) {
-      throw new Error("PLAN_COVERAGE_FILE_INVALID");
+      !fileName || fileName.split("/").some((part) => !part || part === "." || part === "..") ||
+      /\\/.test(fileName) || !/\.pdf$/i.test(fileName)) {
+      console.warn("[process-contract-deliveries] ignorando arquivo opcional invalido");
+      continue;
     }
     if (downloaded.has(fileName)) continue;
-    const { data, error } = await supabase.storage.from("plan-coverages").download(fileName);
-    if (error || !data) throw new Error("PLAN_COVERAGE_DOWNLOAD_FAILED");
     downloaded.add(fileName);
-    attachments.push({
-      filename: `Cobertura-${family}.pdf`,
-      content: Buffer.from(await data.arrayBuffer()),
-      contentType: "application/pdf",
-    });
+    try {
+      const { data, error } = await supabase.storage.from("plan-coverages").download(fileName);
+      if (error || !data) {
+        console.warn("[process-contract-deliveries] PDF opcional indisponivel", { fileName });
+        continue;
+      }
+      attachments.push({
+        filename: `Cobertura-${family}.pdf`,
+        content: Buffer.from(await data.arrayBuffer()),
+        contentType: "application/pdf",
+      });
+    } catch (error) {
+      console.warn("[process-contract-deliveries] nao foi possivel anexar PDF opcional", { fileName, error });
+    }
   }
   return attachments;
 };
@@ -131,6 +136,13 @@ const sendEmail = async (supabase: any, payload: any, jobId: string) => {
 
   const bytes = await downloadContract(supabase, payload);
   const coverageAttachments = await loadCoverageAttachments(supabase, payload);
+  const hasCoverageAttachments = coverageAttachments.length > 0;
+  const attachmentDescription = hasCoverageAttachments
+    ? "Em anexo estao o termo de aceite e a cobertura do plano contratado."
+    : "Em anexo esta o termo de aceite da sua adesao.";
+  const attachmentDescriptionHtml = hasCoverageAttachments
+    ? "Em anexo estão o termo de aceite e a cobertura do plano contratado."
+    : "Em anexo está o termo de aceite da sua adesão.";
   const tutorialsText = tutorialLinks.map(([title, url]) => `- ${title}: ${url}`).join("\\n");
   const tutorialsHtml = tutorialLinks.map(([title, url]) => `<li><a href="${url}" target="_blank" rel="noopener noreferrer">${escapeHtml(title)}</a></li>`).join("");
   const transporter = nodemailer.createTransport({
@@ -146,8 +158,8 @@ const sendEmail = async (supabase: any, payload: any, jobId: string) => {
     to: recipient,
     subject: "Seu contrato Odontoart",
     messageId: `<contrato-${jobId}@${host}>`,
-    text: `Ola, ${String(payload.nome || "associado(a)")}!\n\nSua adesao a Odontoart foi concluida com sucesso. Em anexo estao o termo de aceite e a cobertura do plano contratado.\n\nTutoriais do App do Associado:\n${tutorialsText}\n\nGuarde estes documentos para futuras consultas.\n\nAtenciosamente,\nOdontoart`,
-    html: `<p>Olá, ${escapeHtml(String(payload.nome || "associado(a)"))}!</p><p>Sua adesão à Odontoart foi concluída com sucesso. Em anexo estão o termo de aceite e a cobertura do plano contratado.</p><p><strong>Tutoriais do App do Associado:</strong></p><ul>${tutorialsHtml}</ul><p>Guarde estes documentos para futuras consultas.</p><p>Atenciosamente,<br>Odontoart</p>`,
+    text: `Ola, ${String(payload.nome || "associado(a)")}!\n\nSua adesao a Odontoart foi concluida com sucesso. ${attachmentDescription}\n\nTutoriais do App do Associado:\n${tutorialsText}\n\nGuarde estes documentos para futuras consultas.\n\nAtenciosamente,\nOdontoart`,
+    html: `<p>Olá, ${escapeHtml(String(payload.nome || "associado(a)"))}!</p><p>Sua adesão à Odontoart foi concluída com sucesso. ${attachmentDescriptionHtml}</p><p><strong>Tutoriais do App do Associado:</strong></p><ul>${tutorialsHtml}</ul><p>Guarde estes documentos para futuras consultas.</p><p>Atenciosamente,<br>Odontoart</p>`,
     attachments: [{
       filename: String(payload.fileName || "Contrato-Odontoart.pdf"),
       content: Buffer.from(bytes),
