@@ -26,7 +26,8 @@ type CadastroInput = {
 };
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const ORTHODONTIC_PLAN_CODES = new Set([4, 11]);
+const COVERAGE_CODES = new Set([18, 19, 20]);
+const coveragePath = (code: number) => `${code}.pdf`;
 const money = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const moneyValue = (value: number) => Number(value || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatCpf = (cpf: string) => normalizeDigits(cpf).replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
@@ -90,7 +91,9 @@ const fetchCurrentPlans = async (link: any) => {
   const empresa = Array.isArray(result?.dados) ? result.dados[0] : null;
   if (!empresa) throw new Error("ERP_COMPANY_NOT_FOUND");
   const plans = Array.isArray(empresa?.PrecoPlano) ? empresa.PrecoPlano : Array.isArray(empresa?.precoPlano) ? empresa.precoPlano : [];
-  return plans.map(sanitizePlan).filter((item: any) => item.Plano > 0);
+  const vigenciaMeses = Number(empresa.Vigencia);
+  if (!Number.isInteger(vigenciaMeses) || vigenciaMeses <= 0) throw new Error("ERP_INVALID_VIGENCIA");
+  return { plans: plans.map(sanitizePlan).filter((item: any) => item.Plano > 0), vigenciaMeses };
 };
 
 const renderTemplate = (body: string, values: Record<string, string>) => {
@@ -99,12 +102,11 @@ const renderTemplate = (body: string, values: Record<string, string>) => {
   return rendered;
 };
 
-const applyContractDuration = (text: string, hasOrthodonticPlan: boolean) => {
-  if (!hasOrthodonticPlan) return text;
-  return text.replace(
-    /pelo per[ií]odo de 12\s*\(doze\)\s*meses/giu,
-    "pelo período de 18 (dezoito) meses",
-  );
+const applyContractDuration = (text: string, months: number) => {
+  const duration = `${months} (${months === 12 ? "doze" : months === 18 ? "dezoito" : String(months)}) meses`;
+  return text
+    .replace(/pelo per[ií]odo de (?:12\s*\(doze\)|18\s*\(dezoito\))\s*meses/giu, `pelo período de ${duration}`)
+    .replace(/(?:12\s*\(doze\)|18\s*\(dezoito\))\s*meses/giu, duration);
 };
 
 Deno.serve(async (req: Request) => {
@@ -137,10 +139,10 @@ Deno.serve(async (req: Request) => {
     const linkPlans = (Array.isArray(link.planos_raw) ? link.planos_raw : []).map(sanitizePlan);
     const allowedCodes = new Set(linkPlans.map((item: any) => Number(item.Plano)));
     const selectedCodes = [Number(cadastro.titularPlano), ...cadastro.dependentes.map((item) => Number(item.plano))];
-    const hasOrthodonticPlan = selectedCodes.some((code) => ORTHODONTIC_PLAN_CODES.has(code));
+
     if (selectedCodes.some((code) => !allowedCodes.has(code))) return jsonResponse({ error: "Plano nao permitido para este link", code: "PLAN_NOT_ALLOWED" }, 400);
 
-    const currentPlans = await fetchCurrentPlans(link);
+    const { plans: currentPlans, vigenciaMeses } = await fetchCurrentPlans(link);
     const currentMap = new Map(currentPlans.map((item: any) => [Number(item.Plano), item]));
     if (selectedCodes.some((code) => !currentMap.has(code))) return jsonResponse({ error: "Um dos planos selecionados nao esta mais disponivel para esta empresa", code: "PLAN_CHANGED" }, 409);
 
@@ -173,6 +175,13 @@ Deno.serve(async (req: Request) => {
     };
 
     const uniquePlans = [...new Set(selectedCodes)];
+    const missingCoverage = uniquePlans.filter((code) => !COVERAGE_CODES.has(code));
+    if (missingCoverage.length > 0) return jsonResponse({ error: "Cobertura ainda nao configurada para o(s) plano(s) selecionado(s).", code: "PLAN_COVERAGE_NOT_CONFIGURED", missingPlans: missingCoverage }, 409);
+    // O arquivo precisa estar realmente publicado antes do cliente poder aceitá-lo.
+    const { data: covers, error: coverError } = await supabase.storage.from("plan-coverages").list("", { limit: 100 });
+    if (coverError || uniquePlans.some((code) => !(covers || []).some((file: any) => file.name === coveragePath(code)))) {
+      return jsonResponse({ error: "O documento de cobertura deste plano ainda nao esta disponivel.", code: "PLAN_COVERAGE_UNAVAILABLE" }, 503);
+    }
     const templateCodes = [...new Set([0, ...uniquePlans])];
     const { data: templateRows, error: templateError } = await supabase.from("contract_templates")
       .select("id, plan_code, title, body_text, version, effective_from, effective_until, is_active").in("plan_code", templateCodes).eq("is_active", true);
@@ -187,7 +196,7 @@ Deno.serve(async (req: Request) => {
     const plansSummary = [`Titular: ${normalizedCadastro.titularPlanoNome} - ${money(normalizedCadastro.titularPlanoValor)}`, ...normalizedDependents.map((dep) => `Dependente: ${dep.nome} - ${dep.planoNome} - ${money(dep.planoValor)}`)].join("\n");
     const beneficiaries = joinBeneficiaries([normalizedCadastro.nome, ...normalizedDependents.map((dep) => dep.nome)]);
     const totalMonthlyValue = Number(normalizedCadastro.titularPlanoValor || 0) + normalizedDependents.reduce((sum, dep) => sum + Number(dep.planoValor || 0), 0);
-    const contractDurationMonths = hasOrthodonticPlan ? 18 : 12;
+    const contractDurationMonths = vigenciaMeses;
     const replacements = {
       NOME_RF: normalizedCadastro.nome,
       CPF_RF: formatCpf(normalizedCadastro.cpf),
@@ -200,7 +209,7 @@ Deno.serve(async (req: Request) => {
       DATA_ACEITE: formatDateOnly(new Date()),
       VALOR_DO_PLANO: moneyValue(totalMonthlyValue),
       BENEFICIARIOS: beneficiaries,
-      PERIODO_CONTRATO: hasOrthodonticPlan ? "18 (dezoito) meses" : "12 (doze) meses",
+      PERIODO_CONTRATO: `${contractDurationMonths} (${contractDurationMonths === 12 ? "doze" : contractDurationMonths === 18 ? "dezoito" : String(contractDurationMonths)}) meses`,
     };
 
     const templatesToRender: any[] = defaultTemplate && missingPlans.length > 0
@@ -211,7 +220,7 @@ Deno.serve(async (req: Request) => {
       .filter(Boolean)
       .join("\n\n")
       .trim();
-    const contractText = applyContractDuration(renderedContractText, hasOrthodonticPlan);
+    const contractText = applyContractDuration(renderedContractText, contractDurationMonths);
     if (!contractText) return jsonResponse({ error: "O contrato deste plano ainda nao esta configurado.", code: "CONTRACT_NOT_CONFIGURED", missingPlans: uniquePlans }, 409);
 
     const snapshot = {
@@ -226,6 +235,7 @@ Deno.serve(async (req: Request) => {
         valorMensalTotal: totalMonthlyValue,
         beneficiarios: [normalizedCadastro.nome, ...normalizedDependents.map((dep) => dep.nome)],
         duracaoContratoMeses: contractDurationMonths,
+        coberturaPlanoCodigos: uniquePlans,
       },
       confirmedEmail,
     };

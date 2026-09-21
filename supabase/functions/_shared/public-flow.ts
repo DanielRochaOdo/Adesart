@@ -26,8 +26,12 @@ export const normalizeDate = (value?: string | null) => {
 };
 
 export const sha256 = async (value: string | Uint8Array) => {
-  const data = typeof value === "string" ? new TextEncoder().encode(value) : value;
-  const digest = await crypto.subtle.digest("SHA-256", data);
+  const source = typeof value === "string" ? new TextEncoder().encode(value) : value;
+  // Copia para um Uint8Array com ArrayBuffer proprio. Deno 2.9 tipa Uint8Array
+  // recebido como ArrayBufferLike, enquanto WebCrypto exige BufferSource/ArrayBuffer.
+  const data = new Uint8Array(source.byteLength);
+  data.set(source);
+  const digest = await crypto.subtle.digest("SHA-256", data.buffer);
   return Array.from(new Uint8Array(digest))
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
