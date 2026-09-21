@@ -74,6 +74,33 @@ const downloadContract = async (supabase: any, payload: any) => {
   return bytes;
 };
 
+const tutorialLinks = [
+  ["Como fazer o primeiro acesso no aplicativo", "https://odontoart.com/wp-content/uploads/2026/09/Baixar-o-app-2026.mp4"],
+  ["Como marcar sua consulta pelo aplicativo", "https://odontoart.com/wp-content/uploads/2026/09/Marcacao-de-consulta-2026.mp4"],
+  ["Como marcar sua consulta na rede credenciada", "https://odontoart.com/wp-content/uploads/2026/09/Marca-consulta-rede-credenciada-2026.mp4"],
+  ["Como atualizar os dados do cartao de credito", "https://odontoart.com/wp-content/uploads/2024/05/Atualizar-Dados-do-Cartao.mp4"],
+] as const;
+
+const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+const loadCoverageAttachments = async (supabase: any, payload: any) => {
+  const codes = Array.from(new Set((Array.isArray(payload.coveragePlanCodes) ? payload.coveragePlanCodes : [])
+    .map(Number).filter((code: number) => [18, 19, 20].includes(code))));
+  if (codes.length === 0) throw new Error("PLAN_COVERAGE_CODE_MISSING");
+  const names: Record<number, string> = { 18: "Multiprev", 19: "Multiplus", 20: "Multimaster" };
+  const attachments = [];
+  for (const code of codes) {
+    const { data, error } = await supabase.storage.from("plan-coverages").download(`${code}.pdf`);
+    if (error || !data) throw new Error(`PLAN_COVERAGE_DOWNLOAD_FAILED:${code}`);
+    attachments.push({
+      filename: `Cobertura-${names[code]}.pdf`,
+      content: Buffer.from(await data.arrayBuffer()),
+      contentType: "application/pdf",
+    });
+  }
+  return attachments;
+};
+
 const sendEmail = async (supabase: any, payload: any, jobId: string) => {
   const username = Deno.env.get("SMTP_USERNAME") || Deno.env.get("SMTP_USER") || "";
   const password = Deno.env.get("SMTP_PASSWORD") || Deno.env.get("SMTP_PASS") || "";
@@ -86,6 +113,9 @@ const sendEmail = async (supabase: any, payload: any, jobId: string) => {
   if (!recipient) throw new Error("EMAIL_RECIPIENT_MISSING");
 
   const bytes = await downloadContract(supabase, payload);
+  const coverageAttachments = await loadCoverageAttachments(supabase, payload);
+  const tutorialsText = tutorialLinks.map(([title, url]) => `- ${title}: ${url}`).join("\\n");
+  const tutorialsHtml = tutorialLinks.map(([title, url]) => `<li><a href="${url}" target="_blank" rel="noopener noreferrer">${escapeHtml(title)}</a></li>`).join("");
   const transporter = nodemailer.createTransport({
     host: smtpHost,
     port: smtpPort,
@@ -99,12 +129,13 @@ const sendEmail = async (supabase: any, payload: any, jobId: string) => {
     to: recipient,
     subject: "Seu contrato Odontoart",
     messageId: `<contrato-${jobId}@${host}>`,
-    text: `Ola, ${String(payload.nome || "associado(a)")}!\n\nSua adesao a Odontoart foi concluida com sucesso. Conforme os termos aceitos durante o processo de adesao, encaminhamos em anexo o seu contrato.\n\nGuarde este documento para futuras consultas.\n\nAtenciosamente,\nOdontoart`,
+    text: `Ola, ${String(payload.nome || "associado(a)")}!\n\nSua adesao a Odontoart foi concluida com sucesso. Em anexo estao o termo de aceite e a cobertura do plano contratado.\n\nTutoriais do App do Associado:\n${tutorialsText}\n\nGuarde estes documentos para futuras consultas.\n\nAtenciosamente,\nOdontoart`,
+    html: `<p>Olá, ${escapeHtml(String(payload.nome || "associado(a)"))}!</p><p>Sua adesão à Odontoart foi concluída com sucesso. Em anexo estão o termo de aceite e a cobertura do plano contratado.</p><p><strong>Tutoriais do App do Associado:</strong></p><ul>${tutorialsHtml}</ul><p>Guarde estes documentos para futuras consultas.</p><p>Atenciosamente,<br>Odontoart</p>`,
     attachments: [{
       filename: String(payload.fileName || "Contrato-Odontoart.pdf"),
       content: Buffer.from(bytes),
       contentType: "application/pdf",
-    }],
+    }, ...coverageAttachments],
   });
 
   if (Array.isArray(info.rejected) && info.rejected.length > 0 && (!info.accepted || info.accepted.length === 0)) {
