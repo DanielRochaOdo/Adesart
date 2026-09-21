@@ -141,7 +141,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: link, error: linkError } = await supabase
       .from("cadastro_links")
-      .select("id, created_by, empresa_codigo, empresa_nome, vendedor_nome, vendedor_codigo, click_count, last_clicked_at, created_at")
+      .select("id, created_by, empresa_codigo, empresa_nome, vendedor_nome, vendedor_codigo, click_count, unique_visit_count, unique_visits_started_at, last_unique_visit_at, created_at")
       .eq("id", linkId)
       .maybeSingle();
 
@@ -247,11 +247,13 @@ Deno.serve(async (req: Request) => {
         vendedorCodigo: String(link.vendedor_codigo || ""),
       },
       summary: {
-        clickCount: Number(link.click_count || 0),
+        clickCount: Number(link.unique_visit_count || 0),
+        legacyClickCount: Number(link.click_count || 0),
+        visitsStartedAt: link.unique_visits_started_at || null,
         identifiedAttempts: attempts.length,
         anonymousDetailed: anonymousRows.length,
         detailedAccessEvents: accessEvents.length,
-        lastClickedAt: link.last_clicked_at || null,
+        lastClickedAt: link.last_unique_visit_at || null,
       },
       rows,
     });

@@ -10,13 +10,14 @@ import {
   resolveLinkByToken,
   sanitizePlan,
 } from "../_shared/public-flow.ts";
+import { anonymousVisitId } from "../_shared/link-visits.ts";
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Metodo nao permitido" }, 405);
 
   try {
-    const { token } = await req.json() as { token?: string };
+    const { token, visitId } = await req.json() as { token?: string; visitId?: unknown };
     if (!token || typeof token !== "string") return jsonResponse({ error: "Token obrigatorio" }, 400);
 
     const supabase = createServiceClient();
@@ -91,51 +92,24 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Historico detalhado de abertura do link. Esta gravacao e independente do
-    // contador para que uma falha de telemetria nunca bloqueie o fluxo publico.
-    try {
-      const ipHash = await hashSensitiveValue(getRequestIp(req));
-      const { error: accessEventError } = await supabase
-        .from("cadastro_link_access_events")
-        .insert({ link_id: link.id, ip_hash: ipHash });
-
-      if (accessEventError) {
-        console.warn("[cadastro-link-resolve] falha ao registrar evento de acesso", accessEventError);
+    // A visita é identificada por UUID de sessão enviado pelo cliente.
+    // Reaberturas, voltar/avançar, reload e retries reutilizam o mesmo ID.
+    // Uma RPC transacional cria apenas UM evento e incrementa apenas UMA vez.
+    // Sem ID válido (versão antiga do cliente) o link continua funcionando,
+    // mas a visita não é contabilizada para evitar inflar a métrica nova.
+    const sessionVisitId = anonymousVisitId(visitId);
+    if (sessionVisitId) {
+      try {
+        const ipHash = await hashSensitiveValue(getRequestIp(req));
+        const { error: visitError } = await supabase.rpc("record_cadastro_link_visit", {
+          p_link_id: link.id,
+          p_visit_id: sessionVisitId,
+          p_ip_hash: ipHash,
+        });
+        if (visitError) console.warn("[cadastro-link-resolve] falha ao registrar visita", visitError);
+      } catch (visitError) {
+        console.warn("[cadastro-link-resolve] falha inesperada ao registrar visita", visitError);
       }
-    } catch (accessEventError) {
-      console.warn("[cadastro-link-resolve] falha inesperada ao registrar evento de acesso", accessEventError);
-    }
-
-    try {
-      const { error: clickError } = await supabase.rpc("increment_cadastro_link_click", { p_link_id: link.id });
-      if (clickError) {
-        console.warn("[cadastro-link-resolve] RPC de clique indisponivel; usando fallback", clickError);
-
-        // Fallback defensivo: mantem o contador funcionando mesmo se a migracao
-        // da RPC ainda nao tiver sido aplicada no ambiente.
-        const { data: currentClick, error: readClickError } = await supabase
-          .from("cadastro_links")
-          .select("click_count")
-          .eq("id", link.id)
-          .maybeSingle();
-
-        if (readClickError) {
-          console.warn("[cadastro-link-resolve] falha ao ler contador de clique", readClickError);
-        } else {
-          const nextClickCount = Math.max(0, Number(currentClick?.click_count || 0)) + 1;
-          const { error: fallbackError } = await supabase
-            .from("cadastro_links")
-            .update({
-              click_count: nextClickCount,
-              last_clicked_at: new Date().toISOString(),
-            })
-            .eq("id", link.id);
-
-          if (fallbackError) console.warn("[cadastro-link-resolve] falha ao registrar clique", fallbackError);
-        }
-      }
-    } catch (clickError) {
-      console.warn("[cadastro-link-resolve] falha ao registrar clique", clickError);
     }
 
     // Retorna somente PDFs realmente publicados; o codigo ERP nao define a familia.
