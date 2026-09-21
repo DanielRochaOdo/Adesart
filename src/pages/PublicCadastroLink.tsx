@@ -925,9 +925,7 @@ export function PublicCadastroLink() {
         <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
           <div className="bg-slate-900 px-6 py-8 text-white">
             <div className="flex items-start gap-4">
-              <div className="p-3 rounded-2xl bg-white/10">
-                <Building2 className="w-7 h-7" />
-              </div>
+              <img src="/logo-odontoart.png" alt="Odontoart Planos Odontológicos" className="w-32 shrink-0 object-contain sm:w-40" />
               <div>
                 <h1 className="text-2xl font-bold">Nova Adesao</h1>
                 <p className="text-sm text-slate-200 mt-1">
