@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
   corsHeaders,
   coverageFileForPlan,
+  listCoverageDocuments,
   coverageFamilyFromName,
   createServiceClient,
   hashSensitiveValue,
@@ -190,15 +191,16 @@ Deno.serve(async (req: Request) => {
     const uniquePlans = [...new Set(selectedCodes)];
     // A cobertura deve existir no Storage para TODOS os planos, inclusive dependentes.
     // Nao deduzir a familia pelo codigo do ERP: codigos variam entre produtos/empresas.
-    const { data: covers, error: coverError } = await supabase.storage
-      .from("plan-coverages").list("", { limit: 1000 });
-    if (coverError) return jsonResponse({
-      error: "Nao foi possivel verificar os documentos de cobertura. Tente novamente.",
-      code: "PLAN_COVERAGE_UNAVAILABLE",
-    }, 503);
-    const availableFiles = (covers || [])
-      .filter((file: any) => !!file.id && typeof file.name === "string")
-      .map((file: any) => String(file.name));
+    let availableFiles: string[];
+    try {
+      availableFiles = await listCoverageDocuments(supabase);
+    } catch (coverError) {
+      console.error("[cadastro-public-contract-prepare] plan-coverages", coverError);
+      return jsonResponse({
+        error: "Nao foi possivel verificar os documentos de cobertura. Tente novamente.",
+        code: "PLAN_COVERAGE_UNAVAILABLE",
+      }, 503);
+    }
     const coverageFiles = uniquePlans.map((code) => {
       const planName = String((currentMap.get(code) as any)?.nomeExibicao || "");
       const family = coverageFamilyFromName(planName);
