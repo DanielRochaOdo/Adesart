@@ -147,11 +147,11 @@ Deno.serve(async (req: Request) => {
       console.error("[cadastro-link-resolve] plan-coverages", coverageError);
     }
     if (!coverageFiles.length) console.warn("[cadastro-link-resolve] plan-coverages sem PDFs acessiveis");
-    const missingPlanNames = plans.filter((plan: any) => !coverageFileForPlan(plan.nomeExibicao, coverageFiles))
+    const missingPlanNames = plans.filter((plan: any) => !coverageFileForPlan(plan.nomeExibicao, coverageFiles, Number(plan.Plano)))
       .map((plan: any) => ({ code: Number(plan.Plano), family: String(plan.nomeExibicao).slice(0, 70) }));
     if (missingPlanNames.length) console.warn("[cadastro-link-resolve] documentos nao vinculados", missingPlanNames);
     const coberturaPlanos = Object.fromEntries(plans.flatMap((plan: any) => {
-      const file = coverageFileForPlan(plan.nomeExibicao, coverageFiles);
+      const file = coverageFileForPlan(plan.nomeExibicao, coverageFiles, Number(plan.Plano));
       return file ? [[String(plan.Plano), supabase.storage.from("plan-coverages").getPublicUrl(file).data.publicUrl]] : [];
     }));
 
