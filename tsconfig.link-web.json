@@ -1,6 +1,7 @@
 {
   "extends": "./tsconfig.app.json",
   "include": [
+    "src/vite-env.d.ts",
     "src/pages/PublicCadastroLink.tsx"
   ]
 }
