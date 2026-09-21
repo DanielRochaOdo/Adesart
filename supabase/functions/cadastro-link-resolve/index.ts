@@ -26,12 +26,13 @@ Deno.serve(async (req: Request) => {
         ? await supabase.from("profiles").select("telefone").eq("id", inactiveLink.vendedor_id).maybeSingle()
         : { data: null };
       return jsonResponse({
+        ok: false,
         error: resolved.error === "LINK_INACTIVE" ? "Link inativo" : "Link expirado",
         consultant: {
           nome: String(inactiveLink.vendedor_nome || ""),
           telefone: String(seller?.telefone || ""),
         },
-      }, 410);
+      });
     }
     const link = resolved.link!;
 
