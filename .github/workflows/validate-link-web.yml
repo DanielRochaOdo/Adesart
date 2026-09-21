@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'src/pages/PublicCadastroLink.tsx'
+      - 'tsconfig.link-web.json'
       - 'supabase/functions/cadastro-link-resolve/**'
       - 'supabase/functions/cadastro-public-contract-prepare/**'
       - 'supabase/functions/cadastro-public-submit/**'
@@ -21,7 +22,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
+      - run: npx tsc --noEmit -p tsconfig.link-web.json
       - run: npm run build
   deno-link:
     runs-on: ubuntu-latest
