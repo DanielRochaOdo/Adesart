@@ -2,7 +2,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
   corsHeaders,
   coverageFileForPlan,
-  coverageFamilyFromName,
+  listCoverageDocuments,
+  coverageFamilyForPlan,
   createServiceClient,
   hashSensitiveValue,
   jsonResponse,
@@ -14,6 +15,7 @@ import {
   sha256,
   stableStringify,
 } from "../_shared/public-flow.ts";
+import { applyContractDuration, contractDurationText, vigenciaExtenso } from "../_shared/contract-duration.ts";
 
 type Contact = { tipo: "celular" | "fixo" | "email" | "whatsapp"; valor: string; principal?: boolean };
 type Address = {
@@ -102,12 +104,6 @@ const renderTemplate = (body: string, values: Record<string, string>) => {
   return rendered;
 };
 
-const applyContractDuration = (text: string, months: number) => {
-  const duration = `${months} (${months === 12 ? "doze" : months === 18 ? "dezoito" : String(months)}) meses`;
-  return text
-    .replace(/pelo per[ií]odo de (?:12\s*\(doze\)|18\s*\(dezoito\))\s*meses/giu, `pelo período de ${duration}`)
-    .replace(/(?:12\s*\(doze\)|18\s*\(dezoito\))\s*meses/giu, duration);
-};
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
@@ -190,19 +186,20 @@ Deno.serve(async (req: Request) => {
     const uniquePlans = [...new Set(selectedCodes)];
     // A cobertura deve existir no Storage para TODOS os planos, inclusive dependentes.
     // Nao deduzir a familia pelo codigo do ERP: codigos variam entre produtos/empresas.
-    const { data: covers, error: coverError } = await supabase.storage
-      .from("plan-coverages").list("", { limit: 1000 });
-    if (coverError) return jsonResponse({
-      error: "Nao foi possivel verificar os documentos de cobertura. Tente novamente.",
-      code: "PLAN_COVERAGE_UNAVAILABLE",
-    }, 503);
-    const availableFiles = (covers || [])
-      .filter((file: any) => !!file.id && typeof file.name === "string")
-      .map((file: any) => String(file.name));
+    let availableFiles: string[];
+    try {
+      availableFiles = await listCoverageDocuments(supabase);
+    } catch (coverError) {
+      console.error("[cadastro-public-contract-prepare] plan-coverages", coverError);
+      return jsonResponse({
+        error: "Nao foi possivel verificar os documentos de cobertura. Tente novamente.",
+        code: "PLAN_COVERAGE_UNAVAILABLE",
+      }, 503);
+    }
     const coverageFiles = uniquePlans.map((code) => {
       const planName = String((currentMap.get(code) as any)?.nomeExibicao || "");
-      const family = coverageFamilyFromName(planName);
-      const fileName = coverageFileForPlan(planName, availableFiles);
+      const family = coverageFamilyForPlan(code, planName);
+      const fileName = coverageFileForPlan(planName, availableFiles, code);
       return { code, family, fileName };
     });
     const missingCoverage = coverageFiles.filter((entry) => !entry.fileName).map((entry) => entry.code);
@@ -237,7 +234,10 @@ Deno.serve(async (req: Request) => {
       DATA_ACEITE: formatDateOnly(new Date()),
       VALOR_DO_PLANO: moneyValue(totalMonthlyValue),
       BENEFICIARIOS: beneficiaries,
-      PERIODO_CONTRATO: `${contractDurationMonths} (${contractDurationMonths === 12 ? "doze" : contractDurationMonths === 18 ? "dezoito" : String(contractDurationMonths)}) meses`,
+      PERIODO_CONTRATO: contractDurationText(contractDurationMonths),
+      PARAMETRO_VIGENCIA: String(contractDurationMonths),
+      VIGENCIA_MESES: String(contractDurationMonths),
+      VIGENCIA_EXTENSO: vigenciaExtenso(contractDurationMonths),
     };
 
     const templatesToRender: any[] = defaultTemplate && missingPlans.length > 0
@@ -248,7 +248,16 @@ Deno.serve(async (req: Request) => {
       .filter(Boolean)
       .join("\n\n")
       .trim();
-    const contractText = applyContractDuration(renderedContractText, contractDurationMonths);
+    let contractText: string;
+    try {
+      contractText = applyContractDuration(renderedContractText, contractDurationMonths);
+    } catch (durationError) {
+      console.error("[cadastro-public-contract-prepare] vigencia ausente no contrato", durationError);
+      return jsonResponse({
+        error: "Nao foi possivel apresentar a vigencia contratual. Fale com seu consultor.",
+        code: "CONTRACT_DURATION_UNAVAILABLE",
+      }, 409);
+    }
     if (!contractText) return jsonResponse({ error: "O contrato deste plano ainda nao esta configurado.", code: "CONTRACT_NOT_CONFIGURED", missingPlans: uniquePlans }, 409);
 
     const snapshot = {
