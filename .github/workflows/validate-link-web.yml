@@ -38,4 +38,4 @@ jobs:
             supabase/functions/cadastro-public-contract-prepare/index.ts \
             supabase/functions/cadastro-public-submit/index.ts \
             supabase/functions/process-contract-deliveries/index.ts
-      - run: deno test --node-modules-dir=auto supabase/functions/_shared/plan-coverages.test.ts
+      - run: deno test --node-modules-dir=auto supabase/functions/_shared/plan-coverages.test.ts supabase/functions/_shared/contract-duration.test.ts
