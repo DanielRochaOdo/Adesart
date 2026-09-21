@@ -725,7 +725,7 @@ export function PublicCadastroLink() {
             <Button onClick={authenticate} disabled={busy} className="min-h-12 w-full text-base">
               {busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <ShieldCheck className="mr-2 h-5 w-5" />}Continuar
             </Button>
-            {validationErrors.length > 0 && <p role="alert" className="text-sm text-red-700">Corrija os campos: {validationErrors.join(', ')}.</p>
+            {validationErrors.length > 0 && <p role="alert" className="text-sm text-red-700">Corrija os campos: {validationErrors.join(', ')}.</p>}
           </div>
         </section>
       )}
@@ -755,7 +755,7 @@ export function PublicCadastroLink() {
           <Input label="Bairro" value={form.endereco.bairro} onChange={(event) => setForm((prev) => ({ ...prev, endereco: { ...prev.endereco, bairro: event.target.value } }))} required className="min-h-12" />
           <div className="grid gap-4 sm:grid-cols-2"><Input label="Cidade" value={form.endereco.cidade} onChange={(event) => setForm((prev) => ({ ...prev, endereco: { ...prev.endereco, cidade: event.target.value } }))} required className="min-h-12" /><Input label="UF" value={form.endereco.ufSigla || form.endereco.uf} onChange={(event) => setForm((prev) => ({ ...prev, endereco: { ...prev.endereco, uf: event.target.value, ufSigla: event.target.value } }))} required className="min-h-12" /></div>
           <Button onClick={goDependents} className="min-h-12 w-full text-base">Continuar</Button>
-          {validationErrors.length > 0 && <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800"><p className="font-semibold">Corrija os seguintes campos:</p><ul className="mt-1 list-disc pl-5">{validationErrors.map((message) => <li key={message}>{message}</li>)}</ul></div>
+          {validationErrors.length > 0 && <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800"><p className="font-semibold">Corrija os seguintes campos:</p><ul className="mt-1 list-disc pl-5">{validationErrors.map((message) => <li key={message}>{message}</li>)}</ul></div>}
         </section>
       )}
 
@@ -783,7 +783,7 @@ export function PublicCadastroLink() {
           </div>
           {dependents.length < 4 && <button type="button" onClick={addDependent} className="mt-4 flex min-h-12 w-full items-center justify-center rounded-2xl border border-dashed border-emerald-400 bg-emerald-50 px-4 text-sm font-semibold text-emerald-700"><Plus className="mr-2 h-4 w-4" />Adicionar dependente</button>}
           <Button onClick={goReview} className="mt-5 min-h-12 w-full text-base">Continuar {dependents.length === 0 ? 'sem dependentes' : ''}</Button>
-          {validationErrors.length > 0 && <div role="alert" className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800">Corrija as pendências: {validationErrors.join(', ')}.</div>
+          {validationErrors.length > 0 && <div role="alert" className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800">Corrija as pendências: {validationErrors.join(', ')}.</div>}
         </section>
       )}
 
