@@ -19,6 +19,7 @@ import { Input } from '../components/Input';
 import { Select } from '../components/Select';
 import { useConfigCadastro } from '../contexts/ConfigCadastroContext';
 import { formatCEP, formatCPF, formatMobilePhone, formatPhone, removeCPFMask, validateCPF } from '../lib/cpf';
+import { getPublicLinkVisitId } from '../lib/publicLinkVisit';
 
 type Stage = 'identify' | 'details' | 'dependents' | 'review' | 'contract' | 'success' | 'completed' | 'not_eligible';
 
@@ -322,7 +323,7 @@ export function PublicCadastroLink() {
     const resolve = async () => {
       try {
         const response = await fetch(apiUrl('cadastro-link-resolve'), {
-          method: 'POST', headers: publicHeaders(), body: JSON.stringify({ token: linkToken }),
+          method: 'POST', headers: publicHeaders(), body: JSON.stringify({ token: linkToken, visitId: getPublicLinkVisitId(linkToken) }),
         });
         const result = await response.json();
         if (!response.ok || !result.ok) {
