@@ -38,7 +38,8 @@ interface CadastroLinkRow {
   vendedor_codigo: string;
   link_url: string | null;
   is_active: boolean;
-  click_count: number | null;
+  unique_visit_count: number | null;
+  unique_visits_started_at: string | null;
   used_at: string | null;
   used_cpf: string | null;
   created_at: string;
@@ -84,6 +85,8 @@ interface LinkHistoryRow {
 
 interface LinkHistorySummary {
   clickCount: number;
+  legacyClickCount: number;
+  visitsStartedAt: string | null;
   identifiedAttempts: number;
   anonymousDetailed: number;
   detailedAccessEvents: number;
@@ -223,7 +226,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
     try {
       const { data, error: queryError } = await supabase
         .from('cadastro_links')
-        .select('id, created_by, team_id, empresa_codigo, empresa_nome, empresa_cnpj, empresa_raw, empresa_exige_matricula, planos_raw, vendedor_id, vendedor_nome, vendedor_codigo, link_url, is_active, click_count, used_at, used_cpf, created_at, updated_at')
+        .select('id, created_by, team_id, empresa_codigo, empresa_nome, empresa_cnpj, empresa_raw, empresa_exige_matricula, planos_raw, vendedor_id, vendedor_nome, vendedor_codigo, link_url, is_active, unique_visit_count, unique_visits_started_at, used_at, used_cpf, created_at, updated_at')
         .eq('is_active', true)
         .order('empresa_nome', { ascending: true })
         .order('updated_at', { ascending: false });
@@ -539,7 +542,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
         groupedLinks.map((group) => {
           const groupKey = `${group.empresaCodigo}-${group.empresaNome}`;
           const isExpanded = Boolean(expandedGroups[groupKey]);
-          const groupClicks = group.links.reduce((total, link) => total + Number(link.click_count || 0), 0);
+          const groupVisits = group.links.reduce((total, link) => total + Number(link.unique_visit_count || 0), 0);
           const groupAssociados = group.links.reduce(
             (total, link) => total + (linkMetricsById[link.id]?.associadosCount || 0),
             0
@@ -582,8 +585,8 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                       <div className="w-full rounded-xl border border-slate-200 bg-white px-1 py-1 shadow-sm lg:w-auto">
                         <div className="grid min-w-[198px] grid-cols-3 divide-x divide-slate-200">
                           <div className="px-1.5 py-1 text-center">
-                            <p className="text-[8px] font-medium uppercase tracking-[0.08em] text-slate-400">Cliques</p>
-                            <p className="mt-0.5 text-[15px] font-semibold text-slate-800">{groupClicks}</p>
+                            <p className="text-[8px] font-medium uppercase tracking-[0.08em] text-slate-400">Visitas por sessão</p>
+                            <p className="mt-0.5 text-[15px] font-semibold text-slate-800">{groupVisits}</p>
                           </div>
 
                           <button
@@ -776,7 +779,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
             {historySummary && (
               <div className="grid grid-cols-2 gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 sm:grid-cols-4">
                 <div>
-                  <p className="text-[10px] uppercase tracking-wide text-slate-400">Cliques totais</p>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400">Visitas por sessão</p>
                   <p className="text-base font-semibold text-slate-800">{historySummary.clickCount}</p>
                 </div>
                 <div>
@@ -788,7 +791,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                   <p className="text-base font-semibold text-slate-800">{historySummary.anonymousDetailed}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-wide text-slate-400">Ultimo clique</p>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400">Última visita</p>
                   <p className="text-xs font-medium text-slate-700">
                     {historySummary.lastClickedAt ? formatDateTime(historySummary.lastClickedAt) : '-'}
                   </p>
@@ -881,7 +884,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
             )}
 
             <div className="border-t border-slate-200 bg-slate-50 px-5 py-3 text-xs leading-5 text-slate-500">
-              A identificacao detalhada de quem apenas abriu o link passa a ser registrada a partir desta atualizacao. Acessos anteriores continuam preservados no contador total de cliques.
+              Visitas são contabilizadas uma vez por link e por sessão do navegador ou aplicativo desde {historySummary?.visitsStartedAt ? formatDateTime(historySummary.visitsStartedAt) : 'a atualização da métrica'}. Retornar à tela inicial ou atualizar a página não aumenta a contagem. O histórico anterior ({historySummary?.legacyClickCount ?? 0} aberturas, sem deduplicação) foi preservado separadamente e não é somado às novas visitas. Os registros detalhados antigos ainda podem conter acessos repetidos.
             </div>
           </div>
         </div>
