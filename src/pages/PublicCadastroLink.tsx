@@ -654,29 +654,39 @@ export function PublicCadastroLink() {
     <div className="min-h-screen bg-slate-50 px-4 py-5 sm:py-8">
       <main className="mx-auto w-full max-w-xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <header className="bg-emerald-700 px-5 py-6 text-white sm:px-7">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15"><Building2 className="h-5 w-5" /></div>
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium uppercase tracking-[0.16em] text-emerald-100">Adesao Odontoart</p>
-              <h1 className="truncate text-lg font-semibold">{linkData?.empresaNome || 'Plano odontologico'}</h1>
-              {linkData?.vendedorNome && <p className="mt-1 text-xs text-emerald-100">Atendimento: {linkData.vendedorNome}</p>}
-              {linkData?.vendedorTelefone && <p className="mt-0.5 text-xs text-emerald-100">Telefone: {formatMobilePhone(linkData.vendedorTelefone)}</p>}
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-emerald-100">Adesão Odontoart</p>
+              <h1 className="truncate text-lg font-semibold">{linkData?.empresaNome || 'Plano odontológico'}</h1>
+              {(linkData || knownConsultant)?.vendedorNome && <p className="mt-1 text-xs text-emerald-100">Consultor: {(linkData || knownConsultant)?.vendedorNome}</p>}
+              {(linkData || knownConsultant)?.vendedorTelefone && <p className="mt-0.5 text-xs text-emerald-100">WhatsApp: {formatMobilePhone((linkData || knownConsultant)?.vendedorTelefone || '')}</p>}
             </div>
+            <img src="/logoOdontoart.png" alt="Odontoart Planos Odontológicos" className="h-12 w-28 shrink-0 rounded-lg bg-white object-contain p-1" />
           </div>
+          {whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) && <a href={whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) || '#'} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-9 items-center gap-2 rounded-lg bg-white/15 px-3 py-2 text-xs font-semibold text-white"><MessageCircle className="h-4 w-4" />Precisa de ajuda? Fale com seu consultor</a>}
         </header>
-        <div className="p-5 sm:p-7">{children}</div>
+        <div className="p-5 sm:p-7">
+          {linkData && !['success', 'completed', 'not_eligible'].includes(stage) && <div aria-label="Progresso da adesão" className="mb-5 grid grid-cols-4 gap-1 text-center text-[10px] font-medium">
+            {['Dados', 'Plano', 'Dependentes', 'Confirmação'].map((label, index) => {
+              const currentStep = stage === 'identify' ? 0 : stage === 'details' ? (form.titularPlano ? 1 : 0) : stage === 'dependents' ? 2 : 3;
+              return <span key={label} className={`rounded-lg px-1 py-2 ${index <= currentStep ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-100 text-slate-500'}`}>{label}</span>;
+            })}
+          </div>}
+          {children}
+        </div>
       </main>
     </div>
   );
 
   if (loadingLink) return shell(<div className="flex min-h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-emerald-700" /></div>);
-  if (!linkData) return shell(<div className="py-10 text-center"><ShieldCheck className="mx-auto mb-4 h-12 w-12 text-slate-400" /><h2 className="text-xl font-semibold text-slate-900">Link indisponivel</h2><p className="mt-2 text-sm text-slate-600">{error || 'Este link nao pode ser utilizado.'}</p></div>);
+  if (!linkData) return shell(<div className="py-10 text-center"><ShieldCheck className="mx-auto mb-4 h-12 w-12 text-slate-400" /><h2 className="text-xl font-semibold text-slate-900">Link indisponível</h2><p className="mt-2 text-sm text-slate-600">{error || 'Este link não pode ser utilizado.'}</p><ConsultantContact link={knownConsultant} /></div>);
 
   if (stage === 'completed') return shell(
     <div className="py-4 text-center">
       <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600" />
       <h2 className="mt-4 text-2xl font-bold text-slate-900">Sua adesao ja foi realizada</h2>
       <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600">Identificamos que voce ja concluiu sua adesao. Para incluir dependentes, consultar seu plano ou realizar outras solicitacoes, utilize o App do Associado.</p>
+      <ConsultantContact link={linkData} />
       <div className="mt-7"><AppButtons /></div>
     </div>
   );
@@ -684,19 +694,20 @@ export function PublicCadastroLink() {
   if (stage === 'not_eligible') return shell(
     <div className="py-4 text-center">
       <ShieldCheck className="mx-auto h-14 w-14 text-amber-500" />
-      <h2 className="mt-4 text-xl font-bold text-slate-900">Nao foi possivel continuar por este canal</h2>
-      <p className="mt-3 text-sm leading-6 text-slate-600">Seu cadastro precisa de uma tratativa especifica. Utilize o App do Associado ou os canais de atendimento da Odontoart.</p>
-      <div className="mt-7"><AppButtons /></div>
+      <h2 className="mt-4 text-xl font-bold text-slate-900">Vamos continuar seu atendimento pelo WhatsApp</h2>
+      <p className="mt-3 text-sm leading-6 text-slate-600">Não foi possível concluir por este canal, mas fique tranquilo. Seu consultor está disponível para continuar seu atendimento.</p>
+      <ConsultantContact link={linkData} />
     </div>
   );
 
   if (stage === 'success') return shell(
     <div className="py-4 text-center">
       <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600" />
-      <h2 className="mt-4 text-2xl font-bold text-slate-900">Adesao recebida</h2>
-      <p className="mt-3 text-sm leading-6 text-slate-600">{successMessage}</p>
-      <p className="mt-2 text-sm leading-6 text-slate-600">Seu contrato sera enviado para o e-mail confirmado. A partir de agora, utilize o App do Associado.</p>
-      <div className="mt-7"><AppButtons /></div>
+      <h2 className="mt-4 text-2xl font-bold text-slate-900">Adesão recebida</h2>
+      <p className="mt-3 font-semibold text-emerald-700">Parabéns! Sua adesão foi recebida com sucesso.</p>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{successMessage} Seu contrato e a cobertura do plano serão enviados para o e-mail confirmado. Agora você já pode aproveitar os benefícios e utilizar o App do Associado.</p>
+      <ConsultantContact link={linkData} />
+      <div className="mt-5"><AppButtons /></div>
     </div>
   );
 
