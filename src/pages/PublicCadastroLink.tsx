@@ -668,10 +668,7 @@ export function PublicCadastroLink() {
               {(linkData || knownConsultant)?.vendedorNome && <p className="mt-1 text-xs text-emerald-100">Consultor: {(linkData || knownConsultant)?.vendedorNome}</p>}
               {(linkData || knownConsultant)?.vendedorTelefone && <p className="mt-0.5 text-xs text-emerald-100">WhatsApp: {formatMobilePhone((linkData || knownConsultant)?.vendedorTelefone || '')}</p>}
             </div>
-            <div role="img" aria-label="Odontoart Planos Odontológicos" className="flex min-h-12 w-28 shrink-0 flex-col items-center justify-center rounded-lg bg-white px-1.5 py-2 text-emerald-900">
-              <span className="text-base font-extrabold italic leading-tight tracking-tight">Odontoart</span>
-              <span className="text-center text-[8px] font-semibold leading-tight">Planos Odontológicos</span>
-            </div>
+            <img src="/logo-odontoart.png" alt="Odontoart Planos Odontológicos" className="h-auto w-32 shrink-0 object-contain sm:w-40" />
           </div>
           {whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) && <a href={whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) || '#'} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-9 items-center gap-2 rounded-lg bg-white/15 px-3 py-2 text-xs font-semibold text-white"><MessageCircle className="h-4 w-4" />Precisa de ajuda? Fale com seu consultor</a>}
         </header>
