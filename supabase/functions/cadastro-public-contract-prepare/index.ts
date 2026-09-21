@@ -143,7 +143,7 @@ Deno.serve(async (req: Request) => {
     if (selectedCodes.some((code) => !allowedCodes.has(code))) return jsonResponse({ error: "Plano nao permitido para este link", code: "PLAN_NOT_ALLOWED" }, 400);
 
     const { plans: currentPlans, vigenciaMeses } = await fetchCurrentPlans(link);
-    const currentMap = new Map(currentPlans.map((item: any) => [Number(item.Plano), item]));
+    const currentMap = new Map<number, any>(currentPlans.map((item: any): [number, any] => [Number(item.Plano), item]));
     if (selectedCodes.some((code) => !currentMap.has(code))) return jsonResponse({ error: "Um dos planos selecionados nao esta mais disponivel para esta empresa", code: "PLAN_CHANGED" }, 409);
 
     // O ERP informa os codigos e valores; os nomes comerciais sao mantidos na tabela de planos.
