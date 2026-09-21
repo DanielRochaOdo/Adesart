@@ -466,7 +466,6 @@ export function PublicCadastroLink() {
   };
 
   const addDependent = () => {
-    if (dependents.length >= 4) return;
     setDependents((prev) => [...prev, {
       id: crypto.randomUUID(), tipo: 0, nome: '', dataNascimento: '', cpf: '', sexo: -1, nomeMae: '', plano: plans.length === 1 ? plans[0].Plano : 0,
     }]);
