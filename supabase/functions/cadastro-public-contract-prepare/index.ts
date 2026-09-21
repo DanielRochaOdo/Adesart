@@ -1,9 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
   corsHeaders,
-  coverageFileForPlan,
+  resolveOptionalCoverage,
   listCoverageDocuments,
-  coverageFamilyForPlan,
   createServiceClient,
   hashSensitiveValue,
   jsonResponse,
@@ -193,17 +192,11 @@ Deno.serve(async (req: Request) => {
     } catch (coverError) {
       console.warn("[cadastro-public-contract-prepare] consulta opcional de documentos", coverError);
     }
-    const resolvedCoverage = uniquePlans.map((code) => ({
-      code,
-      family: coverageFamilyForPlan(code),
-      fileName: coverageFileForPlan(code, availableFiles),
-    }));
-    const coverageAvailable = resolvedCoverage.length > 0 &&
-      resolvedCoverage.every((entry) => Boolean(entry.family && entry.fileName));
-    const coverageFiles = coverageAvailable ? resolvedCoverage : [];
+    const { available: coverageAvailable, files: coverageFiles } =
+      resolveOptionalCoverage(uniquePlans, availableFiles);
     if (!coverageAvailable) {
       console.info("[cadastro-public-contract-prepare] adesao sem documento opcional associado", {
-        planCodes: uniquePlans, mappedCodes: resolvedCoverage.filter((entry) => !!entry.fileName).map((entry) => entry.code),
+        planCodes: uniquePlans,
       });
     }
     const templateCodes = [...new Set([0, ...uniquePlans])];
