@@ -116,9 +116,9 @@ const publicHeaders = () => ({
 const normalizePhone = (value: string) => value.replace(/\D/g, '');
 const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 const coverageNames: Record<number, string> = { 18: 'Multiprev', 19: 'Multiplus', 20: 'Multimaster' };
-const dateView = (value: string) => /^\\d{4}-\\d{2}-\\d{2}$/.test(value) ? value.split('-').reverse().join('/') : value;
+const dateView = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-').reverse().join('/') : value;
 const dateInput = (value: string) => {
-  const clean = value.replace(/[^\\d]/g, '').slice(0, 8);
+  const clean = value.replace(/[^\d]/g, '').slice(0, 8);
   if (clean.length === 8) {
     const iso = `${clean.slice(4, 8)}-${clean.slice(2, 4)}-${clean.slice(0, 2)}`;
     const d = new Date(`${iso}T12:00:00Z`);
@@ -126,7 +126,7 @@ const dateInput = (value: string) => {
   }
   return value.slice(0, 10);
 };
-const validDate = (value: string) => /^\\d{4}-\\d{2}-\\d{2}$/.test(value) && dateInput(dateView(value)) === value;
+const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && dateInput(dateView(value)) === value;
 const whatsappUrl = (phone?: string | null) => {
   const digits = normalizePhone(phone || '');
   return digits.length >= 10 ? `https://wa.me/${digits.startsWith('55') ? digits : `55${digits}`}?text=${encodeURIComponent('Olá! Preciso de ajuda com minha adesão à Odontoart.')}` : null;
@@ -459,7 +459,7 @@ export function PublicCadastroLink() {
   const addDependent = () => {
     if (dependents.length >= 4) return;
     setDependents((prev) => [...prev, {
-      id: crypto.randomUUID(), tipo: 0, nome: '', dataNascimento: '', cpf: '', sexo: -1, nomeMae: '', plano: 0,
+      id: crypto.randomUUID(), tipo: 0, nome: '', dataNascimento: '', cpf: '', sexo: -1, nomeMae: '', plano: plans.length === 1 ? plans[0].Plano : 0,
     }]);
   };
 
@@ -719,12 +719,13 @@ export function PublicCadastroLink() {
         <section>
           <div className="mb-6"><ShieldCheck className="mb-3 h-9 w-9 text-emerald-700" /><h2 className="text-2xl font-bold text-slate-900">Vamos comecar sua adesao</h2><p className="mt-2 text-sm leading-6 text-slate-600">Informe os dados do responsavel financeiro para validar sua identidade.</p></div>
           <div className="space-y-4">
-            <Input label="CPF" inputMode="numeric" value={formatCPF(cpf)} onChange={(event) => setCpf(event.target.value)} maxLength={14} required className="min-h-12 text-base" />
-            <Input label="Data de nascimento" type="date" value={birthDate} onChange={(event) => setBirthDate(event.target.value)} required className="min-h-12 text-base" />
+            <Input label="CPF" inputMode="numeric" value={formatCPF(cpf)} onChange={(event) => setCpf(event.target.value)} maxLength={14} required error={validationErrors.includes('CPF válido') ? 'Informe um CPF válido.' : undefined} className="min-h-12 text-base" />
+            <Input label="Data de nascimento" type="text" inputMode="numeric" placeholder="dd/mm/aaaa" value={dateView(birthDate)} onChange={(event) => setBirthDate(dateInput(event.target.value))} required error={validationErrors.includes('Data de nascimento válida') ? 'Informe uma data válida.' : undefined} className="min-h-12 text-base" />
             <Turnstile onToken={setCaptchaToken} />
             <Button onClick={authenticate} disabled={busy} className="min-h-12 w-full text-base">
               {busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <ShieldCheck className="mr-2 h-5 w-5" />}Continuar
             </Button>
+            {validationErrors.length > 0 && <p role="alert" className="text-sm text-red-700">Corrija os campos: {validationErrors.join(', ')}.</p>
           </div>
         </section>
       )}
@@ -734,7 +735,7 @@ export function PublicCadastroLink() {
           <div><UserRound className="mb-3 h-8 w-8 text-emerald-700" /><h2 className="text-xl font-bold text-slate-900">Seus dados</h2><p className="mt-1 text-sm text-slate-600">Revise os dados localizados e corrija o que for necessario.</p></div>
           <Input label="Nome completo" value={form.nome} onChange={(event) => setForm((prev) => ({ ...prev, nome: event.target.value }))} required className="min-h-12" />
           <div className="grid gap-4 sm:grid-cols-2">
-            <Input label="Data de nascimento" type="date" value={form.dataNascimento} disabled className="min-h-12 bg-slate-50" />
+            <Input label="Data de nascimento" type="text" value={dateView(form.dataNascimento)} disabled className="min-h-12 bg-slate-50" />
             <Select label="Sexo" value={String(form.sexoCodigo)} onChange={(event) => setForm((prev) => ({ ...prev, sexoCodigo: Number(event.target.value) }))} required className="min-h-12">
               <option value="-1">Selecione</option><option value="1">Masculino</option><option value="0">Feminino</option>
             </Select>
@@ -754,6 +755,7 @@ export function PublicCadastroLink() {
           <Input label="Bairro" value={form.endereco.bairro} onChange={(event) => setForm((prev) => ({ ...prev, endereco: { ...prev.endereco, bairro: event.target.value } }))} required className="min-h-12" />
           <div className="grid gap-4 sm:grid-cols-2"><Input label="Cidade" value={form.endereco.cidade} onChange={(event) => setForm((prev) => ({ ...prev, endereco: { ...prev.endereco, cidade: event.target.value } }))} required className="min-h-12" /><Input label="UF" value={form.endereco.ufSigla || form.endereco.uf} onChange={(event) => setForm((prev) => ({ ...prev, endereco: { ...prev.endereco, uf: event.target.value, ufSigla: event.target.value } }))} required className="min-h-12" /></div>
           <Button onClick={goDependents} className="min-h-12 w-full text-base">Continuar</Button>
+          {validationErrors.length > 0 && <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800"><p className="font-semibold">Corrija os seguintes campos:</p><ul className="mt-1 list-disc pl-5">{validationErrors.map((message) => <li key={message}>{message}</li>)}</ul></div>
         </section>
       )}
 
@@ -772,7 +774,7 @@ export function PublicCadastroLink() {
                   </div>
                   <Select label="Grau de parentesco" value={String(dep.tipo || '')} onChange={(event) => updateDependent(dep.id, { tipo: Number(event.target.value) })} required className="min-h-12"><option value="">Selecione</option>{activeRelationships.map((item) => <option key={item.id} value={item.parentesco_id}>{item.label}</option>)}</Select>
                   <Input label="Nome completo" value={dep.nome} onChange={(event) => updateDependent(dep.id, { nome: event.target.value })} required className="min-h-12" />
-                  <div className="grid gap-4 sm:grid-cols-2"><Input label="Data de nascimento" type="date" value={dep.dataNascimento} onChange={(event) => updateDependent(dep.id, { dataNascimento: event.target.value })} required className="min-h-12" /><Select label="Sexo" value={String(dep.sexo)} onChange={(event) => updateDependent(dep.id, { sexo: Number(event.target.value) })} required className="min-h-12"><option value="-1">Selecione</option><option value="1">Masculino</option><option value="0">Feminino</option></Select></div>
+                  <div className="grid gap-4 sm:grid-cols-2"><Input label="Data de nascimento" type="text" inputMode="numeric" placeholder="dd/mm/aaaa" value={dateView(dep.dataNascimento)} onChange={(event) => updateDependent(dep.id, { dataNascimento: dateInput(event.target.value) })} required className="min-h-12" /><Select label="Sexo" value={String(dep.sexo)} onChange={(event) => updateDependent(dep.id, { sexo: Number(event.target.value) })} required className="min-h-12"><option value="-1">Selecione</option><option value="1">Masculino</option><option value="0">Feminino</option></Select></div>
                   <Input label="Nome da mae" value={dep.nomeMae} onChange={(event) => updateDependent(dep.id, { nomeMae: event.target.value })} required className="min-h-12" />
                   <Select label="Plano" value={String(dep.plano || '')} onChange={(event) => updateDependent(dep.id, { plano: Number(event.target.value) })} required className="min-h-12"><option value="">Selecione</option>{plans.map((plan) => <option key={plan.Plano} value={plan.Plano}>{plan.nomeExibicao} - {currency(plan.ValorDependente)}</option>)}</Select>
                 </div>
@@ -781,6 +783,7 @@ export function PublicCadastroLink() {
           </div>
           {dependents.length < 4 && <button type="button" onClick={addDependent} className="mt-4 flex min-h-12 w-full items-center justify-center rounded-2xl border border-dashed border-emerald-400 bg-emerald-50 px-4 text-sm font-semibold text-emerald-700"><Plus className="mr-2 h-4 w-4" />Adicionar dependente</button>}
           <Button onClick={goReview} className="mt-5 min-h-12 w-full text-base">Continuar {dependents.length === 0 ? 'sem dependentes' : ''}</Button>
+          {validationErrors.length > 0 && <div role="alert" className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800">Corrija as pendências: {validationErrors.join(', ')}.</div>
         </section>
       )}
 
@@ -804,13 +807,27 @@ export function PublicCadastroLink() {
           <div className="mb-4 flex items-center gap-3"><FileCheck2 className="h-8 w-8 text-emerald-700" /><div><h2 className="text-xl font-bold text-slate-900">Contrato de adesao</h2><p className="text-xs text-slate-500">Hash: {contractHash.slice(0, 16)}...</p></div></div>
           <div className="max-h-[50vh] overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-4"><pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-700">{contractText}</pre></div>
           <div className="mt-5 space-y-3">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <h3 className="font-semibold text-emerald-950">Cobertura do plano {coverageNames[coverageCode] || ''}</h3>
+              <p className="mt-1 text-sm text-emerald-900">Leia os procedimentos cobertos antes de concluir sua adesão.</p>
+              {coverageUrl ? <div className="mt-3 flex flex-wrap gap-3">
+                <button type="button" onClick={() => { setCoverageViewed(true); setCoverageOpen(true); }} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Ver cobertura do plano</button>
+                <a href={coverageUrl} target="_blank" rel="noreferrer" download={`Cobertura-${coverageNames[coverageCode] || coverageCode}.pdf`} className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 px-3 py-2 text-sm font-semibold text-emerald-800"><Download className="h-4 w-4" />Baixar PDF</a>
+              </div> : <p className="mt-3 text-sm font-semibold text-red-700">Cobertura deste plano indisponível. Fale com seu consultor.</p>}
+            </div>
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedCoverage} disabled={!coverageViewed || !coverageUrl} onChange={(event) => setAcceptedCoverage(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Li e estou ciente da cobertura do plano contratado.</strong></span></label>
             <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Li e aceito os termos e condicoes do contrato apresentado.</strong></span></label>
             <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedData} onChange={(event) => setAcceptedData(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Confirmo que os dados informados estao corretos.</strong></span></label>
           </div>
-          <Button onClick={finalize} disabled={busy || !acceptedTerms || !acceptedData} className="mt-5 min-h-12 w-full text-base">{busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}Aceitar e concluir adesao</Button>
+          <Button onClick={finalize} disabled={busy || !acceptedTerms || !acceptedData || !acceptedCoverage || !coverageViewed || !coverageUrl} className="mt-5 min-h-12 w-full text-base">{busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}Aceitar e concluir adesao</Button>
         </section>
       )}
 
+      {coverageOpen && coverageUrl && <div role="dialog" aria-label="Cobertura do plano" className="fixed inset-0 z-50 flex flex-col bg-white p-3 sm:p-6">
+        <div className="mb-3 flex items-center justify-between gap-3"><h3 className="font-semibold">Cobertura — {coverageNames[coverageCode] || 'Plano odontológico'}</h3><button type="button" className="rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white" onClick={() => setCoverageOpen(false)}>Fechar</button></div>
+        <iframe title="Cobertura do plano contratado" src={coverageUrl} className="min-h-0 w-full flex-1 rounded-xl border border-slate-200" />
+        <a href={coverageUrl} target="_blank" rel="noreferrer" className="mt-3 text-center text-sm font-semibold text-emerald-800 underline">Abrir ou baixar o PDF</a>
+      </div>}
       {emailModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end bg-slate-950/50 p-0 sm:items-center sm:justify-center sm:p-4">
           <div className="w-full rounded-t-3xl bg-white p-5 shadow-2xl sm:max-w-md sm:rounded-3xl sm:p-6">
