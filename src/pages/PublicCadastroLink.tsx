@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Apple,
-  Building2,
   CheckCircle2,
   ChevronLeft,
   FileCheck2,
