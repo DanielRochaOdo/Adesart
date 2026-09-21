@@ -10,45 +10,59 @@ Deno.test("codigos 18 e 19 usam Multiprev e Multiplus", () => {
   expect(coverageFileForPlan(19, files) === files[1], "codigo 19 deve usar Multiplus");
 });
 
-Deno.test("codigos 2, 5, 17 e 20 usam sempre Multimaster, inclusive CORTESIA PJ", () => {
-  const files = ["documentos/Cobertura MultiPrev.pdf", "documentos/Cobertura MultiMaster.pdf"];
-  for (const code of [2, 5, 17, 20]) {
-    expect(coverageFileForPlan(code, files) === files[1], `codigo ${code} deve usar Multimaster`);
+Deno.test("somente 2, 17 e 20 utilizam a cobertura Multimaster", () => {
+  const files = ["documentos/Cobertura MultiMaster.pdf", "20.pdf"];
+  for (const code of [2, 17, 20]) {
+    expect(coverageFileForPlan(code, files) === "20.pdf", `codigo ${code} deve usar o PDF canonico Multimaster`);
   }
-  expect(coverageFileForPlan(5, ["20.pdf"]) === "20.pdf", "CORTESIA PJ aceita PDF legado de Multimaster");
+  expect(coverageFileForPlan(5, files) === null, "codigo 5 nao deve apresentar cobertura");
+  expect(coverageFileForPlan("5", files) === null, "codigo 5 em string tambem nao deve receber cobertura");
 });
 
-Deno.test("nome do plano nao autoriza cobertura fora dos codigos configurados", () => {
-  const files = ["multimaster.pdf", "multiplus.pdf", "multiprev.pdf"];
-  for (const code of [0, 1, 3, 4, 6, 99]) {
+Deno.test("codigo de plano fora da configuracao nao recebe cobertura", () => {
+  const files = ["multimaster.pdf", "multiplus.pdf", "multiprev.pdf", "20.pdf"];
+  for (const code of [0, 1, 3, 4, 5, 6, 99]) {
     expect(coverageFileForPlan(code, files) === null, `codigo ${code} nao configurado`);
   }
   expect(coverageFileForPlan(undefined, files) === null, "codigo ausente nao identifica cobertura");
-  expect(coverageFileForPlan("5", files) === "multimaster.pdf", "codigo 5 como string");
 });
 
-Deno.test("nao associa documento de outra familia nem PDFs ambiguos", () => {
-  expect(coverageFileForPlan(5, ["multiplus.pdf"]) === null, "cobertura divergente");
-  expect(coverageFileForPlan(5, ["multimaster-v1.pdf", "multimaster-v2.pdf"]) === null, "cobertura ambigua");
+Deno.test("somente PDF da familia correta e sem ambiguidade pode ser associado", () => {
+  expect(coverageFileForPlan(20, ["multiplus.pdf"]) === null, "cobertura divergente");
+  expect(coverageFileForPlan(20, ["multimaster-v1.pdf", "multimaster-v2.pdf"]) === null, "cobertura ambigua");
 });
 
-Deno.test("sem documento para codigo 5 adesao segue sem cobertura nem aceite presumido", () => {
-  const result = resolveOptionalCoverage([5], []);
-  expect(result.available === false && result.files.length === 0, "sem PDF nao pode exigir cobertura");
-  expect(resolveOptionalCoverage([5], ["multiplus.pdf"]).available === false, "PDF da familia errada");
+Deno.test("codigo 5 nunca apresenta checkbox ou anexo, mesmo se 20.pdf existir", async () => {
+  const files = ["20.pdf", "multimaster.pdf"];
+  expect(resolveOptionalCoverage([5], files).available === false, "titular codigo 5 sem aceite");
+  expect(resolveOptionalCoverage([5], files).files.length === 0, "titular codigo 5 sem anexo");
+  const requested: string[] = [];
+  const storage = { from: () => ({
+    list: async () => ({ data: [], error: null }),
+    download: async (fileName: string) => {
+      requested.push(fileName);
+      return { data: new Blob(["%PDF-1.4"], { type: "application/pdf" }), error: null };
+    },
+  }) };
+  const result = await resolvePublishedOptionalCoverage({ storage }, [5]);
+  expect(result.available === false && result.files.length === 0, "codigo 5 sem cobertura publicada");
+  expect(requested.length === 0, "nao consultar anexo por conta do codigo 5");
 });
 
-Deno.test("com documento real de Multimaster codigo 5 apresenta cobertura", () => {
-  const result = resolveOptionalCoverage([5], ["documentos/Cobertura MultiMaster.pdf"]);
-  expect(result.available === true, "documento de Cortesia PJ deveria estar disponivel");
-  expect(result.files.length === 1 && result.files[0].fileName === "documentos/Cobertura MultiMaster.pdf", "arquivo errado");
+Deno.test("titular 20 com dependente 5 mantem somente cobertura do titular", () => {
+  const result = resolveOptionalCoverage([20, 5], ["20.pdf"]);
+  expect(result.available === true, "dependente codigo 5 nao deve bloquear cobertura do titular 20");
+  expect(result.files.length === 1 && result.files[0].code === 20 && result.files[0].fileName === "20.pdf",
+    "codigo 5 nao deve gerar PDF");
+  expect(resolveOptionalCoverage([5, 20], ["20.pdf"]).available === false,
+    "titular codigo 5 nao recebe checkbox ou anexo, mesmo com dependente 20");
 });
 
-Deno.test("dependente sem PDF nao bloqueia nem gera aceite parcial de cobertura", () => {
-  const partial = resolveOptionalCoverage([5, 19], ["multimaster.pdf"]);
-  expect(partial.available === false && partial.files.length === 0, "associacao parcial nao deve exigir aceite");
-  const complete = resolveOptionalCoverage([5, 19], ["multimaster.pdf", "multiplus.pdf"]);
-  expect(complete.available === true && complete.files.length === 2, "todos os documentos presentes");
+Deno.test("ausencia de arquivo de um dependente elegivel segue sem aceite parcial", () => {
+  const partial = resolveOptionalCoverage([20, 19], ["20.pdf"]);
+  expect(partial.available === false && partial.files.length === 0, "nao exigir aceite parcial");
+  const complete = resolveOptionalCoverage([20, 19], ["20.pdf", "19.pdf"]);
+  expect(complete.available === true && complete.files.length === 2, "todos os documentos confirmados");
 });
 
 Deno.test("codigo 20 confirma 20.pdf no Storage mesmo quando listagem omite o arquivo", async () => {
