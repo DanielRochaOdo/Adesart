@@ -1,4 +1,4 @@
-import { coverageFileForPlan, listCoverageDocuments } from "./public-flow.ts";
+import { coverageFileForPlan, listCoverageDocuments, resolveOptionalCoverage } from "./public-flow.ts";
 
 const expect = (condition: boolean, message: string) => {
   if (!condition) throw new Error(message);
@@ -30,6 +30,25 @@ Deno.test("nome do plano nao autoriza cobertura fora dos codigos configurados", 
 Deno.test("nao associa documento de outra familia nem PDFs ambiguos", () => {
   expect(coverageFileForPlan(5, ["multiplus.pdf"]) === null, "cobertura divergente");
   expect(coverageFileForPlan(5, ["multimaster-v1.pdf", "multimaster-v2.pdf"]) === null, "cobertura ambigua");
+});
+
+Deno.test("sem documento para codigo 5 adesao segue sem cobertura nem aceite presumido", () => {
+  const result = resolveOptionalCoverage([5], []);
+  expect(result.available === false && result.files.length === 0, "sem PDF nao pode exigir cobertura");
+  expect(resolveOptionalCoverage([5], ["multiplus.pdf"]).available === false, "PDF da familia errada");
+});
+
+Deno.test("com documento real de Multimaster codigo 5 apresenta cobertura", () => {
+  const result = resolveOptionalCoverage([5], ["documentos/Cobertura MultiMaster.pdf"]);
+  expect(result.available === true, "documento de Cortesia PJ deveria estar disponivel");
+  expect(result.files.length === 1 && result.files[0].fileName === "documentos/Cobertura MultiMaster.pdf", "arquivo errado");
+});
+
+Deno.test("dependente sem PDF nao bloqueia nem gera aceite parcial de cobertura", () => {
+  const partial = resolveOptionalCoverage([5, 19], ["multimaster.pdf"]);
+  expect(partial.available === false && partial.files.length === 0, "associacao parcial nao deve exigir aceite");
+  const complete = resolveOptionalCoverage([5, 19], ["multimaster.pdf", "multiplus.pdf"]);
+  expect(complete.available === true && complete.files.length === 2, "todos os documentos presentes");
 });
 
 Deno.test("lista PDFs existentes na raiz e subpastas", async () => {
