@@ -3,7 +3,7 @@ import {
   corsHeaders,
   coverageFileForPlan,
   listCoverageDocuments,
-  coverageFamilyFromName,
+  coverageFamilyForPlan,
   createServiceClient,
   hashSensitiveValue,
   jsonResponse,
@@ -198,8 +198,8 @@ Deno.serve(async (req: Request) => {
     }
     const coverageFiles = uniquePlans.map((code) => {
       const planName = String((currentMap.get(code) as any)?.nomeExibicao || "");
-      const family = coverageFamilyFromName(planName);
-      const fileName = coverageFileForPlan(planName, availableFiles);
+      const family = coverageFamilyForPlan(code, planName);
+      const fileName = coverageFileForPlan(planName, availableFiles, code);
       return { code, family, fileName };
     });
     const missingCoverage = coverageFiles.filter((entry) => !entry.fileName).map((entry) => entry.code);
