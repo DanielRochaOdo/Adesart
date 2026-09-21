@@ -20,8 +20,20 @@ Deno.serve(async (req: Request) => {
     const supabase = createServiceClient();
     const resolved = await resolveLinkByToken(supabase, token);
     if (resolved.error === "LINK_NOT_FOUND") return jsonResponse({ error: "Link nao encontrado ou invalido" }, 404);
-    if (resolved.error === "LINK_INACTIVE") return jsonResponse({ error: "Link inativo" }, 410);
-    if (resolved.error === "LINK_EXPIRED") return jsonResponse({ error: "Link expirado" }, 410);
+    if (resolved.error === "LINK_INACTIVE" || resolved.error === "LINK_EXPIRED") {
+      const inactiveLink = resolved.link!;
+      const { data: seller } = inactiveLink.vendedor_id
+        ? await supabase.from("profiles").select("telefone").eq("id", inactiveLink.vendedor_id).maybeSingle()
+        : { data: null };
+      return jsonResponse({
+        ok: false,
+        error: resolved.error === "LINK_INACTIVE" ? "Link inativo" : "Link expirado",
+        consultant: {
+          nome: String(inactiveLink.vendedor_nome || ""),
+          telefone: String(seller?.telefone || ""),
+        },
+      });
+    }
     const link = resolved.link!;
 
     const rawPlans = (Array.isArray(link.planos_raw) ? link.planos_raw : [])
@@ -135,6 +147,9 @@ Deno.serve(async (req: Request) => {
         planos: plans,
         vendedorNome: String(link.vendedor_nome || ""),
         vendedorTelefone,
+        coberturaPlanos: Object.fromEntries(plans
+          .filter((plan: any) => [18, 19, 20].includes(Number(plan.Plano)))
+          .map((plan: any) => [Number(plan.Plano), supabase.storage.from("plan-coverages").getPublicUrl(`${Number(plan.Plano)}.pdf`).data.publicUrl])),
         parentescos: (relationshipRows || [])
           .filter((item: any) => Number(item.parentesco_id) !== 1)
           .map((item: any) => ({ id: Number(item.parentesco_id), label: String(item.label || "") })),

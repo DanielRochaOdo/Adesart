@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Apple,
-  Building2,
   CheckCircle2,
   ChevronLeft,
   FileCheck2,
@@ -10,6 +9,8 @@ import {
   Plus,
   ShieldCheck,
   Smartphone,
+  MessageCircle,
+  Download,
   Trash2,
   UserRound,
 } from 'lucide-react';
@@ -38,6 +39,7 @@ type LinkData = {
   planos: PublicPlan[];
   vendedorNome: string;
   vendedorTelefone?: string | null;
+  coberturaPlanos?: Record<string, string>;
 };
 
 type Contact = {
@@ -112,6 +114,33 @@ const publicHeaders = () => ({
 });
 const normalizePhone = (value: string) => value.replace(/\D/g, '');
 const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+const coverageNames: Record<number, string> = { 18: 'Multiprev', 19: 'Multiplus', 20: 'Multimaster' };
+const dateView = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-').reverse().join('/') : value;
+const dateInput = (value: string) => {
+  const clean = value.replace(/[^\d]/g, '').slice(0, 8);
+  if (clean.length === 8) {
+    const iso = `${clean.slice(4, 8)}-${clean.slice(2, 4)}-${clean.slice(0, 2)}`;
+    const d = new Date(`${iso}T12:00:00Z`);
+    if (!Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso) return iso;
+  }
+  return value.slice(0, 10);
+};
+const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && dateInput(dateView(value)) === value;
+const whatsappUrl = (phone?: string | null) => {
+  const digits = normalizePhone(phone || '');
+  return digits.length >= 10 ? `https://wa.me/${digits.startsWith('55') ? digits : `55${digits}`}?text=${encodeURIComponent('Olá! Preciso de ajuda com minha adesão à Odontoart.')}` : null;
+};
+function ConsultantContact({ link }: { link: Pick<LinkData, 'vendedorNome' | 'vendedorTelefone'> | null }) {
+  const url = whatsappUrl(link?.vendedorTelefone);
+  if (!link?.vendedorNome && !url) return null;
+  return <div className="mt-5 rounded-2xl bg-emerald-50 p-4 text-left">
+    <p className="font-bold text-emerald-900">Ficou com alguma dúvida?</p>
+    <p className="mt-1 text-sm text-emerald-900">Seu consultor está pronto para lhe atender.</p>
+    {link?.vendedorNome && <p className="mt-3 text-sm font-semibold text-emerald-950">{link.vendedorNome}</p>}
+    {link?.vendedorTelefone && <p className="text-sm text-emerald-800">WhatsApp: {formatMobilePhone(link.vendedorTelefone)}</p>}
+    {url && <a href={url} target="_blank" rel="noreferrer" className="mt-3 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 font-semibold text-white"><MessageCircle className="h-5 w-5" />Falar com meu consultor</a>}
+  </div>;
+}
 const currency = (value: number) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const ASSOCIADO_APP_STORE_URL = 'https://apps.apple.com/br/app/odontoart-associado/id1206858386?l=en';
@@ -235,6 +264,11 @@ export function PublicCadastroLink() {
   const { parentescos } = useConfigCadastro();
   const [linkToken] = useState(() => routeToken || sessionStorage.getItem('adesart-public-link-token') || '');
   const [linkData, setLinkData] = useState<LinkData | null>(null);
+  const [knownConsultant, setKnownConsultant] = useState<Pick<LinkData, 'vendedorNome' | 'vendedorTelefone'> | null>(null);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [acceptedCoverage, setAcceptedCoverage] = useState(false);
+  const [coverageViewed, setCoverageViewed] = useState(false);
+  const [coverageOpen, setCoverageOpen] = useState(false);
   const [loadingLink, setLoadingLink] = useState(true);
   const [stage, setStage] = useState<Stage>('identify');
   const [error, setError] = useState('');
@@ -258,6 +292,13 @@ export function PublicCadastroLink() {
   const [successMessage, setSuccessMessage] = useState('');
 
   const plans = useMemo(() => linkData?.planos || [], [linkData]);
+  const coverageCode = form.titularPlano;
+  const coverageUrl = linkData?.coberturaPlanos?.[String(coverageCode)] || '';
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    setValidationErrors([]);
+  }, [stage]);
+  useEffect(() => { setAcceptedCoverage(false); setCoverageViewed(false); }, [coverageCode]);
   const activeRelationships = useMemo(() => parentescos.filter((item) => item.ativo && Number(item.parentesco_id) !== 1), [parentescos]);
 
   useEffect(() => {
@@ -275,7 +316,13 @@ export function PublicCadastroLink() {
           method: 'POST', headers: publicHeaders(), body: JSON.stringify({ token: linkToken }),
         });
         const result = await response.json();
-        if (!response.ok || !result.ok) throw new Error(result.error || 'Link indisponivel');
+        if (!response.ok || !result.ok) {
+          if (result.consultant) setKnownConsultant({
+            vendedorNome: String(result.consultant.nome || ''),
+            vendedorTelefone: String(result.consultant.telefone || ''),
+          });
+          throw new Error(result.error || 'Link indisponível');
+        }
         setLinkData(result.link as LinkData);
         if (routeToken) window.history.replaceState({}, '', '/adesao');
       } catch (resolveError) {
@@ -289,8 +336,10 @@ export function PublicCadastroLink() {
 
   const authenticate = async () => {
     setError('');
-    if (!validateCPF(cpf) || !birthDate) {
-      setError('Informe um CPF valido e sua data de nascimento.');
+    const pending = [!validateCPF(cpf) && 'CPF válido', !validDate(birthDate) && 'Data de nascimento válida'].filter(Boolean) as string[];
+    if (pending.length) {
+      setValidationErrors(pending);
+      setError('');
       return;
     }
     setBusy(true);
@@ -336,7 +385,7 @@ export function PublicCadastroLink() {
         email: primaryEmail?.valor || '',
         contatosOriginais: contacts,
         endereco: { ...emptyAddress, ...(person.endereco || {}) },
-        titularPlano: 0,
+        titularPlano: plans.length === 1 ? plans[0].Plano : 0,
       });
       setStage('details');
     } catch (authError) {
@@ -382,22 +431,26 @@ export function PublicCadastroLink() {
     }
   };
 
-  const detailsValid = () => {
-    if (!form.nome.trim() || !form.dataNascimento || !form.nomeMae.trim()) return 'Preencha os dados do responsavel financeiro.';
-    if (![0, 1].includes(form.sexoCodigo)) return 'Informe o sexo.';
-    if (normalizePhone(form.telefone).length < 10) return 'Informe um telefone valido.';
-    if (!isEmail(form.email)) return 'Informe um e-mail valido.';
-    if (linkData?.empresaExigeMatricula === 1 && !form.numeroMatricula.trim()) return 'Informe a matricula.';
-    if (!form.titularPlano) return 'Selecione o plano do titular.';
-    if (form.endereco.cep.replace(/\D/g, '').length !== 8 || !form.endereco.logradouro.trim() || !form.endereco.numero.trim() || !form.endereco.bairro.trim() || !form.endereco.cidade.trim() || !form.endereco.uf.trim()) {
-      return 'Complete o endereco antes de continuar.';
-    }
-    return '';
-  };
+  const detailsErrors = () => [
+    !form.nome.trim() && 'Nome completo',
+    !validDate(form.dataNascimento) && 'Data de nascimento',
+    ![0, 1].includes(form.sexoCodigo) && 'Sexo',
+    !form.nomeMae.trim() && 'Nome da mãe',
+    normalizePhone(form.telefone).length < 10 && 'Telefone principal / WhatsApp',
+    !isEmail(form.email) && 'E-mail',
+    linkData?.empresaExigeMatricula === 1 && !form.numeroMatricula.trim() && 'Matrícula',
+    !form.titularPlano && 'Plano do titular',
+    form.endereco.cep.replace(/\D/g, '').length !== 8 && 'CEP',
+    !form.endereco.logradouro.trim() && 'Logradouro',
+    !form.endereco.numero.trim() && 'Número',
+    !form.endereco.bairro.trim() && 'Bairro',
+    !form.endereco.cidade.trim() && 'Cidade',
+    !form.endereco.uf.trim() && 'UF',
+  ].filter(Boolean) as string[];
 
   const goDependents = () => {
-    const message = detailsValid();
-    if (message) { setError(message); return; }
+    const pending = detailsErrors();
+    if (pending.length) { setValidationErrors(pending); setError(''); return; }
     setError('');
     setStage('dependents');
   };
@@ -405,7 +458,7 @@ export function PublicCadastroLink() {
   const addDependent = () => {
     if (dependents.length >= 4) return;
     setDependents((prev) => [...prev, {
-      id: crypto.randomUUID(), tipo: 0, nome: '', dataNascimento: '', cpf: '', sexo: -1, nomeMae: '', plano: 0,
+      id: crypto.randomUUID(), tipo: 0, nome: '', dataNascimento: '', cpf: '', sexo: -1, nomeMae: '', plano: plans.length === 1 ? plans[0].Plano : 0,
     }]);
   };
 
@@ -500,7 +553,7 @@ export function PublicCadastroLink() {
 
   const goReview = () => {
     const message = dependentsValid();
-    if (message) { setError(message); return; }
+    if (message) { setValidationErrors([message]); setError(''); return; }
     setError('');
     setStage('review');
   };
@@ -557,6 +610,7 @@ export function PublicCadastroLink() {
       setContractHash(result.contractHash);
       setAcceptedTerms(false);
       setAcceptedData(false);
+      setAcceptedCoverage(false);
       setEmailModalOpen(false);
       setStage('contract');
     } catch (prepareError) {
@@ -567,14 +621,17 @@ export function PublicCadastroLink() {
   };
 
   const finalize = async () => {
-    if (!acceptedTerms || !acceptedData) { setError('Marque os dois aceites para concluir.'); return; }
+    if (!acceptedTerms || !acceptedData || !acceptedCoverage || !coverageViewed || !coverageUrl) {
+      setError('Leia a cobertura do plano e marque os três aceites para concluir.');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
       const response = await fetch(apiUrl('cadastro-public-submit'), {
         method: 'POST',
         headers: publicHeaders(),
-        body: JSON.stringify({ attemptToken, contractToken, acceptedTerms, acceptedData }),
+        body: JSON.stringify({ attemptToken, contractToken, acceptedTerms, acceptedData, acceptedCoverage }),
       });
       const result = await response.json();
       if (!response.ok && response.status !== 202) throw new Error(result.error || 'Nao foi possivel concluir a adesao.');
@@ -596,29 +653,39 @@ export function PublicCadastroLink() {
     <div className="min-h-screen bg-slate-50 px-4 py-5 sm:py-8">
       <main className="mx-auto w-full max-w-xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <header className="bg-emerald-700 px-5 py-6 text-white sm:px-7">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15"><Building2 className="h-5 w-5" /></div>
+          <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-xs font-medium uppercase tracking-[0.16em] text-emerald-100">Adesao Odontoart</p>
-              <h1 className="truncate text-lg font-semibold">{linkData?.empresaNome || 'Plano odontologico'}</h1>
-              {linkData?.vendedorNome && <p className="mt-1 text-xs text-emerald-100">Atendimento: {linkData.vendedorNome}</p>}
-              {linkData?.vendedorTelefone && <p className="mt-0.5 text-xs text-emerald-100">Telefone: {formatMobilePhone(linkData.vendedorTelefone)}</p>}
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-emerald-100">Adesão Odontoart</p>
+              <h1 className="truncate text-lg font-semibold">{linkData?.empresaNome || 'Plano odontológico'}</h1>
+              {(linkData || knownConsultant)?.vendedorNome && <p className="mt-1 text-xs text-emerald-100">Consultor: {(linkData || knownConsultant)?.vendedorNome}</p>}
+              {(linkData || knownConsultant)?.vendedorTelefone && <p className="mt-0.5 text-xs text-emerald-100">WhatsApp: {formatMobilePhone((linkData || knownConsultant)?.vendedorTelefone || '')}</p>}
             </div>
+            <img src="/logoOdontoart.png" alt="Odontoart Planos Odontológicos" className="h-12 w-28 shrink-0 rounded-lg bg-white object-contain p-1" />
           </div>
+          {whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) && <a href={whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) || '#'} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-9 items-center gap-2 rounded-lg bg-white/15 px-3 py-2 text-xs font-semibold text-white"><MessageCircle className="h-4 w-4" />Precisa de ajuda? Fale com seu consultor</a>}
         </header>
-        <div className="p-5 sm:p-7">{children}</div>
+        <div className="p-5 sm:p-7">
+          {linkData && !['success', 'completed', 'not_eligible'].includes(stage) && <div aria-label="Progresso da adesão" className="mb-5 grid grid-cols-4 gap-1 text-center text-[10px] font-medium">
+            {['Dados', 'Plano', 'Dependentes', 'Confirmação'].map((label, index) => {
+              const currentStep = stage === 'identify' ? 0 : stage === 'details' ? (form.titularPlano ? 1 : 0) : stage === 'dependents' ? 2 : 3;
+              return <span key={label} className={`rounded-lg px-1 py-2 ${index <= currentStep ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-100 text-slate-500'}`}>{label}</span>;
+            })}
+          </div>}
+          {children}
+        </div>
       </main>
     </div>
   );
 
   if (loadingLink) return shell(<div className="flex min-h-64 items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-emerald-700" /></div>);
-  if (!linkData) return shell(<div className="py-10 text-center"><ShieldCheck className="mx-auto mb-4 h-12 w-12 text-slate-400" /><h2 className="text-xl font-semibold text-slate-900">Link indisponivel</h2><p className="mt-2 text-sm text-slate-600">{error || 'Este link nao pode ser utilizado.'}</p></div>);
+  if (!linkData) return shell(<div className="py-10 text-center"><ShieldCheck className="mx-auto mb-4 h-12 w-12 text-slate-400" /><h2 className="text-xl font-semibold text-slate-900">Link indisponível</h2><p className="mt-2 text-sm text-slate-600">{error || 'Este link não pode ser utilizado.'}</p><ConsultantContact link={knownConsultant} /></div>);
 
   if (stage === 'completed') return shell(
     <div className="py-4 text-center">
       <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600" />
       <h2 className="mt-4 text-2xl font-bold text-slate-900">Sua adesao ja foi realizada</h2>
       <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600">Identificamos que voce ja concluiu sua adesao. Para incluir dependentes, consultar seu plano ou realizar outras solicitacoes, utilize o App do Associado.</p>
+      <ConsultantContact link={linkData} />
       <div className="mt-7"><AppButtons /></div>
     </div>
   );
@@ -626,19 +693,20 @@ export function PublicCadastroLink() {
   if (stage === 'not_eligible') return shell(
     <div className="py-4 text-center">
       <ShieldCheck className="mx-auto h-14 w-14 text-amber-500" />
-      <h2 className="mt-4 text-xl font-bold text-slate-900">Nao foi possivel continuar por este canal</h2>
-      <p className="mt-3 text-sm leading-6 text-slate-600">Seu cadastro precisa de uma tratativa especifica. Utilize o App do Associado ou os canais de atendimento da Odontoart.</p>
-      <div className="mt-7"><AppButtons /></div>
+      <h2 className="mt-4 text-xl font-bold text-slate-900">Vamos continuar seu atendimento pelo WhatsApp</h2>
+      <p className="mt-3 text-sm leading-6 text-slate-600">Não foi possível concluir por este canal, mas fique tranquilo. Seu consultor está disponível para continuar seu atendimento.</p>
+      <ConsultantContact link={linkData} />
     </div>
   );
 
   if (stage === 'success') return shell(
     <div className="py-4 text-center">
       <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600" />
-      <h2 className="mt-4 text-2xl font-bold text-slate-900">Adesao recebida</h2>
-      <p className="mt-3 text-sm leading-6 text-slate-600">{successMessage}</p>
-      <p className="mt-2 text-sm leading-6 text-slate-600">Seu contrato sera enviado para o e-mail confirmado. A partir de agora, utilize o App do Associado.</p>
-      <div className="mt-7"><AppButtons /></div>
+      <h2 className="mt-4 text-2xl font-bold text-slate-900">Adesão recebida</h2>
+      <p className="mt-3 font-semibold text-emerald-700">Parabéns! Sua adesão foi recebida com sucesso.</p>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{successMessage} Seu contrato e a cobertura do plano serão enviados para o e-mail confirmado. Agora você já pode aproveitar os benefícios e utilizar o App do Associado.</p>
+      <ConsultantContact link={linkData} />
+      <div className="mt-5"><AppButtons /></div>
     </div>
   );
 
@@ -650,12 +718,13 @@ export function PublicCadastroLink() {
         <section>
           <div className="mb-6"><ShieldCheck className="mb-3 h-9 w-9 text-emerald-700" /><h2 className="text-2xl font-bold text-slate-900">Vamos comecar sua adesao</h2><p className="mt-2 text-sm leading-6 text-slate-600">Informe os dados do responsavel financeiro para validar sua identidade.</p></div>
           <div className="space-y-4">
-            <Input label="CPF" inputMode="numeric" value={formatCPF(cpf)} onChange={(event) => setCpf(event.target.value)} maxLength={14} required className="min-h-12 text-base" />
-            <Input label="Data de nascimento" type="date" value={birthDate} onChange={(event) => setBirthDate(event.target.value)} required className="min-h-12 text-base" />
+            <Input label="CPF" inputMode="numeric" value={formatCPF(cpf)} onChange={(event) => setCpf(event.target.value)} maxLength={14} required error={validationErrors.includes('CPF válido') ? 'Informe um CPF válido.' : undefined} className="min-h-12 text-base" />
+            <Input label="Data de nascimento" type="text" inputMode="numeric" placeholder="dd/mm/aaaa" value={dateView(birthDate)} onChange={(event) => setBirthDate(dateInput(event.target.value))} required error={validationErrors.includes('Data de nascimento válida') ? 'Informe uma data válida.' : undefined} className="min-h-12 text-base" />
             <Turnstile onToken={setCaptchaToken} />
             <Button onClick={authenticate} disabled={busy} className="min-h-12 w-full text-base">
               {busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <ShieldCheck className="mr-2 h-5 w-5" />}Continuar
             </Button>
+            {validationErrors.length > 0 && <p role="alert" className="text-sm text-red-700">Corrija os campos: {validationErrors.join(', ')}.</p>}
           </div>
         </section>
       )}
@@ -665,7 +734,7 @@ export function PublicCadastroLink() {
           <div><UserRound className="mb-3 h-8 w-8 text-emerald-700" /><h2 className="text-xl font-bold text-slate-900">Seus dados</h2><p className="mt-1 text-sm text-slate-600">Revise os dados localizados e corrija o que for necessario.</p></div>
           <Input label="Nome completo" value={form.nome} onChange={(event) => setForm((prev) => ({ ...prev, nome: event.target.value }))} required className="min-h-12" />
           <div className="grid gap-4 sm:grid-cols-2">
-            <Input label="Data de nascimento" type="date" value={form.dataNascimento} disabled className="min-h-12 bg-slate-50" />
+            <Input label="Data de nascimento" type="text" value={dateView(form.dataNascimento)} disabled className="min-h-12 bg-slate-50" />
             <Select label="Sexo" value={String(form.sexoCodigo)} onChange={(event) => setForm((prev) => ({ ...prev, sexoCodigo: Number(event.target.value) }))} required className="min-h-12">
               <option value="-1">Selecione</option><option value="1">Masculino</option><option value="0">Feminino</option>
             </Select>
@@ -685,6 +754,7 @@ export function PublicCadastroLink() {
           <Input label="Bairro" value={form.endereco.bairro} onChange={(event) => setForm((prev) => ({ ...prev, endereco: { ...prev.endereco, bairro: event.target.value } }))} required className="min-h-12" />
           <div className="grid gap-4 sm:grid-cols-2"><Input label="Cidade" value={form.endereco.cidade} onChange={(event) => setForm((prev) => ({ ...prev, endereco: { ...prev.endereco, cidade: event.target.value } }))} required className="min-h-12" /><Input label="UF" value={form.endereco.ufSigla || form.endereco.uf} onChange={(event) => setForm((prev) => ({ ...prev, endereco: { ...prev.endereco, uf: event.target.value, ufSigla: event.target.value } }))} required className="min-h-12" /></div>
           <Button onClick={goDependents} className="min-h-12 w-full text-base">Continuar</Button>
+          {validationErrors.length > 0 && <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800"><p className="font-semibold">Corrija os seguintes campos:</p><ul className="mt-1 list-disc pl-5">{validationErrors.map((message) => <li key={message}>{message}</li>)}</ul></div>}
         </section>
       )}
 
@@ -703,7 +773,7 @@ export function PublicCadastroLink() {
                   </div>
                   <Select label="Grau de parentesco" value={String(dep.tipo || '')} onChange={(event) => updateDependent(dep.id, { tipo: Number(event.target.value) })} required className="min-h-12"><option value="">Selecione</option>{activeRelationships.map((item) => <option key={item.id} value={item.parentesco_id}>{item.label}</option>)}</Select>
                   <Input label="Nome completo" value={dep.nome} onChange={(event) => updateDependent(dep.id, { nome: event.target.value })} required className="min-h-12" />
-                  <div className="grid gap-4 sm:grid-cols-2"><Input label="Data de nascimento" type="date" value={dep.dataNascimento} onChange={(event) => updateDependent(dep.id, { dataNascimento: event.target.value })} required className="min-h-12" /><Select label="Sexo" value={String(dep.sexo)} onChange={(event) => updateDependent(dep.id, { sexo: Number(event.target.value) })} required className="min-h-12"><option value="-1">Selecione</option><option value="1">Masculino</option><option value="0">Feminino</option></Select></div>
+                  <div className="grid gap-4 sm:grid-cols-2"><Input label="Data de nascimento" type="text" inputMode="numeric" placeholder="dd/mm/aaaa" value={dateView(dep.dataNascimento)} onChange={(event) => updateDependent(dep.id, { dataNascimento: dateInput(event.target.value) })} required className="min-h-12" /><Select label="Sexo" value={String(dep.sexo)} onChange={(event) => updateDependent(dep.id, { sexo: Number(event.target.value) })} required className="min-h-12"><option value="-1">Selecione</option><option value="1">Masculino</option><option value="0">Feminino</option></Select></div>
                   <Input label="Nome da mae" value={dep.nomeMae} onChange={(event) => updateDependent(dep.id, { nomeMae: event.target.value })} required className="min-h-12" />
                   <Select label="Plano" value={String(dep.plano || '')} onChange={(event) => updateDependent(dep.id, { plano: Number(event.target.value) })} required className="min-h-12"><option value="">Selecione</option>{plans.map((plan) => <option key={plan.Plano} value={plan.Plano}>{plan.nomeExibicao} - {currency(plan.ValorDependente)}</option>)}</Select>
                 </div>
@@ -712,6 +782,7 @@ export function PublicCadastroLink() {
           </div>
           {dependents.length < 4 && <button type="button" onClick={addDependent} className="mt-4 flex min-h-12 w-full items-center justify-center rounded-2xl border border-dashed border-emerald-400 bg-emerald-50 px-4 text-sm font-semibold text-emerald-700"><Plus className="mr-2 h-4 w-4" />Adicionar dependente</button>}
           <Button onClick={goReview} className="mt-5 min-h-12 w-full text-base">Continuar {dependents.length === 0 ? 'sem dependentes' : ''}</Button>
+          {validationErrors.length > 0 && <div role="alert" className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800">Corrija as pendências: {validationErrors.join(', ')}.</div>}
         </section>
       )}
 
@@ -735,13 +806,27 @@ export function PublicCadastroLink() {
           <div className="mb-4 flex items-center gap-3"><FileCheck2 className="h-8 w-8 text-emerald-700" /><div><h2 className="text-xl font-bold text-slate-900">Contrato de adesao</h2><p className="text-xs text-slate-500">Hash: {contractHash.slice(0, 16)}...</p></div></div>
           <div className="max-h-[50vh] overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-4"><pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-700">{contractText}</pre></div>
           <div className="mt-5 space-y-3">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <h3 className="font-semibold text-emerald-950">Cobertura do plano {coverageNames[coverageCode] || ''}</h3>
+              <p className="mt-1 text-sm text-emerald-900">Leia os procedimentos cobertos antes de concluir sua adesão.</p>
+              {coverageUrl ? <div className="mt-3 flex flex-wrap gap-3">
+                <button type="button" onClick={() => { setCoverageViewed(true); setCoverageOpen(true); }} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Ver cobertura do plano</button>
+                <a href={coverageUrl} target="_blank" rel="noreferrer" download={`Cobertura-${coverageNames[coverageCode] || coverageCode}.pdf`} className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 px-3 py-2 text-sm font-semibold text-emerald-800"><Download className="h-4 w-4" />Baixar PDF</a>
+              </div> : <p className="mt-3 text-sm font-semibold text-red-700">Cobertura deste plano indisponível. Fale com seu consultor.</p>}
+            </div>
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedCoverage} disabled={!coverageViewed || !coverageUrl} onChange={(event) => setAcceptedCoverage(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Li e estou ciente da cobertura do plano contratado.</strong></span></label>
             <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Li e aceito os termos e condicoes do contrato apresentado.</strong></span></label>
             <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedData} onChange={(event) => setAcceptedData(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Confirmo que os dados informados estao corretos.</strong></span></label>
           </div>
-          <Button onClick={finalize} disabled={busy || !acceptedTerms || !acceptedData} className="mt-5 min-h-12 w-full text-base">{busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}Aceitar e concluir adesao</Button>
+          <Button onClick={finalize} disabled={busy || !acceptedTerms || !acceptedData || !acceptedCoverage || !coverageViewed || !coverageUrl} className="mt-5 min-h-12 w-full text-base">{busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}Aceitar e concluir adesao</Button>
         </section>
       )}
 
+      {coverageOpen && coverageUrl && <div role="dialog" aria-label="Cobertura do plano" className="fixed inset-0 z-50 flex flex-col bg-white p-3 sm:p-6">
+        <div className="mb-3 flex items-center justify-between gap-3"><h3 className="font-semibold">Cobertura — {coverageNames[coverageCode] || 'Plano odontológico'}</h3><button type="button" className="rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white" onClick={() => setCoverageOpen(false)}>Fechar</button></div>
+        <iframe title="Cobertura do plano contratado" src={coverageUrl} className="min-h-0 w-full flex-1 rounded-xl border border-slate-200" />
+        <a href={coverageUrl} target="_blank" rel="noreferrer" className="mt-3 text-center text-sm font-semibold text-emerald-800 underline">Abrir ou baixar o PDF</a>
+      </div>}
       {emailModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end bg-slate-950/50 p-0 sm:items-center sm:justify-center sm:p-4">
           <div className="w-full rounded-t-3xl bg-white p-5 shadow-2xl sm:max-w-md sm:rounded-3xl sm:p-6">
