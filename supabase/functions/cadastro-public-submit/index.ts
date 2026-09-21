@@ -503,10 +503,11 @@ Deno.serve(async (req: Request) => {
       contractToken?: string;
       acceptedTerms?: boolean;
       acceptedData?: boolean;
+      acceptedCoverage?: boolean;
     };
 
-    if (!body.attemptToken || !body.contractToken || body.acceptedTerms !== true || body.acceptedData !== true) {
-      return jsonResponse({ error: "O aceite dos termos e a confirmacao dos dados sao obrigatorios" }, 400);
+    if (!body.attemptToken || !body.contractToken || body.acceptedTerms !== true || body.acceptedData !== true || body.acceptedCoverage !== true) {
+      return jsonResponse({ error: "O aceite dos termos, da cobertura do plano e a confirmacao dos dados sao obrigatorios" }, 400);
     }
 
     stage = "resolve_attempt";
@@ -835,6 +836,7 @@ Deno.serve(async (req: Request) => {
           storagePath: path,
           fileName,
           pdfHash,
+          coveragePlanCodes: Array.isArray(c.coberturaPlanoCodigos) ? c.coberturaPlanoCodigos : [Number(c.titularPlano)],
         },
         status: "pending",
         attempts: 0,
