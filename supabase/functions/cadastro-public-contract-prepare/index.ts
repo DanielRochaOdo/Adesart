@@ -185,7 +185,7 @@ Deno.serve(async (req: Request) => {
 
     const uniquePlans = [...new Set(selectedCodes)];
     // A cobertura deve existir no Storage para TODOS os planos, inclusive dependentes.
-    // Nao deduzir a familia pelo codigo do ERP: codigos variam entre produtos/empresas.
+    // A cobertura e definida exclusivamente pelo codigo de plano ERP parametrizado.
     let availableFiles: string[];
     try {
       availableFiles = await listCoverageDocuments(supabase);
@@ -197,9 +197,8 @@ Deno.serve(async (req: Request) => {
       }, 503);
     }
     const coverageFiles = uniquePlans.map((code) => {
-      const planName = String((currentMap.get(code) as any)?.nomeExibicao || "");
-      const family = coverageFamilyForPlan(code, planName);
-      const fileName = coverageFileForPlan(planName, availableFiles, code);
+      const family = coverageFamilyForPlan(code);
+      const fileName = coverageFileForPlan(code, availableFiles);
       return { code, family, fileName };
     });
     const missingCoverage = coverageFiles.filter((entry) => !entry.fileName).map((entry) => entry.code);
