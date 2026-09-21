@@ -1,9 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
   corsHeaders,
-  coverageFileForPlan,
+  resolveOptionalCoverage,
   listCoverageDocuments,
-  coverageFamilyForPlan,
   createServiceClient,
   hashSensitiveValue,
   jsonResponse,
@@ -184,28 +183,22 @@ Deno.serve(async (req: Request) => {
     };
 
     const uniquePlans = [...new Set(selectedCodes)];
-    // A cobertura deve existir no Storage para TODOS os planos, inclusive dependentes.
-    // A cobertura e definida exclusivamente pelo codigo de plano ERP parametrizado.
-    let availableFiles: string[];
+    // Cobertura e opcional: nunca interrompe o preparo do contrato se o
+    // Storage estiver indisponivel ou algum plano nao tiver PDF associado.
+    // Se faltar qualquer documento da selecao, nao solicitar aceite parcial.
+    let availableFiles: string[] = [];
     try {
       availableFiles = await listCoverageDocuments(supabase);
     } catch (coverError) {
-      console.error("[cadastro-public-contract-prepare] plan-coverages", coverError);
-      return jsonResponse({
-        error: "Nao foi possivel verificar os documentos de cobertura. Tente novamente.",
-        code: "PLAN_COVERAGE_UNAVAILABLE",
-      }, 503);
+      console.warn("[cadastro-public-contract-prepare] consulta opcional de documentos", coverError);
     }
-    const coverageFiles = uniquePlans.map((code) => {
-      const family = coverageFamilyForPlan(code);
-      const fileName = coverageFileForPlan(code, availableFiles);
-      return { code, family, fileName };
-    });
-    const missingCoverage = coverageFiles.filter((entry) => !entry.fileName).map((entry) => entry.code);
-    if (missingCoverage.length) return jsonResponse({
-      error: "O documento de cobertura de um dos planos selecionados ainda nao esta disponivel.",
-      code: "PLAN_COVERAGE_UNAVAILABLE", missingPlans: missingCoverage,
-    }, 409);
+    const { available: coverageAvailable, files: coverageFiles } =
+      resolveOptionalCoverage(uniquePlans, availableFiles);
+    if (!coverageAvailable) {
+      console.info("[cadastro-public-contract-prepare] adesao sem documento opcional associado", {
+        planCodes: uniquePlans,
+      });
+    }
     const templateCodes = [...new Set([0, ...uniquePlans])];
     const { data: templateRows, error: templateError } = await supabase.from("contract_templates")
       .select("id, plan_code, title, body_text, version, effective_from, effective_until, is_active").in("plan_code", templateCodes).eq("is_active", true);
@@ -272,6 +265,7 @@ Deno.serve(async (req: Request) => {
         beneficiarios: [normalizedCadastro.nome, ...normalizedDependents.map((dep) => dep.nome)],
         duracaoContratoMeses: contractDurationMonths,
         coberturaPlanoCodigos: uniquePlans,
+        coberturaDisponivel: coverageAvailable,
         coberturaPlanoArquivos: coverageFiles.map(({ code, family, fileName }) => ({ planoCodigo: code, familia: family, arquivo: fileName })),
       },
       confirmedEmail,
@@ -302,6 +296,12 @@ Deno.serve(async (req: Request) => {
 
     return jsonResponse({
       ok: true, contractToken, contractHash, contractText,
+      coverageAvailable,
+      coverageUrl: coverageAvailable
+        ? supabase.storage.from("plan-coverages").getPublicUrl(
+          coverageFiles.find((entry) => entry.code === Number(cadastro.titularPlano))!.fileName!,
+        ).data.publicUrl
+        : null,
       summary: { empresa: link.empresa_nome, titular: normalizedCadastro.nome, titularPlano: normalizedCadastro.titularPlanoNome, titularValor: normalizedCadastro.titularPlanoValor, dependentes: normalizedDependents.map((dep) => ({ nome: dep.nome, plano: dep.planoNome, valor: dep.planoValor })), confirmedEmail, duracaoContratoMeses: contractDurationMonths },
     });
   } catch (error) {

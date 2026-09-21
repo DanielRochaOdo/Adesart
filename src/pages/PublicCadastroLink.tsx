@@ -274,6 +274,7 @@ export function PublicCadastroLink() {
   const [acceptedCoverage, setAcceptedCoverage] = useState(false);
   const [coverageViewed, setCoverageViewed] = useState(false);
   const [coverageOpen, setCoverageOpen] = useState(false);
+  const [preparedCoverageUrl, setPreparedCoverageUrl] = useState('');
   const [loadingLink, setLoadingLink] = useState(true);
   const [stage, setStage] = useState<Stage>('identify');
   const [error, setError] = useState('');
@@ -299,11 +300,14 @@ export function PublicCadastroLink() {
   const plans = useMemo(() => linkData?.planos || [], [linkData]);
   const coverageCode = form.titularPlano;
   const coverageName = coverageNameFromCode(coverageCode);
-  const coverageUrl = linkData?.coberturaPlanos?.[String(coverageCode)] || '';
+  // A preparacao no servidor determina se ha cobertura para TODOS os planos.
+  // Nunca exigir aceite com base apenas em um link antigo da consulta inicial.
+  const coverageUrl = preparedCoverageUrl;
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
     setValidationErrors([]);
   }, [stage]);
+  useEffect(() => { setPreparedCoverageUrl(''); }, [coverageCode]);
   useEffect(() => { setAcceptedCoverage(false); setCoverageViewed(false); setCoverageOpen(false); }, [coverageCode, coverageUrl]);
   const activeRelationships = useMemo(() => parentescos.filter((item) => item.ativo && Number(item.parentesco_id) !== 1), [parentescos]);
 
@@ -612,6 +616,7 @@ export function PublicCadastroLink() {
       }
       setForm((prev) => ({ ...prev, email: emailToConfirm.trim().toLowerCase() }));
       setContractToken(result.contractToken);
+      setPreparedCoverageUrl(result.coverageAvailable === true ? String(result.coverageUrl || '') : '');
       setContractText(result.contractText);
       setContractHash(result.contractHash);
       setAcceptedTerms(false);
@@ -627,8 +632,10 @@ export function PublicCadastroLink() {
   };
 
   const finalize = async () => {
-    if (!acceptedTerms || !acceptedData || !acceptedCoverage || !coverageViewed || !coverageUrl) {
-      setError('Leia a cobertura do plano e marque os três aceites para concluir.');
+    if (!acceptedTerms || !acceptedData || (coverageUrl && (!acceptedCoverage || !coverageViewed))) {
+      setError(coverageUrl
+        ? 'Leia o documento disponibilizado e marque os três aceites para concluir.'
+        : 'Aceite os termos do contrato e confirme os dados para concluir.');
       return;
     }
     setBusy(true);
@@ -637,7 +644,7 @@ export function PublicCadastroLink() {
       const response = await fetch(apiUrl('cadastro-public-submit'), {
         method: 'POST',
         headers: publicHeaders(),
-        body: JSON.stringify({ attemptToken, contractToken, acceptedTerms, acceptedData, acceptedCoverage }),
+        body: JSON.stringify({ attemptToken, contractToken, acceptedTerms, acceptedData, acceptedCoverage: Boolean(coverageUrl && acceptedCoverage) }),
       });
       const result = await response.json();
       if (!response.ok && response.status !== 202) throw new Error(result.error || 'Nao foi possivel concluir a adesao.');
@@ -710,7 +717,7 @@ export function PublicCadastroLink() {
       <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600" />
       <h2 className="mt-4 text-2xl font-bold text-slate-900">Adesão recebida</h2>
       <p className="mt-3 font-semibold text-emerald-700">Parabéns! Sua adesão foi recebida com sucesso.</p>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{successMessage} Seu contrato e a cobertura do plano serão enviados para o e-mail confirmado. Agora você já pode aproveitar os benefícios e utilizar o App do Associado.</p>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{successMessage} Seu contrato será enviado para o e-mail confirmado. Agora você já pode aproveitar os benefícios e utilizar o App do Associado.</p>
       <ConsultantContact link={linkData} />
       <div className="mt-5"><AppButtons /></div>
     </div>
@@ -812,19 +819,21 @@ export function PublicCadastroLink() {
           <div className="mb-4 flex items-center gap-3"><FileCheck2 className="h-8 w-8 text-emerald-700" /><div><h2 className="text-xl font-bold text-slate-900">Contrato de adesao</h2><p className="text-xs text-slate-500">Hash: {contractHash.slice(0, 16)}...</p></div></div>
           <div className="max-h-[50vh] overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-4"><pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-700">{contractText}</pre></div>
           <div className="mt-5 space-y-3">
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-              <h3 className="font-semibold text-emerald-950">Cobertura do plano {coverageName}</h3>
-              <p className="mt-1 text-sm text-emerald-900">Leia os procedimentos cobertos antes de concluir sua adesão.</p>
-              {coverageUrl ? <div className="mt-3 flex flex-wrap gap-3">
-                <button type="button" onClick={() => { setCoverageViewed(true); setCoverageOpen(true); }} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Ver cobertura do plano</button>
-                <a href={coverageUrl} target="_blank" rel="noreferrer" download={`Cobertura-${coverageName || coverageCode}.pdf`} className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 px-3 py-2 text-sm font-semibold text-emerald-800"><Download className="h-4 w-4" />Baixar PDF</a>
-              </div> : <p className="mt-3 text-sm font-semibold text-red-700">Não foi possível localizar o documento de cobertura deste plano. Fale com seu consultor para continuar.</p>}
-            </div>
-            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedCoverage} disabled={!coverageViewed || !coverageUrl} onChange={(event) => setAcceptedCoverage(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Li e estou ciente da cobertura do plano contratado.</strong></span></label>
+            {coverageUrl && <>
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <h3 className="font-semibold text-emerald-950">Cobertura do plano {coverageName}</h3>
+                <p className="mt-1 text-sm text-emerald-900">Leia os procedimentos cobertos antes de concluir sua adesão.</p>
+                <div className="mt-3 flex flex-wrap gap-3">
+                  <button type="button" onClick={() => { setCoverageViewed(true); setCoverageOpen(true); }} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Ver cobertura do plano</button>
+                  <a href={coverageUrl} target="_blank" rel="noreferrer" download={`Cobertura-${coverageName || coverageCode}.pdf`} className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 px-3 py-2 text-sm font-semibold text-emerald-800"><Download className="h-4 w-4" />Baixar PDF</a>
+                </div>
+              </div>
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedCoverage} disabled={!coverageViewed} onChange={(event) => setAcceptedCoverage(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Li e estou ciente da cobertura do plano contratado.</strong></span></label>
+            </>}
             <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Li e aceito os termos e condicoes do contrato apresentado.</strong></span></label>
             <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedData} onChange={(event) => setAcceptedData(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Confirmo que os dados informados estao corretos.</strong></span></label>
           </div>
-          <Button onClick={finalize} disabled={busy || !acceptedTerms || !acceptedData || !acceptedCoverage || !coverageViewed || !coverageUrl} className="mt-5 min-h-12 w-full text-base">{busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}Aceitar e concluir adesao</Button>
+          <Button onClick={finalize} disabled={busy || !acceptedTerms || !acceptedData || Boolean(coverageUrl && (!acceptedCoverage || !coverageViewed))} className="mt-5 min-h-12 w-full text-base">{busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}Aceitar e concluir adesao</Button>
         </section>
       )}
 
