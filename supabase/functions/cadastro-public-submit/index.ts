@@ -896,8 +896,8 @@ Deno.serve(async (req: Request) => {
       pdfHash,
       deliveryPending,
       message: deliveryPending
-        ? "Adesao concluida. O contrato foi gerado e os envios estao em processamento."
-        : "Adesao concluida com sucesso. O contrato foi enviado ao e-mail confirmado e ao ERP.",
+        ? "Adesão concluída com sucesso! Seu contrato está sendo enviado para o e-mail confirmado."
+        : "Adesão concluída com sucesso!",
     });
   } catch (error) {
     console.error("[cadastro-public-submit]", {

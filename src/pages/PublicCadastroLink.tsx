@@ -650,7 +650,7 @@ export function PublicCadastroLink() {
       if (response.status === 202) {
         setSuccessMessage('Recebemos sua adesao e ela esta sendo processada. Nao e necessario preencher novamente.');
       } else {
-        setSuccessMessage(result.message || 'Adesao concluida com sucesso.');
+        setSuccessMessage('Adesão concluída com sucesso! Seu contrato será enviado para o e-mail confirmado. Agora você já pode aproveitar os benefícios e utilizar o App Odontoart Associado.');
       }
       sessionStorage.removeItem('adesart-public-attempt-token');
       setStage('success');
@@ -716,7 +716,7 @@ export function PublicCadastroLink() {
       <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600" />
       <h2 className="mt-4 text-2xl font-bold text-slate-900">Adesão recebida</h2>
       <p className="mt-3 font-semibold text-emerald-700">Parabéns! Sua adesão foi recebida com sucesso.</p>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{successMessage} Seu contrato será enviado para o e-mail confirmado. Agora você já pode aproveitar os benefícios e utilizar o App do Associado.</p>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{successMessage}</p>
       <ConsultantContact link={linkData} />
       <div className="mt-5"><AppButtons /></div>
     </div>
