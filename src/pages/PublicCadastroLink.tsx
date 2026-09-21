@@ -114,7 +114,13 @@ const publicHeaders = () => ({
 });
 const normalizePhone = (value: string) => value.replace(/\D/g, '');
 const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-const coverageNames: Record<number, string> = { 18: 'Multiprev', 19: 'Multiplus', 20: 'Multimaster' };
+const coverageNameFromPlan = (value: string) => {
+  const normalized = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (normalized.includes('multimaster')) return 'Multimaster';
+  if (normalized.includes('multiplus')) return 'Multiplus';
+  if (normalized.includes('multiprev')) return 'Multiprev';
+  return value;
+};
 const dateView = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-').reverse().join('/') : value;
 const dateInput = (value: string) => {
   const clean = value.replace(/[^\d]/g, '').slice(0, 8);
@@ -293,12 +299,14 @@ export function PublicCadastroLink() {
 
   const plans = useMemo(() => linkData?.planos || [], [linkData]);
   const coverageCode = form.titularPlano;
+  const selectedPlanName = plans.find((plan) => plan.Plano === coverageCode)?.nomeExibicao || '';
+  const coverageName = coverageNameFromPlan(selectedPlanName);
   const coverageUrl = linkData?.coberturaPlanos?.[String(coverageCode)] || '';
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
     setValidationErrors([]);
   }, [stage]);
-  useEffect(() => { setAcceptedCoverage(false); setCoverageViewed(false); }, [coverageCode]);
+  useEffect(() => { setAcceptedCoverage(false); setCoverageViewed(false); setCoverageOpen(false); }, [coverageCode, coverageUrl]);
   const activeRelationships = useMemo(() => parentescos.filter((item) => item.ativo && Number(item.parentesco_id) !== 1), [parentescos]);
 
   useEffect(() => {
@@ -660,7 +668,10 @@ export function PublicCadastroLink() {
               {(linkData || knownConsultant)?.vendedorNome && <p className="mt-1 text-xs text-emerald-100">Consultor: {(linkData || knownConsultant)?.vendedorNome}</p>}
               {(linkData || knownConsultant)?.vendedorTelefone && <p className="mt-0.5 text-xs text-emerald-100">WhatsApp: {formatMobilePhone((linkData || knownConsultant)?.vendedorTelefone || '')}</p>}
             </div>
-            <img src="/logoOdontoart.png" alt="Odontoart Planos Odontológicos" className="h-12 w-28 shrink-0 rounded-lg bg-white object-contain p-1" />
+            <div role="img" aria-label="Odontoart Planos Odontológicos" className="flex min-h-12 w-28 shrink-0 flex-col items-center justify-center rounded-lg bg-white px-1.5 py-2 text-emerald-900">
+              <span className="text-base font-extrabold italic leading-tight tracking-tight">Odontoart</span>
+              <span className="text-center text-[8px] font-semibold leading-tight">Planos Odontológicos</span>
+            </div>
           </div>
           {whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) && <a href={whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) || '#'} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-9 items-center gap-2 rounded-lg bg-white/15 px-3 py-2 text-xs font-semibold text-white"><MessageCircle className="h-4 w-4" />Precisa de ajuda? Fale com seu consultor</a>}
         </header>
@@ -807,12 +818,12 @@ export function PublicCadastroLink() {
           <div className="max-h-[50vh] overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-4"><pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-700">{contractText}</pre></div>
           <div className="mt-5 space-y-3">
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-              <h3 className="font-semibold text-emerald-950">Cobertura do plano {coverageNames[coverageCode] || ''}</h3>
+              <h3 className="font-semibold text-emerald-950">Cobertura do plano {coverageName}</h3>
               <p className="mt-1 text-sm text-emerald-900">Leia os procedimentos cobertos antes de concluir sua adesão.</p>
               {coverageUrl ? <div className="mt-3 flex flex-wrap gap-3">
                 <button type="button" onClick={() => { setCoverageViewed(true); setCoverageOpen(true); }} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Ver cobertura do plano</button>
-                <a href={coverageUrl} target="_blank" rel="noreferrer" download={`Cobertura-${coverageNames[coverageCode] || coverageCode}.pdf`} className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 px-3 py-2 text-sm font-semibold text-emerald-800"><Download className="h-4 w-4" />Baixar PDF</a>
-              </div> : <p className="mt-3 text-sm font-semibold text-red-700">Cobertura deste plano indisponível. Fale com seu consultor.</p>}
+                <a href={coverageUrl} target="_blank" rel="noreferrer" download={`Cobertura-${coverageName || coverageCode}.pdf`} className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 px-3 py-2 text-sm font-semibold text-emerald-800"><Download className="h-4 w-4" />Baixar PDF</a>
+              </div> : <p className="mt-3 text-sm font-semibold text-red-700">Não foi possível localizar o documento de cobertura deste plano. Fale com seu consultor para continuar.</p>}
             </div>
             <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedCoverage} disabled={!coverageViewed || !coverageUrl} onChange={(event) => setAcceptedCoverage(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Li e estou ciente da cobertura do plano contratado.</strong></span></label>
             <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Li e aceito os termos e condicoes do contrato apresentado.</strong></span></label>
@@ -823,7 +834,7 @@ export function PublicCadastroLink() {
       )}
 
       {coverageOpen && coverageUrl && <div role="dialog" aria-label="Cobertura do plano" className="fixed inset-0 z-50 flex flex-col bg-white p-3 sm:p-6">
-        <div className="mb-3 flex items-center justify-between gap-3"><h3 className="font-semibold">Cobertura — {coverageNames[coverageCode] || 'Plano odontológico'}</h3><button type="button" className="rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white" onClick={() => setCoverageOpen(false)}>Fechar</button></div>
+        <div className="mb-3 flex items-center justify-between gap-3"><h3 className="font-semibold">Cobertura — {coverageName || 'Plano odontológico'}</h3><button type="button" className="rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white" onClick={() => setCoverageOpen(false)}>Fechar</button></div>
         <iframe title="Cobertura do plano contratado" src={coverageUrl} className="min-h-0 w-full flex-1 rounded-xl border border-slate-200" />
         <a href={coverageUrl} target="_blank" rel="noreferrer" className="mt-3 text-center text-sm font-semibold text-emerald-800 underline">Abrir ou baixar o PDF</a>
       </div>}
