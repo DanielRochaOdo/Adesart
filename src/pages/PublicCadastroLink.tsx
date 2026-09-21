@@ -117,7 +117,7 @@ const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim(
 const coverageNameFromCode = (code: number): string => {
   if (code === 18) return 'Multiprev';
   if (code === 19) return 'Multiplus';
-  if ([2, 5, 17, 20].includes(code)) return 'Multimaster';
+  if ([2, 17, 20].includes(code)) return 'Multimaster';
   return 'Plano sem cobertura configurada';
 };
 const dateView = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-').reverse().join('/') : value;
@@ -143,7 +143,7 @@ function ConsultantContact({ link }: { link: Pick<LinkData, 'vendedorNome' | 've
     <p className="mt-1 text-sm text-emerald-900">Seu consultor está pronto para lhe atender.</p>
     {link?.vendedorNome && <p className="mt-3 text-sm font-semibold text-emerald-950">{link.vendedorNome}</p>}
     {link?.vendedorTelefone && <p className="text-sm text-emerald-800">WhatsApp: {formatMobilePhone(link.vendedorTelefone)}</p>}
-    {url && <a href={url} target="_blank" rel="noreferrer" className="mt-3 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 font-semibold text-white"><MessageCircle className="h-5 w-5" />Falar com meu consultor</a>}
+    {url && <a href={url} target="_blank" rel="noreferrer" className="mt-3 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-2 font-extrabold text-white shadow-md ring-2 ring-orange-200 transition-colors hover:bg-orange-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-600"><MessageCircle className="h-5 w-5" />Falar com meu consultor</a>}
   </div>;
 }
 const currency = (value: number) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -466,7 +466,6 @@ export function PublicCadastroLink() {
   };
 
   const addDependent = () => {
-    if (dependents.length >= 4) return;
     setDependents((prev) => [...prev, {
       id: crypto.randomUUID(), tipo: 0, nome: '', dataNascimento: '', cpf: '', sexo: -1, nomeMae: '', plano: plans.length === 1 ? plans[0].Plano : 0,
     }]);
@@ -675,7 +674,7 @@ export function PublicCadastroLink() {
             </div>
             <img src="/logo-odontoart.png" alt="Odontoart Planos Odontológicos" className="h-auto w-32 shrink-0 object-contain sm:w-40" />
           </div>
-          {whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) && <a href={whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) || '#'} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-9 items-center gap-2 rounded-lg bg-white/15 px-3 py-2 text-xs font-semibold text-white"><MessageCircle className="h-4 w-4" />Precisa de ajuda? Fale com seu consultor</a>}
+          {whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) && <a href={whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) || '#'} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-extrabold text-white shadow-lg ring-2 ring-orange-200 transition-colors hover:bg-orange-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-300"><MessageCircle className="h-5 w-5" />Precisa de ajuda? Fale com seu consultor</a>}
         </header>
         <div className="p-5 sm:p-7">
           {linkData && !['success', 'completed', 'not_eligible'].includes(stage) && <div aria-label="Progresso da adesão" className="mb-5 grid grid-cols-4 gap-1 text-center text-[10px] font-medium">
@@ -774,7 +773,7 @@ export function PublicCadastroLink() {
       {stage === 'dependents' && (
         <section>
           <button type="button" onClick={() => setStage('details')} className="mb-4 inline-flex items-center text-sm font-medium text-slate-600"><ChevronLeft className="mr-1 h-4 w-4" />Voltar</button>
-          <div className="flex items-start justify-between gap-4"><div><h2 className="text-xl font-bold text-slate-900">Dependentes</h2><p className="mt-1 text-sm text-slate-600">Inclua ate 4 dependentes nesta primeira adesao.</p></div><span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">{dependents.length}/4</span></div>
+          <div className="flex items-start justify-between gap-4"><div><h2 className="text-xl font-bold text-slate-900">Dependentes</h2><p className="mt-1 text-sm text-slate-600">Inclua os dependentes que deseja cadastrar nesta adesão.</p></div><span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">{dependents.length}</span></div>
           <div className="mt-5 space-y-4">
             {dependents.map((dep, index) => (
               <div key={dep.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -793,7 +792,7 @@ export function PublicCadastroLink() {
               </div>
             ))}
           </div>
-          {dependents.length < 4 && <button type="button" onClick={addDependent} className="mt-4 flex min-h-12 w-full items-center justify-center rounded-2xl border border-dashed border-emerald-400 bg-emerald-50 px-4 text-sm font-semibold text-emerald-700"><Plus className="mr-2 h-4 w-4" />Adicionar dependente</button>}
+          <button type="button" onClick={addDependent} className="mt-4 flex min-h-12 w-full items-center justify-center rounded-2xl border border-dashed border-emerald-400 bg-emerald-50 px-4 text-sm font-semibold text-emerald-700"><Plus className="mr-2 h-4 w-4" />Adicionar dependente</button>
           <Button onClick={goReview} className="mt-5 min-h-12 w-full text-base">Continuar {dependents.length === 0 ? 'sem dependentes' : ''}</Button>
           {validationErrors.length > 0 && <div role="alert" className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800">Corrija as pendências: {validationErrors.join(', ')}.</div>}
         </section>
@@ -806,7 +805,7 @@ export function PublicCadastroLink() {
           <div className="mt-5 space-y-3 text-sm">
             <div className="rounded-2xl border border-slate-200 p-4"><span className="text-slate-500">Responsavel financeiro</span><strong className="mt-1 block text-slate-900">{form.nome}</strong><span className="text-slate-600">{formatCPF(cpf)}</span></div>
             <div className="rounded-2xl border border-slate-200 p-4"><span className="text-slate-500">Plano do titular</span><strong className="mt-1 block text-slate-900">{plans.find((plan) => plan.Plano === form.titularPlano)?.nomeExibicao}</strong><span className="text-slate-600">{currency(plans.find((plan) => plan.Plano === form.titularPlano)?.ValorTitular || 0)}</span></div>
-            <div className="rounded-2xl border border-slate-200 p-4"><span className="text-slate-500">Dependentes</span><strong className="mt-1 block text-slate-900">{dependents.length} de 4</strong>{dependents.map((dep) => <p key={dep.id} className="mt-2 text-slate-600">{dep.nome} - {plans.find((plan) => plan.Plano === dep.plano)?.nomeExibicao}</p>)}</div>
+            <div className="rounded-2xl border border-slate-200 p-4"><span className="text-slate-500">Dependentes</span><strong className="mt-1 block text-slate-900">{dependents.length}</strong>{dependents.map((dep) => <p key={dep.id} className="mt-2 text-slate-600">{dep.nome} - {plans.find((plan) => plan.Plano === dep.plano)?.nomeExibicao}</p>)}</div>
             <div className="rounded-2xl border border-slate-200 p-4"><span className="text-slate-500">Contato</span><strong className="mt-1 block text-slate-900">{formatPhone(form.telefone)}</strong><span className="text-slate-600">{form.email}</span></div>
           </div>
           <Button onClick={() => { setEmailToConfirm(form.email); setEmailModalOpen(true); setError(''); }} className="mt-5 min-h-12 w-full text-base"><FileCheck2 className="mr-2 h-5 w-5" />Revisar contrato</Button>
