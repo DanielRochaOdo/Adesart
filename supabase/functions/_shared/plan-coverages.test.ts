@@ -1,4 +1,4 @@
-import { coverageFileForPlan, listCoverageDocuments, resolveOptionalCoverage } from "./public-flow.ts";
+import { coverageFileForPlan, listCoverageDocuments, resolveOptionalCoverage, resolvePublishedOptionalCoverage } from "./public-flow.ts";
 
 const expect = (condition: boolean, message: string) => {
   if (!condition) throw new Error(message);
@@ -49,6 +49,43 @@ Deno.test("dependente sem PDF nao bloqueia nem gera aceite parcial de cobertura"
   expect(partial.available === false && partial.files.length === 0, "associacao parcial nao deve exigir aceite");
   const complete = resolveOptionalCoverage([5, 19], ["multimaster.pdf", "multiplus.pdf"]);
   expect(complete.available === true && complete.files.length === 2, "todos os documentos presentes");
+});
+
+Deno.test("codigo 20 confirma 20.pdf no Storage mesmo quando listagem omite o arquivo", async () => {
+  const requests: string[] = [];
+  const storage = {
+    from: (name: string) => {
+      expect(name === "plan-coverages", "bucket incorreto");
+      return {
+        list: async () => ({ data: [], error: null }),
+        download: async (path: string) => {
+          requests.push(path);
+          return path === "20.pdf"
+            ? { data: new Blob(["%PDF-1.4\\nDocumento oficial"], { type: "application/pdf" }), error: null }
+            : { data: null, error: { message: "not found" } };
+        },
+      };
+    },
+  };
+  const result = await resolvePublishedOptionalCoverage({ storage }, [20]);
+  expect(result.available === true && result.files[0]?.fileName === "20.pdf", "PDF canonico valido deve habilitar visualizacao e envio");
+  expect(requests.length === 1 && requests[0] === "20.pdf", "so acessar o PDF da familia Multimaster");
+});
+
+Deno.test("codigo 5 e 20 nao recebem PDF inexistente ou arquivo que nao seja PDF", async () => {
+  const storage = {
+    from: () => ({
+      list: async () => ({ data: [], error: null }),
+      download: async () => ({ data: new Blob(["nao e pdf"], { type: "text/plain" }), error: null }),
+    }),
+  };
+  const result = await resolvePublishedOptionalCoverage({ storage }, [5, 20]);
+  expect(result.available === false && result.files.length === 0, "sem arquivo PDF valido nao pedir aceite nem anexar");
+});
+
+Deno.test("20.pdf confirmado prevalece sobre versoes comerciais ambiguas", () => {
+  const paths = ["multimaster-v1.pdf", "multimaster-v2.pdf", "20.pdf"];
+  expect(coverageFileForPlan(20, paths) === "20.pdf", "usar documento numerico canonico");
 });
 
 Deno.test("lista PDFs existentes na raiz e subpastas", async () => {
