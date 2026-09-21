@@ -761,6 +761,7 @@ Deno.serve(async (req: Request) => {
     }
 
     stage = "sync_local_cadastro";
+    if (!cadastroId) throw new Error("CADASTRO_ID_MISSING");
     await syncCadastroEnviado(supabase, cadastroId, erpResult);
 
     stage = "mark_link_used";
