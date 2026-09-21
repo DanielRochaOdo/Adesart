@@ -88,10 +88,12 @@ const loadCoverageAttachments = async (supabase: any, payload: any) => {
   // Nunca deduzir anexos pela lista de codigos quando esse array estiver presente.
   const files: Array<{ family: string; fileName: string }> =
     Array.isArray(payload.coverageFiles)
-      ? payload.coverageFiles.map((entry: any) => ({
-        family: String(entry?.familia || ""),
-        fileName: String(entry?.arquivo || ""),
-      }))
+      ? payload.coverageFiles
+        .filter((entry: any) => Number(entry?.planoCodigo) !== 5)
+        .map((entry: any) => ({
+          family: String(entry?.familia || ""),
+          fileName: String(entry?.arquivo || ""),
+        }))
       : []; // Jobs historicos sem lista de PDFs nao autorizam documento presumido.
 
   const attachments: Array<{ filename: string; content: Uint8Array; contentType: string }> = [];
@@ -158,8 +160,8 @@ const sendEmail = async (supabase: any, payload: any, jobId: string) => {
     to: recipient,
     subject: "Seu contrato Odontoart",
     messageId: `<contrato-${jobId}@${host}>`,
-    text: `Ola, ${String(payload.nome || "associado(a)")}!\n\nSua adesao a Odontoart foi concluida com sucesso. ${attachmentDescription}\n\nTutoriais do App do Associado:\n${tutorialsText}\n\nGuarde estes documentos para futuras consultas.\n\nAtenciosamente,\nOdontoart`,
-    html: `<p>Olá, ${escapeHtml(String(payload.nome || "associado(a)"))}!</p><p>Sua adesão à Odontoart foi concluída com sucesso. ${attachmentDescriptionHtml}</p><p><strong>Tutoriais do App do Associado:</strong></p><ul>${tutorialsHtml}</ul><p>Guarde estes documentos para futuras consultas.</p><p>Atenciosamente,<br>Odontoart</p>`,
+    text: `Ola, ${String(payload.nome || "associado(a)")}!\n\nSua adesao a Odontoart foi concluida com sucesso. ${attachmentDescription}\n\nEsta e uma mensagem automatica. Por favor, nao responda a este e-mail.\n\nTutoriais do App do Associado:\n${tutorialsText}\n\nGuarde estes documentos para futuras consultas.\n\nAtenciosamente,\nOdontoart`,
+    html: `<p>Olá, ${escapeHtml(String(payload.nome || "associado(a)"))}!</p><p>Sua adesão à Odontoart foi concluída com sucesso. ${attachmentDescriptionHtml}</p><p><strong>Esta é uma mensagem automática. Por favor, não responda a este e-mail.</strong></p><p><strong>Tutoriais do App do Associado:</strong></p><ul>${tutorialsHtml}</ul><p>Guarde estes documentos para futuras consultas.</p><p>Atenciosamente,<br>Odontoart</p>`,
     attachments: [{
       filename: String(payload.fileName || "Contrato-Odontoart.pdf"),
       content: Buffer.from(bytes),

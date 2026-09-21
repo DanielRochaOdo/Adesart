@@ -145,13 +145,12 @@ const COVERAGE_FAMILY_BY_PLAN_CODE: Readonly<Record<number, CoverageFamily>> = {
   18: "multiprev",
   19: "multiplus",
   2: "multimaster",
-  5: "multimaster",
   17: "multimaster",
   20: "multimaster",
 };
 
 // Somente o codigo do plano identifica a cobertura. Nomes comerciais nao participam
-// da decisao (p.ex. codigo 5, CORTESIA PJ, usa a cobertura Multimaster).
+// da decisao. O codigo 5 (CORTESIA PJ) nao recebe cobertura nem anexo.
 export const coverageFamilyForPlan = (planCode: number | string | null | undefined): CoverageFamily | null => {
   if (planCode == null || String(planCode).trim() === "") return null;
   const code = Number(planCode);
@@ -218,7 +217,10 @@ export const coverageFileForPlan = (
 // A exibicao e o aceite do documento sao opcionais: se algum plano desta
 // adesao nao tiver documento confirmado, o contrato segue sem cobertura.
 export const resolveOptionalCoverage = (planCodes: number[], availableFiles: string[]) => {
-  const matched = [...new Set(planCodes)].map((code) => ({
+  // Se o titular for codigo 5, nao ha quadro, aceite ou anexo de cobertura.
+  if (planCodes[0] === 5) return { available: false, files: [] };
+  // Dependentes do codigo 5 nunca geram cobertura; nao suprimem o PDF do titular.
+  const matched = [...new Set(planCodes)].filter((code) => code !== 5).map((code) => ({
     code,
     family: coverageFamilyForPlan(code),
     fileName: coverageFileForPlan(code, availableFiles),

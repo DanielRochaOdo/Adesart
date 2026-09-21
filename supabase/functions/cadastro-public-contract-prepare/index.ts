@@ -68,7 +68,6 @@ const validateCadastro = (cadastro: CadastroInput, cpf: string, link: any) => {
   if (!cadastro.endereco.logradouro?.trim() || !cadastro.endereco.numero?.trim() || !cadastro.endereco.bairro?.trim() || !cadastro.endereco.cidade?.trim() || !cadastro.endereco.uf?.trim()) return "Endereco incompleto";
   if (!Number(cadastro?.titularPlano)) return "Plano do titular obrigatorio";
   if (!Array.isArray(cadastro?.dependentes)) return "Dependentes invalidos";
-  if (cadastro.dependentes.length > 4) return "O limite e de ate 4 dependentes";
   const seenCpfs = new Set<string>([cpf]);
   for (const dep of cadastro.dependentes) {
     if (!dep.nome?.trim() || !normalizeDate(dep.dataNascimento) || !dep.nomeMae?.trim() || !Number(dep.tipo) || !Number(dep.plano) || ![0, 1].includes(Number(dep.sexo))) return "Preencha todos os dados obrigatorios dos dependentes";
