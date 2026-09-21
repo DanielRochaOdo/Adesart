@@ -150,23 +150,12 @@ const COVERAGE_FAMILY_BY_PLAN_CODE: Readonly<Record<number, CoverageFamily>> = {
   20: "multimaster",
 };
 
-export const coverageFamilyFromName = (value: string | null | undefined): CoverageFamily | null => {
-  const normalized = String(value || "").normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  if (normalized.includes("multimaster")) return "multimaster";
-  if (normalized.includes("multiplus")) return "multiplus";
-  if (normalized.includes("multiprev")) return "multiprev";
-  return null;
-};
-
-export const coverageFamilyForPlan = (
-  planCode: number | string | null | undefined,
-  planName: string | null | undefined,
-): CoverageFamily | null => {
+// Somente o codigo do plano identifica a cobertura. Nomes comerciais nao participam
+// da decisao (p.ex. codigo 5, CORTESIA PJ, usa a cobertura Multimaster).
+export const coverageFamilyForPlan = (planCode: number | string | null | undefined): CoverageFamily | null => {
+  if (planCode == null || String(planCode).trim() === "") return null;
   const code = Number(planCode);
-  const configured = Number.isInteger(code) ? COVERAGE_FAMILY_BY_PLAN_CODE[code] : undefined;
-  // A configuracao explicita prevalece para estes seis codigos do ERP.
-  return configured || coverageFamilyFromName(planName);
+  return Number.isInteger(code) ? (COVERAGE_FAMILY_BY_PLAN_CODE[code] ?? null) : null;
 };
 
 // Procura os arquivos efetivamente presentes no Storage, inclusive em subpastas.
@@ -199,14 +188,13 @@ export const listCoverageDocuments = async (supabase: any): Promise<string[]> =>
   return paths;
 };
 
-// O documento correto e identificado pelo nome comercial (ex.: "MULTIMASTER PF-REG ...")
-// e pelo nome do PDF (ex.: "Documentos/Cobertura MULTIMASTER.pdf").
+// Somente o codigo ERP determina a familia. O nome do PDF publicado e verificado
+// para localizar o documento daquela familia; o nome comercial do plano e ignorado.
 export const coverageFileForPlan = (
-  planName: string | null | undefined,
+  planCode: number | string | null | undefined,
   filenames: string[],
-  planCode?: number | string | null,
 ): string | null => {
-  const family = coverageFamilyForPlan(planCode, planName);
+  const family = coverageFamilyForPlan(planCode);
   if (!family) return null;
   const files = filenames.filter((path) => !path.split("/").some((part) => part === "." || part === "..")
     && /\.pdf$/i.test(path));

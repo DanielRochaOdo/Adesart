@@ -114,12 +114,11 @@ const publicHeaders = () => ({
 });
 const normalizePhone = (value: string) => value.replace(/\D/g, '');
 const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-const coverageNameFromPlan = (value: string) => {
-  const normalized = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (normalized.includes('multimaster')) return 'Multimaster';
-  if (normalized.includes('multiplus')) return 'Multiplus';
-  if (normalized.includes('multiprev')) return 'Multiprev';
-  return value;
+const coverageNameFromCode = (code: number): string => {
+  if (code === 18) return 'Multiprev';
+  if (code === 19) return 'Multiplus';
+  if ([2, 5, 17, 20].includes(code)) return 'Multimaster';
+  return 'Plano sem cobertura configurada';
 };
 const dateView = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split('-').reverse().join('/') : value;
 const dateInput = (value: string) => {
@@ -299,8 +298,7 @@ export function PublicCadastroLink() {
 
   const plans = useMemo(() => linkData?.planos || [], [linkData]);
   const coverageCode = form.titularPlano;
-  const selectedPlanName = plans.find((plan) => plan.Plano === coverageCode)?.nomeExibicao || '';
-  const coverageName = coverageNameFromPlan(selectedPlanName);
+  const coverageName = coverageNameFromCode(coverageCode);
   const coverageUrl = linkData?.coberturaPlanos?.[String(coverageCode)] || '';
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });

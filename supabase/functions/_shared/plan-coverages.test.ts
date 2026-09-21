@@ -4,40 +4,32 @@ const expect = (condition: boolean, message: string) => {
   if (!condition) throw new Error(message);
 };
 
-Deno.test("identifica Multimaster pelo nome do plano e PDF em subpasta", () => {
-  const path = coverageFileForPlan(
-    "MULTIMASTER PF-REG. PROD. 468948138",
-    ["documentos/Cobertura MultiMaster.PDF", "documentos/Cobertura MultiPlus.pdf"],
-  );
-  expect(path === "documentos/Cobertura MultiMaster.PDF", "PDF da familia incorreta");
+Deno.test("codigos 18 e 19 usam Multiprev e Multiplus", () => {
+  const files = ["documentos/Cobertura MultiPrev.pdf", "documentos/Cobertura MultiPlus.pdf"];
+  expect(coverageFileForPlan(18, files) === files[0], "codigo 18 deve usar Multiprev");
+  expect(coverageFileForPlan(19, files) === files[1], "codigo 19 deve usar Multiplus");
 });
 
-Deno.test("suporta multiplus, multiprev e o legado numerico", () => {
-  expect(coverageFileForPlan("MULTIPLUS PF", ["MULTIPLUS.pdf"]) === "MULTIPLUS.pdf", "Multiplus");
-  expect(coverageFileForPlan("MULTIPREV PF", ["18.pdf"]) === "18.pdf", "Multiprev legado");
-  expect(coverageFileForPlan("MULTIMASTER PF", ["20.pdf"]) === "20.pdf", "Multimaster legado");
-});
-
-Deno.test("nao associa documentos de outra familia ou ambiguidade", () => {
-  expect(coverageFileForPlan("MULTIMASTER", ["Multiplus.pdf"]) === null, "Familia incorreta");
-  expect(coverageFileForPlan("MULTIMASTER", ["multimaster-v1.pdf", "multimaster-v2.pdf"]) === null, "Ambiguo");
-});
-
-Deno.test("codigo ERP parametrizado determina a familia da cobertura", () => {
-  const files = ["documentos/Cobertura MultiPrev.pdf", "documentos/Cobertura MultiPlus.pdf", "documentos/Cobertura MultiMaster.pdf"];
-  const cases: Array<[number, string]> = [
-    [18, "MultiPrev"], [19, "MultiPlus"],
-    [2, "MultiMaster"], [5, "MultiMaster"],
-    [17, "MultiMaster"], [20, "MultiMaster"],
-  ];
-  for (const [code, label] of cases) {
-    const file = coverageFileForPlan("Plano PF-REG. PROD.", files, code);
-    expect(file === `documentos/Cobertura ${label}.pdf`, `codigo ${code} deveria usar ${label}`);
+Deno.test("codigos 2, 5, 17 e 20 usam sempre Multimaster, inclusive CORTESIA PJ", () => {
+  const files = ["documentos/Cobertura MultiPrev.pdf", "documentos/Cobertura MultiMaster.pdf"];
+  for (const code of [2, 5, 17, 20]) {
+    expect(coverageFileForPlan(code, files) === files[1], `codigo ${code} deve usar Multimaster`);
   }
-  expect(coverageFileForPlan("MULTIMASTER PF", files, 18) === "documentos/Cobertura MultiPrev.pdf",
-    "codigo parametrizado deve prevalecer sobre nome divergente");
-  expect(coverageFileForPlan("MULTIMASTER PF", files, 99) === "documentos/Cobertura MultiMaster.pdf",
-    "codigo nao parametrizado pode usar familia do nome");
+  expect(coverageFileForPlan(5, ["20.pdf"]) === "20.pdf", "CORTESIA PJ aceita PDF legado de Multimaster");
+});
+
+Deno.test("nome do plano nao autoriza cobertura fora dos codigos configurados", () => {
+  const files = ["multimaster.pdf", "multiplus.pdf", "multiprev.pdf"];
+  for (const code of [0, 1, 3, 4, 6, 99]) {
+    expect(coverageFileForPlan(code, files) === null, `codigo ${code} nao configurado`);
+  }
+  expect(coverageFileForPlan(undefined, files) === null, "codigo ausente nao identifica cobertura");
+  expect(coverageFileForPlan("5", files) === "multimaster.pdf", "codigo 5 como string");
+});
+
+Deno.test("nao associa documento de outra familia nem PDFs ambiguos", () => {
+  expect(coverageFileForPlan(5, ["multiplus.pdf"]) === null, "cobertura divergente");
+  expect(coverageFileForPlan(5, ["multimaster-v1.pdf", "multimaster-v2.pdf"]) === null, "cobertura ambigua");
 });
 
 Deno.test("lista PDFs existentes na raiz e subpastas", async () => {
