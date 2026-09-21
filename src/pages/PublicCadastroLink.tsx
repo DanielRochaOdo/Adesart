@@ -10,6 +10,8 @@ import {
   Plus,
   ShieldCheck,
   Smartphone,
+  MessageCircle,
+  Download,
   Trash2,
   UserRound,
 } from 'lucide-react';
@@ -38,6 +40,7 @@ type LinkData = {
   planos: PublicPlan[];
   vendedorNome: string;
   vendedorTelefone?: string | null;
+  coberturaPlanos?: Record<string, string>;
 };
 
 type Contact = {
@@ -112,6 +115,33 @@ const publicHeaders = () => ({
 });
 const normalizePhone = (value: string) => value.replace(/\D/g, '');
 const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+const coverageNames: Record<number, string> = { 18: 'Multiprev', 19: 'Multiplus', 20: 'Multimaster' };
+const dateView = (value: string) => /^\\d{4}-\\d{2}-\\d{2}$/.test(value) ? value.split('-').reverse().join('/') : value;
+const dateInput = (value: string) => {
+  const clean = value.replace(/[^\\d]/g, '').slice(0, 8);
+  if (clean.length === 8) {
+    const iso = `${clean.slice(4, 8)}-${clean.slice(2, 4)}-${clean.slice(0, 2)}`;
+    const d = new Date(`${iso}T12:00:00Z`);
+    if (!Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso) return iso;
+  }
+  return value.slice(0, 10);
+};
+const validDate = (value: string) => /^\\d{4}-\\d{2}-\\d{2}$/.test(value) && dateInput(dateView(value)) === value;
+const whatsappUrl = (phone?: string | null) => {
+  const digits = normalizePhone(phone || '');
+  return digits.length >= 10 ? `https://wa.me/${digits.startsWith('55') ? digits : `55${digits}`}?text=${encodeURIComponent('Olá! Preciso de ajuda com minha adesão à Odontoart.')}` : null;
+};
+function ConsultantContact({ link }: { link: Pick<LinkData, 'vendedorNome' | 'vendedorTelefone'> | null }) {
+  const url = whatsappUrl(link?.vendedorTelefone);
+  if (!link?.vendedorNome && !url) return null;
+  return <div className="mt-5 rounded-2xl bg-emerald-50 p-4 text-left">
+    <p className="font-bold text-emerald-900">Ficou com alguma dúvida?</p>
+    <p className="mt-1 text-sm text-emerald-900">Seu consultor está pronto para lhe atender.</p>
+    {link?.vendedorNome && <p className="mt-3 text-sm font-semibold text-emerald-950">{link.vendedorNome}</p>}
+    {link?.vendedorTelefone && <p className="text-sm text-emerald-800">WhatsApp: {formatMobilePhone(link.vendedorTelefone)}</p>}
+    {url && <a href={url} target="_blank" rel="noreferrer" className="mt-3 flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 font-semibold text-white"><MessageCircle className="h-5 w-5" />Falar com meu consultor</a>}
+  </div>;
+}
 const currency = (value: number) => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 const ASSOCIADO_APP_STORE_URL = 'https://apps.apple.com/br/app/odontoart-associado/id1206858386?l=en';
@@ -235,6 +265,11 @@ export function PublicCadastroLink() {
   const { parentescos } = useConfigCadastro();
   const [linkToken] = useState(() => routeToken || sessionStorage.getItem('adesart-public-link-token') || '');
   const [linkData, setLinkData] = useState<LinkData | null>(null);
+  const [knownConsultant, setKnownConsultant] = useState<Pick<LinkData, 'vendedorNome' | 'vendedorTelefone'> | null>(null);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [acceptedCoverage, setAcceptedCoverage] = useState(false);
+  const [coverageViewed, setCoverageViewed] = useState(false);
+  const [coverageOpen, setCoverageOpen] = useState(false);
   const [loadingLink, setLoadingLink] = useState(true);
   const [stage, setStage] = useState<Stage>('identify');
   const [error, setError] = useState('');
@@ -258,6 +293,13 @@ export function PublicCadastroLink() {
   const [successMessage, setSuccessMessage] = useState('');
 
   const plans = useMemo(() => linkData?.planos || [], [linkData]);
+  const coverageCode = form.titularPlano;
+  const coverageUrl = linkData?.coberturaPlanos?.[String(coverageCode)] || '';
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    setValidationErrors([]);
+  }, [stage]);
+  useEffect(() => { setAcceptedCoverage(false); setCoverageViewed(false); }, [coverageCode]);
   const activeRelationships = useMemo(() => parentescos.filter((item) => item.ativo && Number(item.parentesco_id) !== 1), [parentescos]);
 
   useEffect(() => {
@@ -275,7 +317,13 @@ export function PublicCadastroLink() {
           method: 'POST', headers: publicHeaders(), body: JSON.stringify({ token: linkToken }),
         });
         const result = await response.json();
-        if (!response.ok || !result.ok) throw new Error(result.error || 'Link indisponivel');
+        if (!response.ok || !result.ok) {
+          if (result.consultant) setKnownConsultant({
+            vendedorNome: String(result.consultant.nome || ''),
+            vendedorTelefone: String(result.consultant.telefone || ''),
+          });
+          throw new Error(result.error || 'Link indisponível');
+        }
         setLinkData(result.link as LinkData);
         if (routeToken) window.history.replaceState({}, '', '/adesao');
       } catch (resolveError) {
@@ -289,8 +337,10 @@ export function PublicCadastroLink() {
 
   const authenticate = async () => {
     setError('');
-    if (!validateCPF(cpf) || !birthDate) {
-      setError('Informe um CPF valido e sua data de nascimento.');
+    const pending = [!validateCPF(cpf) && 'CPF válido', !validDate(birthDate) && 'Data de nascimento válida'].filter(Boolean) as string[];
+    if (pending.length) {
+      setValidationErrors(pending);
+      setError('');
       return;
     }
     setBusy(true);
@@ -336,7 +386,7 @@ export function PublicCadastroLink() {
         email: primaryEmail?.valor || '',
         contatosOriginais: contacts,
         endereco: { ...emptyAddress, ...(person.endereco || {}) },
-        titularPlano: 0,
+        titularPlano: plans.length === 1 ? plans[0].Plano : 0,
       });
       setStage('details');
     } catch (authError) {
@@ -382,22 +432,26 @@ export function PublicCadastroLink() {
     }
   };
 
-  const detailsValid = () => {
-    if (!form.nome.trim() || !form.dataNascimento || !form.nomeMae.trim()) return 'Preencha os dados do responsavel financeiro.';
-    if (![0, 1].includes(form.sexoCodigo)) return 'Informe o sexo.';
-    if (normalizePhone(form.telefone).length < 10) return 'Informe um telefone valido.';
-    if (!isEmail(form.email)) return 'Informe um e-mail valido.';
-    if (linkData?.empresaExigeMatricula === 1 && !form.numeroMatricula.trim()) return 'Informe a matricula.';
-    if (!form.titularPlano) return 'Selecione o plano do titular.';
-    if (form.endereco.cep.replace(/\D/g, '').length !== 8 || !form.endereco.logradouro.trim() || !form.endereco.numero.trim() || !form.endereco.bairro.trim() || !form.endereco.cidade.trim() || !form.endereco.uf.trim()) {
-      return 'Complete o endereco antes de continuar.';
-    }
-    return '';
-  };
+  const detailsErrors = () => [
+    !form.nome.trim() && 'Nome completo',
+    !validDate(form.dataNascimento) && 'Data de nascimento',
+    ![0, 1].includes(form.sexoCodigo) && 'Sexo',
+    !form.nomeMae.trim() && 'Nome da mãe',
+    normalizePhone(form.telefone).length < 10 && 'Telefone principal / WhatsApp',
+    !isEmail(form.email) && 'E-mail',
+    linkData?.empresaExigeMatricula === 1 && !form.numeroMatricula.trim() && 'Matrícula',
+    !form.titularPlano && 'Plano do titular',
+    form.endereco.cep.replace(/\D/g, '').length !== 8 && 'CEP',
+    !form.endereco.logradouro.trim() && 'Logradouro',
+    !form.endereco.numero.trim() && 'Número',
+    !form.endereco.bairro.trim() && 'Bairro',
+    !form.endereco.cidade.trim() && 'Cidade',
+    !form.endereco.uf.trim() && 'UF',
+  ].filter(Boolean) as string[];
 
   const goDependents = () => {
-    const message = detailsValid();
-    if (message) { setError(message); return; }
+    const pending = detailsErrors();
+    if (pending.length) { setValidationErrors(pending); setError(''); return; }
     setError('');
     setStage('dependents');
   };
@@ -500,7 +554,7 @@ export function PublicCadastroLink() {
 
   const goReview = () => {
     const message = dependentsValid();
-    if (message) { setError(message); return; }
+    if (message) { setValidationErrors([message]); setError(''); return; }
     setError('');
     setStage('review');
   };
@@ -557,6 +611,7 @@ export function PublicCadastroLink() {
       setContractHash(result.contractHash);
       setAcceptedTerms(false);
       setAcceptedData(false);
+      setAcceptedCoverage(false);
       setEmailModalOpen(false);
       setStage('contract');
     } catch (prepareError) {
@@ -567,14 +622,17 @@ export function PublicCadastroLink() {
   };
 
   const finalize = async () => {
-    if (!acceptedTerms || !acceptedData) { setError('Marque os dois aceites para concluir.'); return; }
+    if (!acceptedTerms || !acceptedData || !acceptedCoverage || !coverageViewed || !coverageUrl) {
+      setError('Leia a cobertura do plano e marque os três aceites para concluir.');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
       const response = await fetch(apiUrl('cadastro-public-submit'), {
         method: 'POST',
         headers: publicHeaders(),
-        body: JSON.stringify({ attemptToken, contractToken, acceptedTerms, acceptedData }),
+        body: JSON.stringify({ attemptToken, contractToken, acceptedTerms, acceptedData, acceptedCoverage }),
       });
       const result = await response.json();
       if (!response.ok && response.status !== 202) throw new Error(result.error || 'Nao foi possivel concluir a adesao.');
