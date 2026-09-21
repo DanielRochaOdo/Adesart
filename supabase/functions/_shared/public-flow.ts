@@ -213,6 +213,19 @@ export const coverageFileForPlan = (
   return files.find((path) => path === oldNames[family]) || null;
 };
 
+// A exibicao e o aceite do documento sao opcionais: se algum plano desta
+// adesao nao tiver documento confirmado, o contrato segue sem cobertura.
+export const resolveOptionalCoverage = (planCodes: number[], availableFiles: string[]) => {
+  const matched = [...new Set(planCodes)].map((code) => ({
+    code,
+    family: coverageFamilyForPlan(code),
+    fileName: coverageFileForPlan(code, availableFiles),
+  }));
+  const available = matched.length > 0 &&
+    matched.every((entry) => Boolean(entry.family && entry.fileName));
+  return { available, files: available ? matched : [] };
+};
+
 export const sanitizePlan = (plan: any) => ({
   Plano: Number(plan?.Plano ?? plan?.plano ?? plan?.Id ?? 0),
   nomeExibicao: String(plan?.nomeExibicao ?? plan?.NomeANS ?? plan?.PlanoNome ?? plan?.Nome ?? `Plano ${plan?.Plano ?? plan?.plano ?? ""}`),
