@@ -201,16 +201,18 @@ export const coverageFileForPlan = (
   const normalized = (text: string) => text.normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
   const matched = files.filter((path) => normalized(path.split("/").pop() || "").includes(family));
+  const fixedNames: Record<CoverageFamily, string> = {
+    multiprev: "18.pdf", multiplus: "19.pdf", multimaster: "20.pdf",
+  };
+  // O arquivo oficial numerico tem prioridade sobre nomes comerciais ambiguos.
+  const fixedFile = files.find((path) => path === fixedNames[family]);
+  if (fixedFile) return fixedFile;
   const canonical = matched.find((path) =>
     normalized((path.split("/").pop() || "").replace(/\.pdf$/i, "")) === family);
   if (canonical) return canonical;
   if (matched.length === 1) return matched[0];
-  // Se houver varios PDFs da mesma familia, nao apresenta cobertura possivelmente errada.
-  if (matched.length > 1) return null;
-  const oldNames: Record<CoverageFamily, string> = {
-    multiprev: "18.pdf", multiplus: "19.pdf", multimaster: "20.pdf",
-  };
-  return files.find((path) => path === oldNames[family]) || null;
+  // Nao escolher PDF arbitrariamente caso existam varias versoes sem arquivo canonico.
+  return null;
 };
 
 // A exibicao e o aceite do documento sao opcionais: se algum plano desta
@@ -224,6 +226,56 @@ export const resolveOptionalCoverage = (planCodes: number[], availableFiles: str
   const available = matched.length > 0 &&
     matched.every((entry) => Boolean(entry.family && entry.fileName));
   return { available, files: available ? matched : [] };
+};
+
+// Em alguns ambientes, a listagem do Storage nao retorna todos os objetos.
+// Antes de omitir a cobertura de um codigo conhecido, consultar diretamente os
+// PDFs canonicos 18/19/20.pdf. Nunca inventar URL sem verificar que o PDF existe.
+export const resolvePublishedOptionalCoverage = async (
+  supabase: any,
+  planCodes: number[],
+) => {
+  let availableFiles: string[] = [];
+  try {
+    availableFiles = await listCoverageDocuments(supabase);
+  } catch (error) {
+    console.warn("[plan-coverages] falha ao listar PDFs; tentando caminhos canonicos", error);
+  }
+  let result = resolveOptionalCoverage(planCodes, availableFiles);
+  if (result.available) return result;
+
+  const fixedNames: Record<CoverageFamily, string> = {
+    multiprev: "18.pdf", multiplus: "19.pdf", multimaster: "20.pdf",
+  };
+  const families = [...new Set(planCodes.map((code) => coverageFamilyForPlan(code)).filter(
+    (family): family is CoverageFamily => family !== null,
+  ))];
+  const bucket = supabase.storage.from("plan-coverages");
+  for (const family of families) {
+    const fileName = fixedNames[family];
+    if (availableFiles.includes(fileName)) continue;
+    try {
+      const { data, error } = await bucket.download(fileName);
+      if (!error && data && data.size >= 5) {
+        const signature = new Uint8Array(await data.slice(0, 5).arrayBuffer());
+        if (String.fromCharCode(...signature) === "%PDF-") {
+          availableFiles.push(fileName);
+        } else {
+          console.warn("[plan-coverages] arquivo canonico nao e PDF", { fileName });
+        }
+      } else {
+        console.info("[plan-coverages] PDF canonico nao confirmado", { fileName, reason: error?.message || "arquivo ausente ou vazio" });
+      }
+    } catch (error) {
+      console.warn("[plan-coverages] falha ao verificar PDF canonico", { fileName, error });
+    }
+  }
+  result = resolveOptionalCoverage(planCodes, availableFiles);
+  console.info("[plan-coverages] resolucao de cobertura", {
+    planCodes, available: result.available,
+    confirmedFiles: result.files.map((entry) => entry.fileName),
+  });
+  return result;
 };
 
 export const sanitizePlan = (plan: any) => ({
