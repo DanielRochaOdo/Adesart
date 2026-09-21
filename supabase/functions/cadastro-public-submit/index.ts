@@ -506,8 +506,8 @@ Deno.serve(async (req: Request) => {
       acceptedCoverage?: boolean;
     };
 
-    if (!body.attemptToken || !body.contractToken || body.acceptedTerms !== true || body.acceptedData !== true || body.acceptedCoverage !== true) {
-      return jsonResponse({ error: "O aceite dos termos, da cobertura do plano e a confirmacao dos dados sao obrigatorios" }, 400);
+    if (!body.attemptToken || !body.contractToken || body.acceptedTerms !== true || body.acceptedData !== true) {
+      return jsonResponse({ error: "O aceite do contrato e a confirmacao dos dados sao obrigatorios" }, 400);
     }
 
     stage = "resolve_attempt";
@@ -565,6 +565,17 @@ Deno.serve(async (req: Request) => {
 
     if (!["prepared", "erp_failed"].includes(session.status)) {
       return jsonResponse({ error: "Este contrato nao pode mais ser utilizado" }, 409);
+    }
+
+    // O requisito de aceite e determinado pelo snapshot preparado no servidor.
+    // A ausencia de cobertura nunca gera aceite presumido nem bloqueia a adesao.
+    const preparedCadastro = session.snapshot?.cadastro;
+    const requiresCoverageConsent = preparedCadastro?.coberturaDisponivel === true ||
+      (preparedCadastro?.coberturaDisponivel == null &&
+        Array.isArray(preparedCadastro?.coberturaPlanoArquivos) &&
+        preparedCadastro.coberturaPlanoArquivos.length > 0);
+    if (requiresCoverageConsent && body.acceptedCoverage !== true) {
+      return jsonResponse({ error: "Leia e aceite a cobertura disponibilizada antes de concluir." }, 400);
     }
 
     const previousStatus = session.status;
