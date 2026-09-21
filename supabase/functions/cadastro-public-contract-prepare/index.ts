@@ -1,8 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
   corsHeaders,
-  resolveOptionalCoverage,
-  listCoverageDocuments,
+  resolvePublishedOptionalCoverage,
   createServiceClient,
   hashSensitiveValue,
   jsonResponse,
@@ -183,17 +182,10 @@ Deno.serve(async (req: Request) => {
     };
 
     const uniquePlans = [...new Set(selectedCodes)];
-    // Cobertura e opcional: nunca interrompe o preparo do contrato se o
-    // Storage estiver indisponivel ou algum plano nao tiver PDF associado.
-    // Se faltar qualquer documento da selecao, nao solicitar aceite parcial.
-    let availableFiles: string[] = [];
-    try {
-      availableFiles = await listCoverageDocuments(supabase);
-    } catch (coverError) {
-      console.warn("[cadastro-public-contract-prepare] consulta opcional de documentos", coverError);
-    }
+    // Verifica PDFs canonicos por acesso direto quando a listagem do Storage
+    // estiver incompleta. A ausencia real de PDF nunca bloqueia o contrato.
     const { available: coverageAvailable, files: coverageFiles } =
-      resolveOptionalCoverage(uniquePlans, availableFiles);
+      await resolvePublishedOptionalCoverage(supabase, uniquePlans);
     if (!coverageAvailable) {
       console.info("[cadastro-public-contract-prepare] adesao sem documento opcional associado", {
         planCodes: uniquePlans,
