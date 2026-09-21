@@ -149,26 +149,56 @@ export const coverageFamilyFromName = (value: string | null | undefined): Covera
   return null;
 };
 
-// Usa o nome real do PDF no bucket, com compatibilidade para os antigos 18/19/20.pdf.
-// Em caso de multiplos documentos da mesma familia sem nome canonico, nao escolhe
-// um arquivo arbitrariamente: evita apresentar uma cobertura incorreta ao associado.
+// Procura os arquivos efetivamente presentes no Storage, inclusive em subpastas.
+ // Nunca presume que o codigo numerico do ERP indica a familia do plano.
+export const listCoverageDocuments = async (supabase: any): Promise<string[]> => {
+  const bucket = supabase.storage.from("plan-coverages");
+  const paths: string[] = [];
+  const visited = new Set<string>();
+  const pending: Array<{ folder: string; depth: number }> = [{ folder: "", depth: 0 }];
+  while (pending.length) {
+    if (visited.size >= 50) throw new Error("PLAN_COVERAGE_FOLDERS_LIMIT");
+    const { folder, depth } = pending.shift()!;
+    if (visited.has(folder)) continue;
+    visited.add(folder);
+    const { data, error } = await bucket.list(folder, { limit: 1000, offset: 0 });
+    if (error) throw new Error("PLAN_COVERAGE_STORAGE_UNAVAILABLE");
+    if ((data || []).length === 1000) throw new Error("PLAN_COVERAGE_FILES_LIMIT");
+    for (const entry of data || []) {
+      const name = String(entry?.name || "");
+      if (!name || name === "." || name === ".." || /[\/\\]/.test(name)) continue;
+      const path = folder ? `${folder}/${name}` : name;
+      if (/\.pdf$/i.test(name)) {
+        // Arquivo listado nao significa URL inventada: apenas arquivos reais do bucket.
+        paths.push(path);
+      } else if (depth < 2 && (entry.id == null || entry.metadata == null)) {
+        pending.push({ folder: path, depth: depth + 1 });
+      }
+    }
+  }
+  return paths;
+};
+
+// O documento correto e identificado pelo nome comercial (ex.: "MULTIMASTER PF-REG ...")
+// e pelo nome do PDF (ex.: "Documentos/Cobertura MULTIMASTER.pdf").
 export const coverageFileForPlan = (planName: string | null | undefined, filenames: string[]): string | null => {
   const family = coverageFamilyFromName(planName);
   if (!family) return null;
-  const pdfNames = filenames.filter((file) => !/[\/\\]/.test(file) && /\.pdf$/i.test(file));
-  const matches = pdfNames.filter((file) => {
-    const normalized = file.replace(/\.pdf$/i, "").normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    return normalized.includes(family);
-  });
-  const canonical = matches.find((file) => file.toLowerCase() === `${family}.pdf`);
+  const files = filenames.filter((path) => !path.split("/").some((part) => part === "." || part === "..")
+    && /\.pdf$/i.test(path));
+  const normalized = (text: string) => text.normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const matched = files.filter((path) => normalized(path.split("/").pop() || "").includes(family));
+  const canonical = matched.find((path) =>
+    normalized((path.split("/").pop() || "").replace(/\.pdf$/i, "")) === family);
   if (canonical) return canonical;
-  if (matches.length === 1) return matches[0];
-  if (matches.length > 1) return null;
-  const legacyCode: Record<CoverageFamily, string> = {
+  if (matched.length === 1) return matched[0];
+  // Se houver varios PDFs da mesma familia, nao apresenta cobertura possivelmente errada.
+  if (matched.length > 1) return null;
+  const oldNames: Record<CoverageFamily, string> = {
     multiprev: "18.pdf", multiplus: "19.pdf", multimaster: "20.pdf",
   };
-  return pdfNames.find((file) => file === legacyCode[family]) || null;
+  return files.find((path) => path === oldNames[family]) || null;
 };
 
 export const sanitizePlan = (plan: any) => ({
