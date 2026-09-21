@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - 'src/pages/PublicCadastroLink.tsx'
+      - 'src/lib/publicLinkVisit.ts'
+      - 'src/components/cadastro/LinksGeradosList.tsx'
+      - 'supabase/migrations/20260921194500_dedupe_cadastro_link_visits.sql'
+      - 'supabase/functions/cadastro-link-history/**'
       - 'tsconfig.link-web.json'
       - 'supabase/functions/_shared/**'
       - 'supabase/functions/cadastro-link-resolve/**'
@@ -35,7 +39,8 @@ jobs:
       - run: |
           deno check --node-modules-dir=auto \
             supabase/functions/cadastro-link-resolve/index.ts \
+            supabase/functions/cadastro-link-history/index.ts \
             supabase/functions/cadastro-public-contract-prepare/index.ts \
             supabase/functions/cadastro-public-submit/index.ts \
             supabase/functions/process-contract-deliveries/index.ts
-      - run: deno test --node-modules-dir=auto supabase/functions/_shared/plan-coverages.test.ts supabase/functions/_shared/contract-duration.test.ts
+      - run: deno test --node-modules-dir=auto supabase/functions/_shared/plan-coverages.test.ts supabase/functions/_shared/contract-duration.test.ts supabase/functions/_shared/link-visits.test.ts
