@@ -137,8 +137,18 @@ export const verifyTurnstileIfConfigured = async (req: Request, token?: string |
   return Boolean(result?.success);
 };
 
-// A familia da cobertura vem do nome comercial, nunca do codigo interno do ERP.
+// Codigos de plano autorizados para as tres familias de cobertura.
+// A tabela e aplicada tanto ao PDF exibido quanto ao contrato e seus anexos.
 export type CoverageFamily = "multimaster" | "multiplus" | "multiprev";
+
+const COVERAGE_FAMILY_BY_PLAN_CODE: Readonly<Record<number, CoverageFamily>> = {
+  18: "multiprev",
+  19: "multiplus",
+  2: "multimaster",
+  5: "multimaster",
+  17: "multimaster",
+  20: "multimaster",
+};
 
 export const coverageFamilyFromName = (value: string | null | undefined): CoverageFamily | null => {
   const normalized = String(value || "").normalize("NFD")
@@ -149,8 +159,18 @@ export const coverageFamilyFromName = (value: string | null | undefined): Covera
   return null;
 };
 
+export const coverageFamilyForPlan = (
+  planCode: number | string | null | undefined,
+  planName: string | null | undefined,
+): CoverageFamily | null => {
+  const code = Number(planCode);
+  const configured = Number.isInteger(code) ? COVERAGE_FAMILY_BY_PLAN_CODE[code] : undefined;
+  // A configuracao explicita prevalece para estes seis codigos do ERP.
+  return configured || coverageFamilyFromName(planName);
+};
+
 // Procura os arquivos efetivamente presentes no Storage, inclusive em subpastas.
- // Nunca presume que o codigo numerico do ERP indica a familia do plano.
+// Usa o mapeamento configurado por codigo para a familia; so exibe PDFs que existem no Storage.
 export const listCoverageDocuments = async (supabase: any): Promise<string[]> => {
   const bucket = supabase.storage.from("plan-coverages");
   const paths: string[] = [];
@@ -181,8 +201,12 @@ export const listCoverageDocuments = async (supabase: any): Promise<string[]> =>
 
 // O documento correto e identificado pelo nome comercial (ex.: "MULTIMASTER PF-REG ...")
 // e pelo nome do PDF (ex.: "Documentos/Cobertura MULTIMASTER.pdf").
-export const coverageFileForPlan = (planName: string | null | undefined, filenames: string[]): string | null => {
-  const family = coverageFamilyFromName(planName);
+export const coverageFileForPlan = (
+  planName: string | null | undefined,
+  filenames: string[],
+  planCode?: number | string | null,
+): string | null => {
+  const family = coverageFamilyForPlan(planCode, planName);
   if (!family) return null;
   const files = filenames.filter((path) => !path.split("/").some((part) => part === "." || part === "..")
     && /\.pdf$/i.test(path));
