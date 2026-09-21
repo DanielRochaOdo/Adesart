@@ -272,7 +272,6 @@ export function PublicCadastroLink() {
   const [knownConsultant, setKnownConsultant] = useState<Pick<LinkData, 'vendedorNome' | 'vendedorTelefone'> | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [acceptedCoverage, setAcceptedCoverage] = useState(false);
-  const [coverageViewed, setCoverageViewed] = useState(false);
   const [coverageOpen, setCoverageOpen] = useState(false);
   const [preparedCoverageUrl, setPreparedCoverageUrl] = useState('');
   const [loadingLink, setLoadingLink] = useState(true);
@@ -308,7 +307,7 @@ export function PublicCadastroLink() {
     setValidationErrors([]);
   }, [stage]);
   useEffect(() => { setPreparedCoverageUrl(''); }, [coverageCode]);
-  useEffect(() => { setAcceptedCoverage(false); setCoverageViewed(false); setCoverageOpen(false); }, [coverageCode, coverageUrl]);
+  useEffect(() => { setAcceptedCoverage(false); setCoverageOpen(false); }, [coverageCode, coverageUrl]);
   const activeRelationships = useMemo(() => parentescos.filter((item) => item.ativo && Number(item.parentesco_id) !== 1), [parentescos]);
 
   useEffect(() => {
@@ -631,9 +630,9 @@ export function PublicCadastroLink() {
   };
 
   const finalize = async () => {
-    if (!acceptedTerms || !acceptedData || (coverageUrl && (!acceptedCoverage || !coverageViewed))) {
+    if (!acceptedTerms || !acceptedData || (coverageUrl && !acceptedCoverage)) {
       setError(coverageUrl
-        ? 'Leia o documento disponibilizado e marque os três aceites para concluir.'
+        ? 'Marque os três aceites para concluir. A cobertura está disponível para consulta, caso deseje.'
         : 'Aceite os termos do contrato e confirme os dados para concluir.');
       return;
     }
@@ -823,16 +822,16 @@ export function PublicCadastroLink() {
                 <h3 className="font-semibold text-emerald-950">Cobertura do plano {coverageName}</h3>
                 <p className="mt-1 text-sm text-emerald-900">Leia os procedimentos cobertos antes de concluir sua adesão.</p>
                 <div className="mt-3 flex flex-wrap gap-3">
-                  <button type="button" onClick={() => { setCoverageViewed(true); setCoverageOpen(true); }} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Ver cobertura do plano</button>
+                  <button type="button" onClick={() => setCoverageOpen(true)} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Ver cobertura do plano</button>
                   <a href={coverageUrl} target="_blank" rel="noreferrer" download={`Cobertura-${coverageName || coverageCode}.pdf`} className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 px-3 py-2 text-sm font-semibold text-emerald-800"><Download className="h-4 w-4" />Baixar PDF</a>
                 </div>
               </div>
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedCoverage} disabled={!coverageViewed} onChange={(event) => setAcceptedCoverage(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Li e estou ciente da cobertura do plano contratado.</strong></span></label>
+              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedCoverage} onChange={(event) => setAcceptedCoverage(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Estou ciente da cobertura do plano contratado, disponibilizada para consulta.</strong></span></label>
             </>}
             <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Li e aceito os termos e condicoes do contrato apresentado.</strong></span></label>
             <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedData} onChange={(event) => setAcceptedData(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Confirmo que os dados informados estao corretos.</strong></span></label>
           </div>
-          <Button onClick={finalize} disabled={busy || !acceptedTerms || !acceptedData || Boolean(coverageUrl && (!acceptedCoverage || !coverageViewed))} className="mt-5 min-h-12 w-full text-base">{busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}Aceitar e concluir adesao</Button>
+          <Button onClick={finalize} disabled={busy || !acceptedTerms || !acceptedData || Boolean(coverageUrl && !acceptedCoverage)} className="mt-5 min-h-12 w-full text-base">{busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}Aceitar e concluir adesao</Button>
         </section>
       )}
 
