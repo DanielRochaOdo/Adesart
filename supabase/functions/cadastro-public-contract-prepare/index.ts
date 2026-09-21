@@ -1,6 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
   corsHeaders,
+  coverageFileForPlan,
+  coverageFamilyFromName,
   createServiceClient,
   hashSensitiveValue,
   jsonResponse,
@@ -26,8 +28,6 @@ type CadastroInput = {
 };
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const COVERAGE_CODES = new Set([18, 19, 20]);
-const coveragePath = (code: number) => `${code}.pdf`;
 const money = (value: number) => value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const moneyValue = (value: number) => Number(value || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatCpf = (cpf: string) => normalizeDigits(cpf).replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
@@ -143,8 +143,21 @@ Deno.serve(async (req: Request) => {
     if (selectedCodes.some((code) => !allowedCodes.has(code))) return jsonResponse({ error: "Plano nao permitido para este link", code: "PLAN_NOT_ALLOWED" }, 400);
 
     const { plans: currentPlans, vigenciaMeses } = await fetchCurrentPlans(link);
-    const currentMap = new Map(currentPlans.map((item: any) => [Number(item.Plano), item]));
+    const currentMap = new Map<number, any>(currentPlans.map((item: any): [number, any] => [Number(item.Plano), item]));
     if (selectedCodes.some((code) => !currentMap.has(code))) return jsonResponse({ error: "Um dos planos selecionados nao esta mais disponivel para esta empresa", code: "PLAN_CHANGED" }, 409);
+
+    // O ERP informa os codigos e valores; os nomes comerciais sao mantidos na tabela de planos.
+    const { data: namedPlanRows, error: namedPlanError } = await supabase
+      .from("cadastro_planos_map")
+      .select("plano_id, nome_exibicao, ativo")
+      .in("plano_id", [...new Set(selectedCodes)]);
+    if (namedPlanError) throw namedPlanError;
+    const displayNames = new Map<number, string>((namedPlanRows || [])
+      .filter((row: any) => row.ativo !== false && String(row.nome_exibicao || "").trim())
+      .map((row: any) => [Number(row.plano_id), String(row.nome_exibicao).trim()]));
+    for (const [code, plan] of currentMap) {
+      plan.nomeExibicao = displayNames.get(code) || plan.nomeExibicao;
+    }
 
     const titularPlan: any = currentMap.get(Number(cadastro.titularPlano));
     const normalizedDependents = cadastro.dependentes.map((dep) => {
@@ -175,13 +188,28 @@ Deno.serve(async (req: Request) => {
     };
 
     const uniquePlans = [...new Set(selectedCodes)];
-    const missingCoverage = uniquePlans.filter((code) => !COVERAGE_CODES.has(code));
-    if (missingCoverage.length > 0) return jsonResponse({ error: "Cobertura ainda nao configurada para o(s) plano(s) selecionado(s).", code: "PLAN_COVERAGE_NOT_CONFIGURED", missingPlans: missingCoverage }, 409);
-    // O arquivo precisa estar realmente publicado antes do cliente poder aceitá-lo.
-    const { data: covers, error: coverError } = await supabase.storage.from("plan-coverages").list("", { limit: 100 });
-    if (coverError || uniquePlans.some((code) => !(covers || []).some((file: any) => file.name === coveragePath(code)))) {
-      return jsonResponse({ error: "O documento de cobertura deste plano ainda nao esta disponivel.", code: "PLAN_COVERAGE_UNAVAILABLE" }, 503);
-    }
+    // A cobertura deve existir no Storage para TODOS os planos, inclusive dependentes.
+    // Nao deduzir a familia pelo codigo do ERP: codigos variam entre produtos/empresas.
+    const { data: covers, error: coverError } = await supabase.storage
+      .from("plan-coverages").list("", { limit: 1000 });
+    if (coverError) return jsonResponse({
+      error: "Nao foi possivel verificar os documentos de cobertura. Tente novamente.",
+      code: "PLAN_COVERAGE_UNAVAILABLE",
+    }, 503);
+    const availableFiles = (covers || [])
+      .filter((file: any) => !!file.id && typeof file.name === "string")
+      .map((file: any) => String(file.name));
+    const coverageFiles = uniquePlans.map((code) => {
+      const planName = String((currentMap.get(code) as any)?.nomeExibicao || "");
+      const family = coverageFamilyFromName(planName);
+      const fileName = coverageFileForPlan(planName, availableFiles);
+      return { code, family, fileName };
+    });
+    const missingCoverage = coverageFiles.filter((entry) => !entry.fileName).map((entry) => entry.code);
+    if (missingCoverage.length) return jsonResponse({
+      error: "O documento de cobertura de um dos planos selecionados ainda nao esta disponivel.",
+      code: "PLAN_COVERAGE_UNAVAILABLE", missingPlans: missingCoverage,
+    }, 409);
     const templateCodes = [...new Set([0, ...uniquePlans])];
     const { data: templateRows, error: templateError } = await supabase.from("contract_templates")
       .select("id, plan_code, title, body_text, version, effective_from, effective_until, is_active").in("plan_code", templateCodes).eq("is_active", true);
@@ -236,6 +264,7 @@ Deno.serve(async (req: Request) => {
         beneficiarios: [normalizedCadastro.nome, ...normalizedDependents.map((dep) => dep.nome)],
         duracaoContratoMeses: contractDurationMonths,
         coberturaPlanoCodigos: uniquePlans,
+        coberturaPlanoArquivos: coverageFiles.map(({ code, family, fileName }) => ({ planoCodigo: code, familia: family, arquivo: fileName })),
       },
       confirmedEmail,
     };

@@ -84,16 +84,33 @@ const tutorialLinks = [
 const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 const loadCoverageAttachments = async (supabase: any, payload: any) => {
-  const codes: number[] = [...new Set<number>((Array.isArray(payload.coveragePlanCodes) ? payload.coveragePlanCodes : [])
-    .map(Number).filter((code: number) => [18, 19, 20].includes(code)))];
-  if (codes.length === 0) throw new Error("PLAN_COVERAGE_CODE_MISSING");
-  const names: Record<number, string> = { 18: "Multiprev", 19: "Multiplus", 20: "Multimaster" };
+  // Novos contratos preservam os nomes reais dos PDFs verificados na preparacao.
+  // A compatibilidade numerica so se aplica aos contratos antigos ja preparados.
+  const files = Array.isArray(payload.coverageFiles) && payload.coverageFiles.length
+    ? payload.coverageFiles.map((entry: any) => ({
+      family: String(entry.familia || ""),
+      fileName: String(entry.arquivo || ""),
+    }))
+    : [...new Set<number>((Array.isArray(payload.coveragePlanCodes) ? payload.coveragePlanCodes : [])
+      .map(Number).filter((code: number) => [18, 19, 20].includes(code)))]
+      .map((code) => ({
+        family: ({ 18: "multiprev", 19: "multiplus", 20: "multimaster" } as Record<number, string>)[code],
+        fileName: `${code}.pdf`,
+      }));
+  if (!files.length) throw new Error("PLAN_COVERAGE_FILE_MISSING");
   const attachments = [];
-  for (const code of codes) {
-    const { data, error } = await supabase.storage.from("plan-coverages").download(`${code}.pdf`);
-    if (error || !data) throw new Error(`PLAN_COVERAGE_DOWNLOAD_FAILED:${code}`);
+  const downloaded = new Set<string>();
+  for (const { family, fileName } of files) {
+    if (!["multimaster", "multiplus", "multiprev"].includes(family) ||
+      !fileName || /[\/\\]/.test(fileName) || !/\.pdf$/i.test(fileName)) {
+      throw new Error("PLAN_COVERAGE_FILE_INVALID");
+    }
+    if (downloaded.has(fileName)) continue;
+    const { data, error } = await supabase.storage.from("plan-coverages").download(fileName);
+    if (error || !data) throw new Error("PLAN_COVERAGE_DOWNLOAD_FAILED");
+    downloaded.add(fileName);
     attachments.push({
-      filename: `Cobertura-${names[code]}.pdf`,
+      filename: `Cobertura-${family}.pdf`,
       content: Buffer.from(await data.arrayBuffer()),
       contentType: "application/pdf",
     });

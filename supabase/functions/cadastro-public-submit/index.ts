@@ -838,6 +838,7 @@ Deno.serve(async (req: Request) => {
           fileName,
           pdfHash,
           coveragePlanCodes: Array.isArray(c.coberturaPlanoCodigos) ? c.coberturaPlanoCodigos : [Number(c.titularPlano)],
+          coverageFiles: Array.isArray(c.coberturaPlanoArquivos) ? c.coberturaPlanoArquivos : [],
         },
         status: "pending",
         attempts: 0,

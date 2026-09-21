@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
   corsHeaders,
+  coverageFileForPlan,
   createServiceClient,
   getRequestIp,
   hashSensitiveValue,
@@ -136,6 +137,18 @@ Deno.serve(async (req: Request) => {
       console.warn("[cadastro-link-resolve] falha ao registrar clique", clickError);
     }
 
+    // Retorna somente PDFs realmente publicados; o codigo ERP nao define a familia.
+    const { data: coverageObjects, error: coverageError } = await supabase.storage
+      .from("plan-coverages").list("", { limit: 1000 });
+    if (coverageError) console.warn("[cadastro-link-resolve] falha ao listar coberturas", coverageError);
+    const coverageFiles = (coverageObjects || [])
+      .filter((entry: any) => !!entry.id && typeof entry.name === "string")
+      .map((entry: any) => String(entry.name));
+    const coberturaPlanos = Object.fromEntries(plans.flatMap((plan: any) => {
+      const file = coverageFileForPlan(plan.nomeExibicao, coverageFiles);
+      return file ? [[String(plan.Plano), supabase.storage.from("plan-coverages").getPublicUrl(file).data.publicUrl]] : [];
+    }));
+
     return jsonResponse({
       ok: true,
       link: {
@@ -147,9 +160,7 @@ Deno.serve(async (req: Request) => {
         planos: plans,
         vendedorNome: String(link.vendedor_nome || ""),
         vendedorTelefone,
-        coberturaPlanos: Object.fromEntries(plans
-          .filter((plan: any) => [18, 19, 20].includes(Number(plan.Plano)))
-          .map((plan: any) => [Number(plan.Plano), supabase.storage.from("plan-coverages").getPublicUrl(`${Number(plan.Plano)}.pdf`).data.publicUrl])),
+        coberturaPlanos,
         parentescos: (relationshipRows || [])
           .filter((item: any) => Number(item.parentesco_id) !== 1)
           .map((item: any) => ({ id: Number(item.parentesco_id), label: String(item.label || "") })),

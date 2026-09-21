@@ -137,6 +137,40 @@ export const verifyTurnstileIfConfigured = async (req: Request, token?: string |
   return Boolean(result?.success);
 };
 
+// A familia da cobertura vem do nome comercial, nunca do codigo interno do ERP.
+export type CoverageFamily = "multimaster" | "multiplus" | "multiprev";
+
+export const coverageFamilyFromName = (value: string | null | undefined): CoverageFamily | null => {
+  const normalized = String(value || "").normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (normalized.includes("multimaster")) return "multimaster";
+  if (normalized.includes("multiplus")) return "multiplus";
+  if (normalized.includes("multiprev")) return "multiprev";
+  return null;
+};
+
+// Usa o nome real do PDF no bucket, com compatibilidade para os antigos 18/19/20.pdf.
+// Em caso de multiplos documentos da mesma familia sem nome canonico, nao escolhe
+// um arquivo arbitrariamente: evita apresentar uma cobertura incorreta ao associado.
+export const coverageFileForPlan = (planName: string | null | undefined, filenames: string[]): string | null => {
+  const family = coverageFamilyFromName(planName);
+  if (!family) return null;
+  const pdfNames = filenames.filter((file) => !/[\/\\]/.test(file) && /\.pdf$/i.test(file));
+  const matches = pdfNames.filter((file) => {
+    const normalized = file.replace(/\.pdf$/i, "").normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    return normalized.includes(family);
+  });
+  const canonical = matches.find((file) => file.toLowerCase() === `${family}.pdf`);
+  if (canonical) return canonical;
+  if (matches.length === 1) return matches[0];
+  if (matches.length > 1) return null;
+  const legacyCode: Record<CoverageFamily, string> = {
+    multiprev: "18.pdf", multiplus: "19.pdf", multimaster: "20.pdf",
+  };
+  return pdfNames.find((file) => file === legacyCode[family]) || null;
+};
+
 export const sanitizePlan = (plan: any) => ({
   Plano: Number(plan?.Plano ?? plan?.plano ?? plan?.Id ?? 0),
   nomeExibicao: String(plan?.nomeExibicao ?? plan?.NomeANS ?? plan?.PlanoNome ?? plan?.Nome ?? `Plano ${plan?.Plano ?? plan?.plano ?? ""}`),
