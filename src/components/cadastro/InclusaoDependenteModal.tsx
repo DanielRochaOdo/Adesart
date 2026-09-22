@@ -314,7 +314,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
             continue;
           }
 
-          setSuccess('Retomando upload do arquivo apos recarregamento...');
+          setSuccess('Retomando upload do arquivo após recarregamento...');
           await uploadDependenteFile(index, pendingFile);
         } catch (err) {
           console.error('Erro ao retomar upload pendente:', err);
@@ -862,7 +862,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
       try {
         await clearPendingFile(profile.id, 'inclusao-dependente-modal', getPendingFileSlotKey(index));
       } catch (err) {
-        console.warn('Erro ao limpar arquivo pendente apos upload:', err);
+        console.warn('Erro ao limpar arquivo pendente após upload:', err);
       }
 
       setSuccess('Arquivo carregado com sucesso!');

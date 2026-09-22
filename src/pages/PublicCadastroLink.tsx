@@ -313,7 +313,7 @@ export function PublicCadastroLink() {
 
   useEffect(() => {
     if (!linkToken) {
-      setError('Link de adesao nao informado.');
+      setError('Link de adesão não informado.');
       setLoadingLink(false);
       return;
     }
@@ -336,7 +336,7 @@ export function PublicCadastroLink() {
         setLinkData(result.link as LinkData);
         if (routeToken) window.history.replaceState({}, '', '/adesao');
       } catch (resolveError) {
-        setError(resolveError instanceof Error ? resolveError.message : 'Nao foi possivel carregar este link.');
+        setError(resolveError instanceof Error ? resolveError.message : 'Não foi possível carregar este link.');
       } finally {
         setLoadingLink(false);
       }
@@ -361,7 +361,7 @@ export function PublicCadastroLink() {
         body: JSON.stringify({ token: linkToken, cpf: normalizedCpf, birthDate, captchaToken }),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Nao foi possivel validar seus dados.');
+      if (!response.ok) throw new Error(result.error || 'Não foi possível validar seus dados.');
 
       if (result.state === 'completed') {
         setStage('completed');
@@ -372,7 +372,7 @@ export function PublicCadastroLink() {
         return;
       }
       if (result.state !== 'authenticated' || !result.attemptToken || !result.person) {
-        throw new Error('Nao foi possivel iniciar a adesao.');
+        throw new Error('Não foi possível iniciar a adesão.');
       }
 
       const person = result.person as Person;
@@ -399,7 +399,7 @@ export function PublicCadastroLink() {
       });
       setStage('details');
     } catch (authError) {
-      setError(authError instanceof Error ? authError.message : 'Nao foi possivel validar seus dados.');
+      setError(authError instanceof Error ? authError.message : 'Não foi possível validar seus dados.');
     } finally {
       setBusy(false);
     }
@@ -415,7 +415,7 @@ export function PublicCadastroLink() {
         method: 'POST', headers: publicHeaders(), body: JSON.stringify({ attemptToken, cep }),
       });
       const result = await response.json();
-      if (!response.ok || !result.ok) throw new Error(result.error || 'CEP nao localizado.');
+      if (!response.ok || !result.ok) throw new Error(result.error || 'CEP não localizado.');
       const data = result.dados;
       setForm((prev) => ({
         ...prev,
@@ -435,7 +435,7 @@ export function PublicCadastroLink() {
         },
       }));
     } catch (cepError) {
-      setError(cepError instanceof Error ? cepError.message : 'Nao foi possivel consultar o CEP.');
+      setError(cepError instanceof Error ? cepError.message : 'Não foi possível consultar o CEP.');
     } finally {
       setBusy(false);
     }
@@ -480,11 +480,11 @@ export function PublicCadastroLink() {
     if (normalizedCpf.length !== 11) return;
 
     if (!validateCPF(normalizedCpf)) {
-      setError('Informe um CPF valido para o dependente.');
+      setError('Informe um CPF válido para o dependente.');
       return;
     }
     if (normalizedCpf === removeCPFMask(cpf)) {
-      setError('O CPF do dependente nao pode ser o mesmo do responsavel financeiro.');
+      setError('O CPF do dependente não pode ser o mesmo do responsável financeiro.');
       return;
     }
     if (dependentLookupCpfRef.current[id] === normalizedCpf) return;
@@ -507,7 +507,7 @@ export function PublicCadastroLink() {
           setError(`${result.error || 'Dados nao encontrados na Lemmit'}. Preencha os dados do dependente manualmente.`);
           return;
         }
-        throw new Error(result.error || 'Nao foi possivel consultar o CPF do dependente.');
+        throw new Error(result.error || 'Não foi possível consultar o CPF do dependente.');
       }
 
       const pessoa = result.pessoa;
@@ -529,7 +529,7 @@ export function PublicCadastroLink() {
       });
     } catch (lookupError) {
       delete dependentLookupCpfRef.current[id];
-      setError(lookupError instanceof Error ? lookupError.message : 'Nao foi possivel consultar o CPF do dependente.');
+      setError(lookupError instanceof Error ? lookupError.message : 'Não foi possível consultar o CPF do dependente.');
     } finally {
       setDependentLookupId(null);
     }
@@ -550,11 +550,11 @@ export function PublicCadastroLink() {
     const seenCpfs = new Set<string>([removeCPFMask(cpf)]);
     for (const dep of dependents) {
       const depCpf = removeCPFMask(dep.cpf);
-      if (!depCpf || !validateCPF(depCpf)) return `Informe um CPF valido para ${dep.nome || 'o dependente'}.`;
+      if (!depCpf || !validateCPF(depCpf)) return `Informe um CPF válido para ${dep.nome || 'o dependente'}.`;
       if (seenCpfs.has(depCpf)) return 'Existem CPFs duplicados no cadastro.';
       seenCpfs.add(depCpf);
       if (!dep.tipo || !dep.nome.trim() || !dep.dataNascimento || ![0, 1].includes(dep.sexo) || !dep.nomeMae.trim() || !dep.plano) {
-        return 'Preencha todos os campos obrigatorios dos dependentes.';
+        return 'Preencha todos os campos obrigatórios dos dependentes.';
       }
     }
     return '';
@@ -582,7 +582,7 @@ export function PublicCadastroLink() {
   };
 
   const prepareContract = async () => {
-    if (!isEmail(emailToConfirm)) { setError('Confirme um e-mail valido.'); return; }
+    if (!isEmail(emailToConfirm)) { setError('Confirme um e-mail válido.'); return; }
     setBusy(true);
     setError('');
     try {
@@ -609,9 +609,9 @@ export function PublicCadastroLink() {
       const result = await response.json();
       if (!response.ok || !result.ok) {
         if (result.code === 'CONTRACT_NOT_CONFIGURED' && Array.isArray(result.missingPlans)) {
-          throw new Error(`Contrato ainda nao configurado para o(s) plano(s): ${result.missingPlans.join(', ')}.`);
+          throw new Error(`Contrato ainda não configurado para o(s) plano(s): ${result.missingPlans.join(', ')}.`);
         }
-        throw new Error(result.error || 'Nao foi possivel preparar o contrato.');
+        throw new Error(result.error || 'Não foi possível preparar o contrato.');
       }
       setForm((prev) => ({ ...prev, email: emailToConfirm.trim().toLowerCase() }));
       setContractToken(result.contractToken);
@@ -624,7 +624,7 @@ export function PublicCadastroLink() {
       setEmailModalOpen(false);
       setStage('contract');
     } catch (prepareError) {
-      setError(prepareError instanceof Error ? prepareError.message : 'Nao foi possivel preparar o contrato.');
+      setError(prepareError instanceof Error ? prepareError.message : 'Não foi possível preparar o contrato.');
     } finally {
       setBusy(false);
     }
@@ -646,16 +646,16 @@ export function PublicCadastroLink() {
         body: JSON.stringify({ attemptToken, contractToken, acceptedTerms, acceptedData, acceptedCoverage: Boolean(coverageUrl && acceptedCoverage) }),
       });
       const result = await response.json();
-      if (!response.ok && response.status !== 202) throw new Error(result.error || 'Nao foi possivel concluir a adesao.');
+      if (!response.ok && response.status !== 202) throw new Error(result.error || 'Não foi possível concluir a adesão.');
       if (response.status === 202) {
-        setSuccessMessage('Recebemos sua adesao e ela esta sendo processada. Nao e necessario preencher novamente.');
+        setSuccessMessage('Recebemos sua adesão e ela está sendo processada. Não é necessário preencher novamente.');
       } else {
         setSuccessMessage('Adesão concluída com sucesso! Seu contrato será enviado para o e-mail confirmado. Agora você já pode aproveitar os benefícios e utilizar o App Odontoart Associado.');
       }
       sessionStorage.removeItem('adesart-public-attempt-token');
       setStage('success');
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Nao foi possivel concluir a adesao.');
+      setError(submitError instanceof Error ? submitError.message : 'Não foi possível concluir a adesão.');
     } finally {
       setBusy(false);
     }
@@ -695,8 +695,8 @@ export function PublicCadastroLink() {
   if (stage === 'completed') return shell(
     <div className="py-4 text-center">
       <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600" />
-      <h2 className="mt-4 text-2xl font-bold text-slate-900">Sua adesao ja foi realizada</h2>
-      <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600">Identificamos que voce ja concluiu sua adesao. Para incluir dependentes, consultar seu plano ou realizar outras solicitacoes, utilize o App do Associado.</p>
+      <h2 className="mt-4 text-2xl font-bold text-slate-900">Sua adesão já foi realizada</h2>
+      <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600">Identificamos que você já concluiu sua adesão. Para incluir dependentes, consultar seu plano ou realizar outras solicitações, utilize o App do Associado.</p>
       <ConsultantContact link={linkData} />
       <div className="mt-7"><AppButtons /></div>
     </div>
@@ -728,7 +728,7 @@ export function PublicCadastroLink() {
 
       {stage === 'identify' && (
         <section>
-          <div className="mb-6"><ShieldCheck className="mb-3 h-9 w-9 text-emerald-700" /><h2 className="text-2xl font-bold text-slate-900">Vamos comecar sua adesao</h2><p className="mt-2 text-sm leading-6 text-slate-600">Informe os dados do responsavel financeiro para validar sua identidade.</p></div>
+          <div className="mb-6"><ShieldCheck className="mb-3 h-9 w-9 text-emerald-700" /><h2 className="text-2xl font-bold text-slate-900">Vamos começar sua adesão</h2><p className="mt-2 text-sm leading-6 text-slate-600">Informe os dados do responsável financeiro para validar sua identidade.</p></div>
           <div className="space-y-4">
             <Input label="CPF" inputMode="numeric" value={formatCPF(cpf)} onChange={(event) => setCpf(event.target.value)} maxLength={14} required error={validationErrors.includes('CPF válido') ? 'Informe um CPF válido.' : undefined} className="min-h-12 text-base" />
             <Input label="Data de nascimento" type="text" inputMode="numeric" placeholder="dd/mm/aaaa" value={dateView(birthDate)} onChange={(event) => setBirthDate(dateInput(event.target.value))} required error={validationErrors.includes('Data de nascimento válida') ? 'Informe uma data válida.' : undefined} className="min-h-12 text-base" />
@@ -743,7 +743,7 @@ export function PublicCadastroLink() {
 
       {stage === 'details' && (
         <section className="space-y-5">
-          <div><UserRound className="mb-3 h-8 w-8 text-emerald-700" /><h2 className="text-xl font-bold text-slate-900">Seus dados</h2><p className="mt-1 text-sm text-slate-600">Revise os dados localizados e corrija o que for necessario.</p></div>
+          <div><UserRound className="mb-3 h-8 w-8 text-emerald-700" /><h2 className="text-xl font-bold text-slate-900">Seus dados</h2><p className="mt-1 text-sm text-slate-600">Revise os dados localizados e corrija o que for necessário.</p></div>
           <Input label="Nome completo" value={form.nome} onChange={(event) => setForm((prev) => ({ ...prev, nome: event.target.value }))} required className="min-h-12" />
           <div className="grid gap-4 sm:grid-cols-2">
             <Input label="Data de nascimento" type="text" value={dateView(form.dataNascimento)} disabled className="min-h-12 bg-slate-50" />
@@ -751,18 +751,18 @@ export function PublicCadastroLink() {
               <option value="-1">Selecione</option><option value="1">Masculino</option><option value="0">Feminino</option>
             </Select>
           </div>
-          <Input label="Nome da mae" value={form.nomeMae} onChange={(event) => setForm((prev) => ({ ...prev, nomeMae: event.target.value }))} required className="min-h-12" />
+          <Input label="Nome da mãe" value={form.nomeMae} onChange={(event) => setForm((prev) => ({ ...prev, nomeMae: event.target.value }))} required className="min-h-12" />
           <Input label="Telefone principal / WhatsApp" inputMode="tel" value={formatPhone(form.telefone)} onChange={(event) => setForm((prev) => ({ ...prev, telefone: event.target.value }))} required className="min-h-12" />
           <Input label="E-mail" type="email" value={form.email} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} required className="min-h-12" />
-          {linkData.empresaExigeMatricula === 1 && <Input label="Matricula" value={form.numeroMatricula} onChange={(event) => setForm((prev) => ({ ...prev, numeroMatricula: event.target.value }))} required className="min-h-12" />}
+          {linkData.empresaExigeMatricula === 1 && <Input label="Matrícula" value={form.numeroMatricula} onChange={(event) => setForm((prev) => ({ ...prev, numeroMatricula: event.target.value }))} required className="min-h-12" />}
           <Select label="Plano do titular" value={String(form.titularPlano || '')} onChange={(event) => setForm((prev) => ({ ...prev, titularPlano: Number(event.target.value) }))} required className="min-h-12">
             <option value="">Selecione</option>{plans.map((plan) => <option key={plan.Plano} value={plan.Plano}>{plan.nomeExibicao} - {currency(plan.ValorTitular)}</option>)}
           </Select>
 
-          <div className="border-t border-slate-200 pt-5"><h3 className="font-semibold text-slate-900">Endereco</h3></div>
+          <div className="border-t border-slate-200 pt-5"><h3 className="font-semibold text-slate-900">Endereço</h3></div>
           <div className="flex items-end gap-2"><div className="flex-1"><Input label="CEP" inputMode="numeric" value={formatCEP(form.endereco.cep)} onChange={(event) => setForm((prev) => ({ ...prev, endereco: { ...prev.endereco, cep: event.target.value } }))} required className="min-h-12" /></div><Button variant="secondary" onClick={enrichCep} disabled={busy} className="mb-0 min-h-12 px-3">Buscar</Button></div>
           <Input label="Logradouro" value={form.endereco.logradouro} onChange={(event) => setForm((prev) => ({ ...prev, endereco: { ...prev.endereco, logradouro: event.target.value } }))} required className="min-h-12" />
-          <div className="grid gap-4 sm:grid-cols-2"><Input label="Numero" value={form.endereco.numero} onChange={(event) => setForm((prev) => ({ ...prev, endereco: { ...prev.endereco, numero: event.target.value } }))} required className="min-h-12" /><Input label="Complemento" value={form.endereco.complemento} onChange={(event) => setForm((prev) => ({ ...prev, endereco: { ...prev.endereco, complemento: event.target.value } }))} className="min-h-12" /></div>
+          <div className="grid gap-4 sm:grid-cols-2"><Input label="Número" value={form.endereco.numero} onChange={(event) => setForm((prev) => ({ ...prev, endereco: { ...prev.endereco, numero: event.target.value } }))} required className="min-h-12" /><Input label="Complemento" value={form.endereco.complemento} onChange={(event) => setForm((prev) => ({ ...prev, endereco: { ...prev.endereco, complemento: event.target.value } }))} className="min-h-12" /></div>
           <Input label="Bairro" value={form.endereco.bairro} onChange={(event) => setForm((prev) => ({ ...prev, endereco: { ...prev.endereco, bairro: event.target.value } }))} required className="min-h-12" />
           <div className="grid gap-4 sm:grid-cols-2"><Input label="Cidade" value={form.endereco.cidade} onChange={(event) => setForm((prev) => ({ ...prev, endereco: { ...prev.endereco, cidade: event.target.value } }))} required className="min-h-12" /><Input label="UF" value={form.endereco.ufSigla || form.endereco.uf} onChange={(event) => setForm((prev) => ({ ...prev, endereco: { ...prev.endereco, uf: event.target.value, ufSigla: event.target.value } }))} required className="min-h-12" /></div>
           <Button onClick={goDependents} className="min-h-12 w-full text-base">Continuar</Button>
@@ -786,7 +786,7 @@ export function PublicCadastroLink() {
                   <Select label="Grau de parentesco" value={String(dep.tipo || '')} onChange={(event) => updateDependent(dep.id, { tipo: Number(event.target.value) })} required className="min-h-12"><option value="">Selecione</option>{activeRelationships.map((item) => <option key={item.id} value={item.parentesco_id}>{item.label}</option>)}</Select>
                   <Input label="Nome completo" value={dep.nome} onChange={(event) => updateDependent(dep.id, { nome: event.target.value })} required className="min-h-12" />
                   <div className="grid gap-4 sm:grid-cols-2"><Input label="Data de nascimento" type="text" inputMode="numeric" placeholder="dd/mm/aaaa" value={dateView(dep.dataNascimento)} onChange={(event) => updateDependent(dep.id, { dataNascimento: dateInput(event.target.value) })} required className="min-h-12" /><Select label="Sexo" value={String(dep.sexo)} onChange={(event) => updateDependent(dep.id, { sexo: Number(event.target.value) })} required className="min-h-12"><option value="-1">Selecione</option><option value="1">Masculino</option><option value="0">Feminino</option></Select></div>
-                  <Input label="Nome da mae" value={dep.nomeMae} onChange={(event) => updateDependent(dep.id, { nomeMae: event.target.value })} required className="min-h-12" />
+                  <Input label="Nome da mãe" value={dep.nomeMae} onChange={(event) => updateDependent(dep.id, { nomeMae: event.target.value })} required className="min-h-12" />
                   <Select label="Plano" value={String(dep.plano || '')} onChange={(event) => updateDependent(dep.id, { plano: Number(event.target.value) })} required className="min-h-12"><option value="">Selecione</option>{plans.map((plan) => <option key={plan.Plano} value={plan.Plano}>{plan.nomeExibicao} - {currency(plan.ValorDependente)}</option>)}</Select>
                 </div>
               </div>
@@ -801,9 +801,9 @@ export function PublicCadastroLink() {
       {stage === 'review' && (
         <section>
           <button type="button" onClick={() => setStage('dependents')} className="mb-4 inline-flex items-center text-sm font-medium text-slate-600"><ChevronLeft className="mr-1 h-4 w-4" />Voltar</button>
-          <h2 className="text-xl font-bold text-slate-900">Revise sua adesao</h2>
+          <h2 className="text-xl font-bold text-slate-900">Revise sua adesão</h2>
           <div className="mt-5 space-y-3 text-sm">
-            <div className="rounded-2xl border border-slate-200 p-4"><span className="text-slate-500">Responsavel financeiro</span><strong className="mt-1 block text-slate-900">{form.nome}</strong><span className="text-slate-600">{formatCPF(cpf)}</span></div>
+            <div className="rounded-2xl border border-slate-200 p-4"><span className="text-slate-500">Responsável financeiro</span><strong className="mt-1 block text-slate-900">{form.nome}</strong><span className="text-slate-600">{formatCPF(cpf)}</span></div>
             <div className="rounded-2xl border border-slate-200 p-4"><span className="text-slate-500">Plano do titular</span><strong className="mt-1 block text-slate-900">{plans.find((plan) => plan.Plano === form.titularPlano)?.nomeExibicao}</strong><span className="text-slate-600">{currency(plans.find((plan) => plan.Plano === form.titularPlano)?.ValorTitular || 0)}</span></div>
             <div className="rounded-2xl border border-slate-200 p-4"><span className="text-slate-500">Dependentes</span><strong className="mt-1 block text-slate-900">{dependents.length}</strong>{dependents.map((dep) => <p key={dep.id} className="mt-2 text-slate-600">{dep.nome} - {plans.find((plan) => plan.Plano === dep.plano)?.nomeExibicao}</p>)}</div>
             <div className="rounded-2xl border border-slate-200 p-4"><span className="text-slate-500">Contato</span><strong className="mt-1 block text-slate-900">{formatPhone(form.telefone)}</strong><span className="text-slate-600">{form.email}</span></div>
@@ -815,7 +815,7 @@ export function PublicCadastroLink() {
       {stage === 'contract' && (
         <section>
           <button type="button" onClick={() => setStage('review')} className="mb-4 inline-flex items-center text-sm font-medium text-slate-600"><ChevronLeft className="mr-1 h-4 w-4" />Voltar e alterar dados</button>
-          <div className="mb-4 flex items-center gap-3"><FileCheck2 className="h-8 w-8 text-emerald-700" /><div><h2 className="text-xl font-bold text-slate-900">Contrato de adesao</h2><p className="text-xs text-slate-500">Hash: {contractHash.slice(0, 16)}...</p></div></div>
+          <div className="mb-4 flex items-center gap-3"><FileCheck2 className="h-8 w-8 text-emerald-700" /><div><h2 className="text-xl font-bold text-slate-900">Contrato de adesão</h2><p className="text-xs text-slate-500">Hash: {contractHash.slice(0, 16)}...</p></div></div>
           <div className="max-h-[50vh] overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-4"><pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-700">{contractText}</pre></div>
           <div className="mt-5 space-y-3">
             {coverageUrl && <>
@@ -845,7 +845,7 @@ export function PublicCadastroLink() {
         <div className="fixed inset-0 z-50 flex items-end bg-slate-950/50 p-0 sm:items-center sm:justify-center sm:p-4">
           <div className="w-full rounded-t-3xl bg-white p-5 shadow-2xl sm:max-w-md sm:rounded-3xl sm:p-6">
             <h3 className="text-xl font-bold text-slate-900">Confirme seu e-mail</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">O contrato sera enviado para este endereco. Voce pode corrigi-lo antes de continuar.</p>
+            <p className="mt-2 text-sm leading-6 text-slate-600">O contrato será enviado para este endereço. Você pode corrigi-lo antes de continuar.</p>
             <div className="mt-5"><Input label="E-mail do contrato" type="email" value={emailToConfirm} onChange={(event) => setEmailToConfirm(event.target.value)} required className="min-h-12" /></div>
             <div className="mt-5 grid grid-cols-2 gap-3"><Button variant="secondary" onClick={() => setEmailModalOpen(false)} disabled={busy} className="min-h-12">Cancelar</Button><Button onClick={prepareContract} disabled={busy} className="min-h-12">{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Confirmar</Button></div>
           </div>

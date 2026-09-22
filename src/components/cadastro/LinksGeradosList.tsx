@@ -344,7 +344,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
       setTimeout(() => setCopyFeedbackId(null), 2500);
     } catch (err) {
       console.error('Error copying generated link:', err);
-      setError('Nao foi possivel copiar o link');
+      setError('Não foi possível copiar o link');
     }
   };
 
@@ -373,11 +373,11 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
 
   const handleRegenerateLink = async (link: CadastroLinkRow) => {
     if (!profile?.id) {
-      setError('Usuario nao autenticado');
+      setError('Usuário não autenticado');
       return;
     }
 
-    const confirmed = window.confirm(`Regerar um novo link para ${link.empresa_nome}? O link atual sera inativado.`);
+    const confirmed = window.confirm(`Regerar um novo link para ${link.empresa_nome}? O link atual será inativado.`);
     if (!confirmed) return;
 
     setActionLoadingId(link.id);
@@ -426,13 +426,13 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
       });
 
       if (functionError) throw functionError;
-      if (!data?.ok) throw new Error(data?.error || 'Nao foi possivel carregar o historico');
+      if (!data?.ok) throw new Error(data?.error || 'Não foi possível carregar o histórico');
 
       setHistoryRows(Array.isArray(data.rows) ? data.rows as LinkHistoryRow[] : []);
       setHistorySummary((data.summary || null) as LinkHistorySummary | null);
     } catch (err) {
       console.error('Error loading cadastro link history:', err);
-      setHistoryError(err instanceof Error ? err.message : 'Nao foi possivel carregar o historico deste link');
+      setHistoryError(err instanceof Error ? err.message : 'Não foi possível carregar o histórico deste link');
     } finally {
       setHistoryLoading(false);
     }
@@ -449,9 +449,9 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
       Telefone: row.telefone ? formatPhone(row.telefone) : '',
       Status: row.status,
       Vendedor: row.vendedor,
-      'Codigo do vendedor': row.vendedorCodigo || '',
+      'Código do vendedor': row.vendedorCodigo || '',
       Empresa: row.empresaNome,
-      'Codigo da empresa': row.empresaCodigo,
+      'Código da empresa': row.empresaCodigo,
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
@@ -469,13 +469,13 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
     ];
 
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Historico');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Histórico');
 
     const companyPart = safeFilePart(selectedHistoryLink.empresa_nome) || 'empresa';
     const datePart = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(
       workbook,
-      `historico-link-${selectedHistoryLink.empresa_codigo}-${companyPart}-${datePart}.xlsx`
+      `histórico-link-${selectedHistoryLink.empresa_codigo}-${companyPart}-${datePart}.xlsx`
     );
   };
 
@@ -518,7 +518,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
             type="search"
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
-            placeholder="Buscar por empresa, codigo, CNPJ ou vendedor"
+            placeholder="Buscar por empresa, código, CNPJ ou vendedor"
             className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-sm text-slate-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
           />
         </div>
@@ -528,7 +528,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
               ? 'Nenhum link encontrado'
               : `Mostrando ${pageStart + 1}-${Math.min(pageStart + PAGE_SIZE, filteredLinks.length)} de ${filteredLinks.length} links`}
           </span>
-          <span>5 links por pagina</span>
+          <span>5 links por página</span>
         </div>
       </div>
 
@@ -536,7 +536,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
         <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
           <Search className="mx-auto mb-3 h-8 w-8 text-slate-400" />
           <h3 className="text-base font-semibold text-slate-800">Nenhum resultado</h3>
-          <p className="mt-1 text-sm text-slate-500">Tente buscar por outro codigo, empresa ou vendedor.</p>
+          <p className="mt-1 text-sm text-slate-500">Tente buscar por outro código, empresa ou vendedor.</p>
         </div>
       ) : (
         groupedLinks.map((group) => {
@@ -577,7 +577,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                             Codigo {group.empresaCodigo}{group.empresaCnpj ? ` • CNPJ ${group.empresaCnpj}` : ''}
                           </p>
                           <p className="mt-2 text-xs text-slate-500">
-                            {isExpanded ? 'Clique para ocultar detalhes e opcoes' : 'Clique para expandir detalhes e opcoes'}
+                            {isExpanded ? 'Clique para ocultar detalhes e opções' : 'Clique para expandir detalhes e opções'}
                           </p>
                         </div>
                       </div>
@@ -620,7 +620,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                   {group.links.map((link) => {
                     const isCopyingCurrent = copyFeedbackId === link.id;
                     const isActionLoading = actionLoadingId === link.id;
-                    const status = link.is_active ? 'Disponivel' : 'Inativo';
+                    const status = link.is_active ? 'Disponível' : 'Inativo';
                     const statusClasses = link.is_active
                       ? 'bg-green-100 text-green-700'
                       : 'bg-amber-100 text-amber-700';
@@ -652,13 +652,13 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
 
                           <div className="flex items-center justify-between gap-3">
                             <p className="text-xs text-slate-500">
-                              {isCopyingCurrent ? 'Link copiado com sucesso.' : 'Acoes do link'}
+                              {isCopyingCurrent ? 'Link copiado com sucesso.' : 'Ações do link'}
                             </p>
 
                             <div className="flex flex-wrap items-center gap-2">
                               <LinkActionIconButton
                                 icon={History}
-                                label="Historico"
+                                label="Histórico"
                                 onClick={() => handleOpenHistory(link)}
                                 disabled={isActionLoading}
                               />
@@ -747,7 +747,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
           >
             <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-slate-800">Historico do link</h3>
+                <h3 className="text-lg font-semibold text-slate-800">Histórico do link</h3>
                 <p className="mt-1 text-sm text-slate-600">
                   {selectedHistoryLink.empresa_nome} • Codigo {selectedHistoryLink.empresa_codigo}
                 </p>
@@ -769,7 +769,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                   type="button"
                   onClick={() => setSelectedHistoryLink(null)}
                   className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                  aria-label="Fechar historico"
+                  aria-label="Fechar histórico"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -817,14 +817,14 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                   <thead className="sticky top-0 z-10 bg-slate-100 text-slate-600">
                     <tr>
                       <th className="border-b border-slate-200 px-3 py-3 font-semibold">Data</th>
-                      <th className="border-b border-slate-200 px-3 py-3 font-semibold">Horario</th>
+                      <th className="border-b border-slate-200 px-3 py-3 font-semibold">Horário</th>
                       <th className="border-b border-slate-200 px-3 py-3 font-semibold">Nome do RF</th>
                       <th className="border-b border-slate-200 px-3 py-3 font-semibold">Dependentes</th>
                       <th className="border-b border-slate-200 px-3 py-3 font-semibold">Telefone</th>
                       <th className="border-b border-slate-200 px-3 py-3 font-semibold">Status</th>
                       <th className="border-b border-slate-200 px-3 py-3 font-semibold">Vendedor</th>
                       <th className="border-b border-slate-200 px-3 py-3 font-semibold">Empresa</th>
-                      <th className="border-b border-slate-200 px-3 py-3 font-semibold">Codigo</th>
+                      <th className="border-b border-slate-200 px-3 py-3 font-semibold">Código</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">

@@ -74,7 +74,7 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
     setCopySuccess(false);
 
     if (!profile?.id) {
-      setError('Usuario nao autenticado');
+      setError('Usuário não autenticado');
       return;
     }
 
@@ -147,7 +147,7 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
       setTimeout(() => setCopySuccess(false), 2500);
     } catch (err) {
       console.error('Error copying link:', err);
-      setError('Nao foi possivel copiar o link automaticamente');
+      setError('Não foi possível copiar o link automaticamente');
     }
   };
 
@@ -182,9 +182,9 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
               <LinkIcon className="w-6 h-6 text-emerald-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-slate-800">Gerar Link de Adesao</h3>
+              <h3 className="text-lg font-semibold text-slate-800">Gerar Link de Adesão</h3>
               <p className="text-sm text-slate-600 mt-1">
-                O link sera vinculado a esta empresa e ao codigo de vendedor do usuario logado.
+                O link será vinculado a esta empresa e ao código de vendedor do usuário logado.
               </p>
             </div>
           </div>
@@ -192,19 +192,19 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                Usuario
+                Usuário
               </p>
               <p className="text-sm font-medium text-slate-800">
-                {profile?.name || profile?.email || 'Nao identificado'}
+                {profile?.name || profile?.email || 'Não identificado'}
               </p>
             </div>
 
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                Codigo de Vendedor
+                Código de Vendedor
               </p>
               <p className="text-sm font-medium text-slate-800">
-                {profile?.external_id || 'Nao configurado - sera usado o codigo 0'}
+                {profile?.external_id || 'Não configurado - será usado o código 0'}
               </p>
             </div>
           </div>
@@ -268,7 +268,7 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
 
             <div className="mt-4 flex items-center justify-between gap-3">
               <p className="text-xs text-slate-500">
-                {copySuccess ? 'Link copiado para a area de transferencia.' : 'Acoes rapidas do link'}
+                {copySuccess ? 'Link copiado para a área de transferencia.' : 'Ações rapidas do link'}
               </p>
 
               <div className="flex flex-wrap items-center gap-2">
