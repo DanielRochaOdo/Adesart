@@ -184,7 +184,7 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
             <div>
               <h3 className="text-lg font-semibold text-slate-800">Gerar Link de Adesão</h3>
               <p className="text-sm text-slate-600 mt-1">
-                O link sera vinculado a esta empresa e ao codigo de vendedor do usuario logado.
+                O link será vinculado a esta empresa e ao código de vendedor do usuário logado.
               </p>
             </div>
           </div>
@@ -192,7 +192,7 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                Usuario
+                Usuário
               </p>
               <p className="text-sm font-medium text-slate-800">
                 {profile?.name || profile?.email || 'Não identificado'}
@@ -201,7 +201,7 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
 
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                Codigo de Vendedor
+                Código de Vendedor
               </p>
               <p className="text-sm font-medium text-slate-800">
                 {profile?.external_id || 'Não configurado - será usado o código 0'}
