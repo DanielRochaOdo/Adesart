@@ -832,7 +832,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        throw new Error('Sessao nao encontrada');
+        throw new Error('Sessão não encontrada');
       }
 
       const idDependente = parseInt(String(dependenteCodigo));
