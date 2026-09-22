@@ -89,7 +89,7 @@ export function PublicCadastroLinkPreview() {
                 <div>
                   <h2 className="text-lg font-semibold text-slate-800">Titular e Dependentes</h2>
                   <p className="text-sm text-slate-600">
-                    Este preview usa o mesmo componente real da tela publica para voce validar a nova acao de plano.
+                    Este preview usa o mesmo componente real da tela publica para você validar a nova ação de plano.
                   </p>
                 </div>
               </div>
