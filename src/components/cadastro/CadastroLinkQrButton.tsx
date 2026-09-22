@@ -114,7 +114,7 @@ export function CadastroLinkQrButton({
               <div>
                 <h3 className="text-base sm:text-lg font-semibold text-slate-800">QR Code do Link</h3>
                 <p className="text-xs sm:text-sm text-slate-600 mt-1">
-                  Escaneie para abrir a pagina de adesao.
+                  Escaneie para abrir a página de adesão.
                 </p>
               </div>
 
