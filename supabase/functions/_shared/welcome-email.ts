@@ -2,7 +2,8 @@
 // Sem scripts no e-mail: a seleção da loja acontece apenas na página de destino.
 export const APP_DOWNLOAD_URL = "https://ais.odontoart.com/baixar-app.html";
 const SITE_URL = "https://odontoart.com/";
-const LOGO_URL = "https://ais.odontoart.com/logo-odontoart.png";
+import { WELCOME_EMAIL_LOGO_CONTENT_ID } from "./welcome-email-logo.ts";
+const LOGO_CID_URL = `cid:${WELCOME_EMAIL_LOGO_CONTENT_ID}`;
 const TUTORIALS: ReadonlyArray<readonly [string, string]> = [
   ["Primeiro acesso ao aplicativo", "https://odontoart.com/wp-content/uploads/2026/09/Baixar-o-app-2026.mp4"],
   ["Marcação de consultas pelo aplicativo", "https://odontoart.com/wp-content/uploads/2026/09/Marcacao-de-consulta-2026.mp4"],
@@ -80,7 +81,7 @@ export const welcomeEmail = (payload: {
     '<div style="display:none;font-size:1px;line-height:1px;color:#f3f7f3;max-height:0;max-width:0;opacity:0;overflow:hidden;">Sua adesão foi concluída. Confira seus documentos e veja como começar a usar o aplicativo Odontoart.</div>',
     '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;background:#f3f7f3;"><tr><td align="center" style="padding:32px 12px 44px;">',
     '<table role="presentation" class="outer" cellpadding="0" cellspacing="0" border="0" width="600" style="width:600px;max-width:600px;border-collapse:separate;background:#fff;border-radius:18px;overflow:hidden;">',
-    '<tr><td class="pad" style="padding:28px 42px 26px;border-top:6px solid #50c900;"><img src="' + LOGO_URL + '" alt="Odontoart — Planos Odontológicos" width="216" style="display:block;width:216px;height:auto;max-width:100%;border:0;outline:none;text-decoration:none;"></td></tr>',
+    '<tr><td class="pad" style="padding:28px 42px 26px;border-top:6px solid #50c900;"><img src="' + LOGO_CID_URL + '" alt="Odontoart — Planos Odontológicos" width="216" style="display:block;width:216px;height:auto;max-width:100%;border:0;outline:none;text-decoration:none;"></td></tr>',
     '<tr><td class="pad" style="padding:28px 42px 36px;background:#eef9e7;"><div style="display:inline-block;padding:7px 12px;background:#d4f2c4;border-radius:20px;color:#226a32;font-size:11px;font-weight:bold;letter-spacing:0.6px;">ADESÃO CONCLUÍDA COM SUCESSO</div>',
     '<h1 class="headline" style="margin:18px 0 14px;font-size:32px;line-height:40px;color:#174e2e;font-weight:700;">Seu sorriso tem uma nova companhia! 💚</h1>',
     '<p style="margin:0;font-size:16px;line-height:25px;color:#30553d;">Olá, <strong>' + escapeHtml(firstName) + '!</strong> Seja muito bem-vindo à Odontoart.</p></td></tr>',
