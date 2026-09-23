@@ -90,6 +90,10 @@ async function buildErpPayload(supabase: any, snapshot: any) {
   const l = snapshot.link;
   const vendedor = await sellerCode(supabase, l);
   if (!vendedor) throw new Error("SELLER_CODE_MISSING");
+  // O codigo do adesionista vem do link validado no banco, nunca do cliente publico.
+  const adesionista = l.adesionistaId
+    ? Number.parseInt(String(l.adesionistaCodigo || ""), 10)
+    : 0;
 
   const contacts = (c.contatos || []).map((x: any) => ({
     tipo: x.tipo === "fixo" ? 1 : x.tipo === "email" ? 50 : x.tipo === "whatsapp" ? 10 : 8,
@@ -154,7 +158,7 @@ async function buildErpPayload(supabase: any, snapshot: any) {
 
   return {
     dados: {
-      parceiro: { codigo: vendedor, tipoCobranca: 1 },
+      parceiro: { codigo: vendedor, tipoCobranca: 1, ...(adesionista > 0 ? { adesionista } : {}) },
       parcelaRetidaComissao: "0",
       responsavelFinanceiro: rf,
       dependente: [titular, ...deps],
@@ -719,6 +723,9 @@ Deno.serve(async (req: Request) => {
         vendedor_id: l.vendedorId,
         vendedor_codigo: String(vendedor),
         vendedor_nome: l.vendedorNome,
+        adesionista_id: l.adesionistaId || null,
+        adesionista_codigo: l.adesionistaId ? l.adesionistaCodigo || null : null,
+        adesionista_nome: l.adesionistaId ? l.adesionistaNome || null : null,
         origem_link_id: l.id,
         fluxo_publico: true,
         payload_erp: erpPayload,
