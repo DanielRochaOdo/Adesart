@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Baixar App Odontoart Associado</title>
+  <style>
+    body {font-family:Arial,Helvetica,sans-serif;background:#f3f7f3;color:#174e2e;margin:0;padding:24px}
+    main {max-width:420px;margin:10vh auto;padding:28px;background:#fff;border-radius:18px;text-align:center;box-shadow:0 8px 30px #174e2e14}
+    a {display:block;margin:12px 0;padding:15px;border-radius:10px;background:#267d36;color:white;font-weight:bold;text-decoration:none}
+    p {line-height:1.5}
+  </style>
+</head>
+<body>
+<main>
+  <img src="/logo-odontoart.png" alt="Odontoart — Planos Odontológicos" width="210" style="max-width:100%;height:auto">
+  <h1>App Odontoart Associado</h1>
+  <p id="message">Escolha sua loja para baixar o aplicativo:</p>
+  <a id="apple" href="https://apps.apple.com/br/app/odontoart-associado/id1206858386">Baixar na App Store (iPhone e iPad)</a>
+  <a id="android" href="https://play.google.com/store/apps/details?id=com.odontoart.associado">Baixar no Google Play (Android)</a>
+</main>
+<script>
+  (function () {
+    var ua = navigator.userAgent || "";
+    var apple = document.getElementById("apple").href;
+    var android = document.getElementById("android").href;
+    var isiPad = navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+    var target = /android/i.test(ua) ? android : (/iPad|iPhone|iPod/i.test(ua) || isiPad) ? apple : null;
+    if (target) {
+      document.getElementById("message").textContent = "Redirecionando para a loja do seu aparelho. Se não abrir automaticamente, escolha uma das opções abaixo.";
+      window.location.replace(target);
+    }
+  })();
+</script>
+</body>
+</html>

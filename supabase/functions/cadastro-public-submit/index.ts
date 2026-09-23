@@ -845,6 +845,26 @@ Deno.serve(async (req: Request) => {
 
     if (!idFuncionario) throw new Error("ERP_FUNCIONARIO_ID_NOT_FOUND");
 
+    // Telefone do mesmo vendedor que consta no snapshot do link, nunca do adesionista.
+    // Falha de leitura do contato não pode impedir a entrega do contrato.
+    let vendedorTelefone: string | null = null;
+    if (l.vendedorId) {
+      try {
+        const { data: vendedorProfile, error: vendedorContactError } = await supabase
+          .from("profiles")
+          .select("telefone")
+          .eq("id", l.vendedorId)
+          .maybeSingle();
+        if (vendedorContactError) {
+          console.warn("[cadastro-public-submit] contato do vendedor indisponivel", vendedorContactError.message);
+        } else {
+          vendedorTelefone = vendedorProfile?.telefone ?? null;
+        }
+      } catch (vendedorContactError) {
+        console.warn("[cadastro-public-submit] falha ao carregar contato do vendedor", vendedorContactError);
+      }
+    }
+
     const { error: jobsError } = await supabase.from("contract_delivery_jobs").upsert([
       {
         contract_session_id: claimed.id,
@@ -852,6 +872,8 @@ Deno.serve(async (req: Request) => {
         payload: {
           email: claimed.confirmed_email,
           nome: c.nome,
+          vendedorNome: l.vendedorNome || null,
+          vendedorTelefone,
           storagePath: path,
           fileName,
           pdfHash,
