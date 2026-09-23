@@ -2,6 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import nodemailer from "npm:nodemailer@6.9.16";
 import { Buffer } from "node:buffer";
 import { welcomeEmail } from "../_shared/welcome-email.ts";
+import { WELCOME_EMAIL_LOGO_BASE64, WELCOME_EMAIL_LOGO_CONTENT_ID } from "../_shared/welcome-email-logo.ts";
 import {
   corsHeaders,
   createServiceClient,
@@ -156,7 +157,13 @@ const sendEmail = async (supabase: any, payload: any, jobId: string) => {
       filename: String(payload.fileName || "Contrato-Odontoart.pdf"),
       content: Buffer.from(bytes),
       contentType: "application/pdf",
-    }, ...coverageAttachments],
+    }, ...coverageAttachments, {
+      filename: "Odontoart-logo.png",
+      content: Buffer.from(WELCOME_EMAIL_LOGO_BASE64, "base64"),
+      contentType: "image/png",
+      contentDisposition: "inline",
+      cid: WELCOME_EMAIL_LOGO_CONTENT_ID,
+    }],
   });
 
   if (Array.isArray(info.rejected) && info.rejected.length > 0 && (!info.accepted || info.accepted.length === 0)) {

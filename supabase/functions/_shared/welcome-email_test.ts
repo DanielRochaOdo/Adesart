@@ -1,4 +1,5 @@
 import { APP_DOWNLOAD_URL, sellerWhatsappUrl, welcomeEmail } from "./welcome-email.ts";
+import { WELCOME_EMAIL_LOGO_BASE64, WELCOME_EMAIL_LOGO_CONTENT_ID } from "./welcome-email-logo.ts";
 
 Deno.test("e-mail de boas-vindas: vincula o WhatsApp do vendedor de origem", () => {
   const result = welcomeEmail({
@@ -34,5 +35,23 @@ Deno.test("e-mail de boas-vindas: telefone ausente nao cria link de contato fals
 Deno.test("e-mail de boas-vindas: rejeita numero do vendedor invalido", () => {
   for (const raw of [null, "", "123", "00000000000", "85 99999-1234;https://example.com"]) {
     if (sellerWhatsappUrl(raw)) throw new Error("Numero invalido aceito: " + raw);
+  }
+});
+
+Deno.test("logo inline: URL CID corresponde ao anexo PNG e nao depende de hospedagem", () => {
+  const result = welcomeEmail({
+    nome: "Associado Teste",
+    vendedorTelefone: "85999991234",
+    hasCoverageAttachments: true,
+  });
+  if (!result.html.includes('src="cid:' + WELCOME_EMAIL_LOGO_CONTENT_ID + '"')) {
+    throw new Error("HTML nao usa o CID da logo");
+  }
+  if (result.html.includes("ais.odontoart.com/logo-odontoart.png")) {
+    throw new Error("Logo ainda depende de endereco HTTP");
+  }
+  const png = Uint8Array.from(atob(WELCOME_EMAIL_LOGO_BASE64), (char) => char.charCodeAt(0));
+  if (png.length < 100 || png.slice(0, 8).join(",") !== "137,80,78,71,13,10,26,10") {
+    throw new Error("Imagem inline nao e PNG valido");
   }
 });
