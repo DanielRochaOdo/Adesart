@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Copy, ExternalLink, Link as LinkIcon, Loader2 } from 'lucide-react';
 import { EmpresaSearchCard } from './EmpresaSearchCard';
 import { Button } from '../Button';
+import { Select } from '../Select';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { generateCadastroLinkToken, hashCadastroLinkToken } from '../../lib/cadastroLink';
@@ -21,6 +22,13 @@ interface Empresa {
   raw: any;
 }
 
+interface Adesionista {
+  id: string;
+  name: string | null;
+  email: string | null;
+  external_id: string | null;
+}
+
 interface GeneratedLink {
   url: string;
   empresaNome: string;
@@ -34,6 +42,10 @@ interface LinkCadastroCardProps {
 export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
   const { profile } = useAuth();
   const [selectedEmpresa, setSelectedEmpresa] = useState<Empresa | null>(null);
+  const [adesionistas, setAdesionistas] = useState<Adesionista[]>([]);
+  const [selectedAdesionista, setSelectedAdesionista] = useState('');
+  const [loadingAdesionistas, setLoadingAdesionistas] = useState(false);
+  const [adesionistaError, setAdesionistaError] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -43,8 +55,34 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
   const [requiresAuthorization, setRequiresAuthorization] = useState<boolean | null>(null);
   const resolvedVendedorCodigo = profile?.external_id?.trim() || '0';
 
+  // Reutiliza a mesma fonte e os mesmos critérios do seletor em +Adesão.
+  useEffect(() => {
+    if (!profile?.id) return;
+    let active = true;
+    setLoadingAdesionistas(true);
+    setAdesionistaError('');
+    supabase.from('profiles')
+      .select('id, name, email, external_id')
+      .eq('role', 'ADESIONISTA')
+      .eq('is_active', true)
+      .not('external_id', 'is', null)
+      .order('name')
+      .then(({ data, error: fetchError }) => {
+        if (!active) return;
+        if (fetchError) {
+          setAdesionistaError('Não foi possível carregar os adesionistas. Atualize a página para tentar novamente.');
+          setAdesionistas([]);
+        } else {
+          setAdesionistas((data || []).filter(item => String(item.external_id || '').trim() !== ''));
+        }
+        setLoadingAdesionistas(false);
+      });
+    return () => { active = false; };
+  }, [profile?.id]);
+
   const handleEmpresaSelected = (empresa: Empresa | null) => {
     setSelectedEmpresa(empresa);
+    setSelectedAdesionista('');
     setGeneratedLink(null);
     setSuccess('');
     setError('');
@@ -92,6 +130,14 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
       return;
     }
 
+    const adesionista = selectedAdesionista
+      ? adesionistas.find(item => item.id === selectedAdesionista)
+      : null;
+    if (selectedAdesionista && !adesionista) {
+      setError('O adesionista selecionado não está disponível. Atualize a lista e tente novamente.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -113,6 +159,8 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
         vendedor_id: profile.id,
         vendedor_codigo: resolvedVendedorCodigo,
         vendedor_nome: profile.name || profile.email,
+        // O banco confirma e preenche codigo/nome canonicos ao inserir o link.
+        adesionista_id: adesionista?.id || null,
       };
 
       const { error: insertError } = await supabase
@@ -232,6 +280,25 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
           {success && (
             <div className="mt-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
               {success}
+            </div>
+          )}
+
+          {selectedEmpresa && requiresAuthorization === false && (
+            <div className="mt-6">
+              <Select
+                label="Adesionista (Opcional)"
+                value={selectedAdesionista}
+                onChange={(event) => setSelectedAdesionista(event.target.value)}
+                disabled={loading || loadingAdesionistas || Boolean(adesionistaError)}
+              >
+                <option value="">Selecione um adesionista (opcional)</option>
+                {adesionistas.map((adesionista) => (
+                  <option key={adesionista.id} value={adesionista.id}>
+                    {adesionista.name || adesionista.email || 'Adesionista sem nome'} - Código: {adesionista.external_id}
+                  </option>
+                ))}
+              </Select>
+              {adesionistaError && <p className="mt-2 text-sm text-amber-700">{adesionistaError} O campo é opcional.</p>}
             </div>
           )}
 
