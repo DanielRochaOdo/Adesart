@@ -897,7 +897,7 @@ export function PublicCadastroLink() {
 
   if (loadingLink) {
     return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center px-4">
+      <div translate="no" className="min-h-screen bg-slate-100 flex items-center justify-center px-4">
         <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8 text-center">
           <Loader2 className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-4" />
           <p className="text-slate-700 font-medium">Carregando link de adesao...</p>
@@ -908,7 +908,7 @@ export function PublicCadastroLink() {
 
   if (linkError || !selectedEmpresa) {
     return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center px-4">
+      <div translate="no" className="min-h-screen bg-slate-100 flex items-center justify-center px-4">
         <div className="max-w-lg w-full bg-white rounded-2xl shadow-xl border border-slate-200 p-8">
           <h1 className="text-xl font-bold text-slate-800 mb-3">Link indisponivel</h1>
           <p className="text-sm text-slate-600">
@@ -920,7 +920,7 @@ export function PublicCadastroLink() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-emerald-50 px-4 py-8">
+    <div translate="no" className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-emerald-50 px-4 py-8">
       <div className="max-w-4xl mx-auto">
         <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
           <div className="bg-slate-900 px-6 py-8 text-white">
