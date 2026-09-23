@@ -249,6 +249,9 @@ Deno.serve(async (req: Request) => {
         id: link.id, empresaCodigo: Number(link.empresa_codigo), empresaNome: String(link.empresa_nome || ""), empresaCnpj: link.empresa_cnpj || null,
         empresaExigeMatricula: Number(link.empresa_exige_matricula || 0), vendedorId: link.vendedor_id || null, vendedorCodigo: String(link.vendedor_codigo || ""),
         vendedorNome: String(link.vendedor_nome || ""), createdBy: link.created_by, teamId: link.team_id || null,
+        adesionistaId: link.adesionista_id || null,
+        adesionistaCodigo: link.adesionista_id ? String(link.adesionista_codigo || "") : "",
+        adesionistaNome: link.adesionista_id ? String(link.adesionista_nome || "") : "",
       },
       cadastro: {
         ...normalizedCadastro,
