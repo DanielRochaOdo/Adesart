@@ -36,6 +36,9 @@ interface CadastroLinkRow {
   vendedor_id: string | null;
   vendedor_nome: string;
   vendedor_codigo: string;
+  adesionista_id: string | null;
+  adesionista_nome: string | null;
+  adesionista_codigo: string | null;
   link_url: string | null;
   is_active: boolean;
   unique_visit_count: number | null;
@@ -226,7 +229,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
     try {
       const { data, error: queryError } = await supabase
         .from('cadastro_links')
-        .select('id, created_by, team_id, empresa_codigo, empresa_nome, empresa_cnpj, empresa_raw, empresa_exige_matricula, planos_raw, vendedor_id, vendedor_nome, vendedor_codigo, link_url, is_active, unique_visit_count, unique_visits_started_at, used_at, used_cpf, created_at, updated_at')
+        .select('id, created_by, team_id, empresa_codigo, empresa_nome, empresa_cnpj, empresa_raw, empresa_exige_matricula, planos_raw, vendedor_id, vendedor_nome, vendedor_codigo, adesionista_id, adesionista_nome, adesionista_codigo, link_url, is_active, unique_visit_count, unique_visits_started_at, used_at, used_cpf, created_at, updated_at')
         .eq('is_active', true)
         .order('empresa_nome', { ascending: true })
         .order('updated_at', { ascending: false });
@@ -631,8 +634,14 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                             <div className="space-y-1">
                               <p className="text-sm font-medium text-slate-800">
-                                Vendedor: {link.vendedor_nome} (Codigo {link.vendedor_codigo})
+                                Vendedor: {link.vendedor_nome} (Código {link.vendedor_codigo})
                               </p>
+                              {link.adesionista_id && (
+                                <p className="text-sm font-medium text-slate-700">
+                                  Adesionista: {link.adesionista_nome || 'Não identificado'}
+                                  {link.adesionista_codigo?.trim() ? ` (Código ${link.adesionista_codigo})` : ''}
+                                </p>
+                              )}
                               <p className="text-xs text-slate-500">Gerado em {formatDateTime(link.created_at)}</p>
                               {link.used_at && (
                                 <p className="text-xs text-slate-500">
@@ -752,7 +761,10 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                   {selectedHistoryLink.empresa_nome} • Codigo {selectedHistoryLink.empresa_codigo}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Vendedor: {selectedHistoryLink.vendedor_nome} (Codigo {selectedHistoryLink.vendedor_codigo})
+                  Vendedor: {selectedHistoryLink.vendedor_nome} (Código {selectedHistoryLink.vendedor_codigo})
+                  {selectedHistoryLink.adesionista_id && (
+                    <span className="block">Adesionista: {selectedHistoryLink.adesionista_nome || 'Não identificado'}{selectedHistoryLink.adesionista_codigo?.trim() ? ` (Código ${selectedHistoryLink.adesionista_codigo})` : ''}</span>
+                  )}
                 </p>
               </div>
               <div className="flex items-center gap-2 self-end sm:self-start">
