@@ -662,7 +662,7 @@ export function PublicCadastroLink() {
   };
 
   const shell = (children: React.ReactNode) => (
-    <div className="min-h-screen bg-slate-50 px-4 py-5 sm:py-8">
+    <div translate="no" className="min-h-screen bg-slate-50 px-4 py-5 sm:py-8">
       <main className="mx-auto w-full max-w-xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <header className="bg-emerald-700 px-5 py-6 text-white sm:px-7">
           <div className="flex items-start justify-between gap-3">
