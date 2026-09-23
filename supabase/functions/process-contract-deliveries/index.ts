@@ -1,6 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import nodemailer from "npm:nodemailer@6.9.16";
 import { Buffer } from "node:buffer";
+import { welcomeEmail } from "../_shared/welcome-email.ts";
 import {
   corsHeaders,
   createServiceClient,
@@ -74,15 +75,6 @@ const downloadContract = async (supabase: any, payload: any) => {
   return bytes;
 };
 
-const tutorialLinks = [
-  ["Como fazer o primeiro acesso no aplicativo", "https://odontoart.com/wp-content/uploads/2026/09/Baixar-o-app-2026.mp4"],
-  ["Como marcar sua consulta pelo aplicativo", "https://odontoart.com/wp-content/uploads/2026/09/Marcacao-de-consulta-2026.mp4"],
-  ["Como marcar sua consulta na rede credenciada", "https://odontoart.com/wp-content/uploads/2026/09/Marca-consulta-rede-credenciada-2026.mp4"],
-  ["Como atualizar os dados do cartao de credito", "https://odontoart.com/wp-content/uploads/2024/05/Atualizar-Dados-do-Cartao.mp4"],
-] as const;
-
-const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-
 const loadCoverageAttachments = async (supabase: any, payload: any) => {
   // Um array explicito vazio significa "adesao sem cobertura associada".
   // Nunca deduzir anexos pela lista de codigos quando esse array estiver presente.
@@ -139,14 +131,12 @@ const sendEmail = async (supabase: any, payload: any, jobId: string) => {
   const bytes = await downloadContract(supabase, payload);
   const coverageAttachments = await loadCoverageAttachments(supabase, payload);
   const hasCoverageAttachments = coverageAttachments.length > 0;
-  const attachmentDescription = hasCoverageAttachments
-    ? "Em anexo estao o termo de aceite e a cobertura do plano contratado."
-    : "Em anexo esta o termo de aceite da sua adesao.";
-  const attachmentDescriptionHtml = hasCoverageAttachments
-    ? "Em anexo estão o termo de aceite e a cobertura do plano contratado."
-    : "Em anexo está o termo de aceite da sua adesão.";
-  const tutorialsText = tutorialLinks.map(([title, url]) => `- ${title}: ${url}`).join("\\n");
-  const tutorialsHtml = tutorialLinks.map(([title, url]) => `<li><a href="${url}" target="_blank" rel="noopener noreferrer">${escapeHtml(title)}</a></li>`).join("");
+  const welcome = welcomeEmail({
+    nome: String(payload.nome || ""),
+    vendedorNome: payload.vendedorNome,
+    vendedorTelefone: payload.vendedorTelefone,
+    hasCoverageAttachments,
+  });
   const transporter = nodemailer.createTransport({
     host: smtpHost,
     port: smtpPort,
@@ -158,10 +148,10 @@ const sendEmail = async (supabase: any, payload: any, jobId: string) => {
   const info = await transporter.sendMail({
     from,
     to: recipient,
-    subject: "Seu contrato Odontoart",
+    subject: "Bem-vindo à Odontoart! Sua adesão foi concluída",
     messageId: `<contrato-${jobId}@${host}>`,
-    text: `Ola, ${String(payload.nome || "associado(a)")}!\n\nSua adesao a Odontoart foi concluida com sucesso. ${attachmentDescription}\n\nEsta e uma mensagem automatica. Por favor, nao responda a este e-mail.\n\nTutoriais do App do Associado:\n${tutorialsText}\n\nGuarde estes documentos para futuras consultas.\n\nAtenciosamente,\nOdontoart`,
-    html: `<p>Olá, ${escapeHtml(String(payload.nome || "associado(a)"))}!</p><p>Sua adesão à Odontoart foi concluída com sucesso. ${attachmentDescriptionHtml}</p><p><strong>Esta é uma mensagem automática. Por favor, não responda a este e-mail.</strong></p><p><strong>Tutoriais do App do Associado:</strong></p><ul>${tutorialsHtml}</ul><p>Guarde estes documentos para futuras consultas.</p><p>Atenciosamente,<br>Odontoart</p>`,
+    text: welcome.text,
+    html: welcome.html,
     attachments: [{
       filename: String(payload.fileName || "Contrato-Odontoart.pdf"),
       content: Buffer.from(bytes),
