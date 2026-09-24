@@ -112,7 +112,8 @@ function datasPeriodo(periodo: Periodo, inicio: string, fim: string) {
 }
 
 function vendedorKey(c: DashboardCadastro): string {
-  return c.vendedor_id || c.vendedor_codigo || 'sem-vendedor';
+  // Agrupar pela identificação comercial, independentemente de haver UUID local.
+  return c.vendedor_codigo || c.vendedor_id || 'sem-vendedor';
 }
 
 function adesionistaKey(c: DashboardCadastro): string {
@@ -367,7 +368,7 @@ function TabelaProfissionais({ titulo, grupos, mostrarTaxa }: {
           </td>
         </tr>)}</tbody>
       </table></div>}
-    <p className="mt-3 text-xs text-slate-500">Um cadastro conta uma vez em cada atribuição profissional; não some as duas tabelas.</p>
+    <p className="mt-3 text-xs text-slate-500">Registros sem vínculo comercial local ficam identificados à parte; não são atribuídos automaticamente a quem criou o cadastro. Não some as duas tabelas.</p>
   </Painel>;
 }
 
@@ -495,12 +496,15 @@ export function Dashboard() {
   const anteriores = filtrados.filter((c) => c.created_at < limiteInicioAtual);
   const atual = calcular(atuais);
   const anterior = calcular(anteriores);
+  // Não excluir do relatório os cadastros sem atribuição local confirmada.
   const profissionaisVendedor = agrupar(atual.cadastros, vendedorKey,
-    (c) => c.vendedor_nome || 'Sem vendedor').filter((g) => g.key !== 'sem-vendedor');
+    (c) => c.vendedor_nome || (c.vendedor_codigo ? `Código ${c.vendedor_codigo} (nome não informado)` : 'Sem vendedor atribuído'));
   const profissionaisAdesionista = agrupar(atual.cadastros, adesionistaKey,
     (c) => c.adesionista_nome || 'Sem adesionista').filter((g) => g.key !== 'sem-adesionista');
   const semVendedor = atual.cadastros.filter((c) => vendedorKey(c) === 'sem-vendedor').length;
   const semAdesionista = atual.cadastros.filter((c) => adesionistaKey(c) === 'sem-adesionista').length;
+  const enviadosSemAtribuicao = atual.cadastros.filter((c) => c.status === 'enviado' &&
+    (!c.vendedor_codigo || !c.vendedor_nome || !c.empresa_codigo || !c.empresa_nome)).length;
   const porEmpresa = agrupar(atual.cadastros, empresaKey,
     (c) => c.empresa_nome || 'Não informada');
   const porPlano = agrupar(atual.cadastros, planoKey,
@@ -611,6 +615,10 @@ export function Dashboard() {
           <CardIndicador titulo="Pendências" valor={atual.pendentes} anterior={anterior.pendentes}
             icone={AlertCircle} cor="bg-amber-50 text-amber-600" positivoQuandoCresce={false} />
         </div>
+        {enviadosSemAtribuicao > 0 && <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {inteiro(enviadosSemAtribuicao)} cadastro(s) enviado(s) no período com empresa ou atribuição comercial incompleta nos dados locais.
+          Esses cadastros continuam nos totais gerais; os sem vendedor identificado aparecem separadamente na tabela de produção.
+        </div>}
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">
           <Painel titulo="Evolução de cadastros no período">
             <GraficoEvolucao registros={atuais} inicio={datas.inicioAtual} fimExclusivo={datas.fimExclusivo} />
