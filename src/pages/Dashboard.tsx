@@ -406,7 +406,7 @@ function RankingPlanos({ catalogo, registros, erro }: {
     <p className="text-xs text-slate-500">
       {inteiro(totalVidas)} vidas com plano identificado · {inteiro(ranking.length)} planos com produção
     </p>
-    <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+    <div className="dashboard-scrollbar-hidden max-h-72 space-y-3 overflow-y-auto" tabIndex={0} aria-label="Ranking de planos; role para ver os demais planos">
       {ranking.map((plano, index) => <div key={plano.plano_id} className="space-y-1">
         <div className="flex items-center gap-2 text-xs sm:text-sm">
           <span className="w-6 shrink-0 text-right tabular-nums text-slate-400">
@@ -437,9 +437,9 @@ function RankingPlanos({ catalogo, registros, erro }: {
   </div>;
 }
 
-function Rosca({ entradas, centro, legenda }: {
+function Rosca({ entradas, centro, legenda, compacto = false }: {
   entradas: { nome: string; valor: number; cor: string }[];
-  centro: number; legenda: string;
+  centro: number; legenda: string; compacto?: boolean;
 }) {
   const total = entradas.reduce((s, entrada) => s + entrada.valor, 0);
   let cursor = 0;
@@ -449,14 +449,18 @@ function Rosca({ entradas, centro, legenda }: {
     return entrada.cor + ' ' + inicio + '% ' + cursor + '%';
   });
   const fundo = total ? 'conic-gradient(' + partes.join(',') + ')' : '#e2e8f0';
-  return <div className="grid items-center gap-5 sm:grid-cols-[minmax(120px,1fr)_minmax(0,1.5fr)]">
-    <div className="relative mx-auto flex h-40 w-40 items-center justify-center rounded-full" style={{ background: fundo }}>
-      <div className="flex h-28 w-28 flex-col items-center justify-center rounded-full bg-white text-center">
+  return <div className={compacto
+    ? 'flex flex-wrap items-center justify-center gap-4'
+    : 'grid items-center gap-5 sm:grid-cols-[minmax(120px,1fr)_minmax(0,1.5fr)]'}>
+    <div className={'relative mx-auto flex shrink-0 items-center justify-center rounded-full ' +
+      (compacto ? 'h-32 w-32' : 'h-40 w-40')} style={{ background: fundo }}>
+      <div className={'flex flex-col items-center justify-center rounded-full bg-white text-center ' +
+        (compacto ? 'h-24 w-24' : 'h-28 w-28')}>
         <strong className="text-2xl tabular-nums text-slate-900">{inteiro(centro)}</strong>
         <span className="text-xs text-slate-500">{legenda}</span>
       </div>
     </div>
-    <div className="space-y-2.5">
+    <div className={compacto ? 'min-w-[160px] flex-1 space-y-2.5' : 'min-w-0 space-y-2.5'}>
       {entradas.map((entrada) => <div key={entrada.nome} className="flex items-center gap-2 text-xs sm:text-sm">
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: entrada.cor }} />
         <span className="min-w-0 flex-1 text-slate-600">{entrada.nome}</span>
@@ -859,7 +863,7 @@ export function Dashboard() {
           <Painel titulo="Ranking de planos">
             <RankingPlanos catalogo={catalogoPlanos} registros={atuais} erro={erroCatalogoPlanos} />
           </Painel>
-          <Painel titulo="Canais de origem"><Rosca centro={atual.titulares} legenda="cadastros"
+          <Painel titulo="Canais de origem"><Rosca centro={atual.titulares} legenda="cadastros" compacto
             entradas={[
               { nome: 'Interno', valor: atual.cadastros.filter((c) => canalKey(c) === 'interno').length, cor: '#16a34a' },
               { nome: 'Link / QR Code', valor: atual.cadastros.filter((c) => canalKey(c) === 'publico').length, cor: '#3b82f6' },
