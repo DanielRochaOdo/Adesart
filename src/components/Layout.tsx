@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { LogOut, Users, Briefcase, User as UserIcon, LayoutDashboard, Menu, X, FileText, Settings, Activity, Upload, ChevronDown, Trash2, Sun, Moon } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -16,6 +16,37 @@ export function Layout({ children }: LayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [configDropdownOpen, setConfigDropdownOpen] = useState(false);
   const [mobileConfigOpen, setMobileConfigOpen] = useState(false);
+  const configDropdownRef = useRef<HTMLDivElement>(null);
+  const configButtonRef = useRef<HTMLButtonElement>(null);
+
+  // O menu de desktop permanece aberto até uma ação explícita: seleção,
+  // segundo clique, clique fora, mudança de rota ou tecla Escape.
+  useEffect(() => {
+    if (!configDropdownOpen) return;
+
+    const handleOutsidePointer = (event: PointerEvent) => {
+      if (!configDropdownRef.current?.contains(event.target as Node)) {
+        setConfigDropdownOpen(false);
+      }
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setConfigDropdownOpen(false);
+        configButtonRef.current?.focus();
+      }
+    };
+
+    document.addEventListener('pointerdown', handleOutsidePointer);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('pointerdown', handleOutsidePointer);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [configDropdownOpen]);
+
+  useEffect(() => {
+    setConfigDropdownOpen(false);
+  }, [location.pathname]);
 
   const handleSignOut = async () => {
     try {
@@ -29,6 +60,8 @@ export function Layout({ children }: LayoutProps) {
   const handleNavigate = (path: string) => {
     navigate(path);
     setMobileMenuOpen(false);
+    setMobileConfigOpen(false);
+    setConfigDropdownOpen(false);
   };
 
   const canViewUsers = profile?.role && ['ADMINISTRADOR', 'GERENTE', 'SUPERVISOR'].includes(profile.role);
@@ -92,12 +125,13 @@ export function Layout({ children }: LayoutProps) {
                 ))}
 
                 {hasAnyConfigMenu && (
-                  <div
-                    className="relative"
-                    onMouseEnter={() => setConfigDropdownOpen(true)}
-                    onMouseLeave={() => setConfigDropdownOpen(false)}
-                  >
+                  <div ref={configDropdownRef} className="relative">
                     <button
+                      ref={configButtonRef}
+                      type="button"
+                      aria-expanded={configDropdownOpen}
+                      aria-controls="configuracoes-submenu-desktop"
+                      onClick={() => setConfigDropdownOpen((open) => !open)}
                       className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                         isConfigActive
                           ? 'bg-emerald-50 text-emerald-700'
@@ -110,13 +144,13 @@ export function Layout({ children }: LayoutProps) {
                     </button>
 
                     {configDropdownOpen && (
-                      <div className="absolute top-full left-0 mt-1 w-56 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-50">
+                      <div id="configuracoes-submenu-desktop" className="absolute top-full left-0 z-50 w-56 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
                         {configMenuItems.map((item) => item.show && (
                           <button
                             key={item.path}
                             onClick={() => {
-                              navigate(item.path);
                               setConfigDropdownOpen(false);
+                              navigate(item.path);
                             }}
                             className={`w-full flex items-center px-4 py-2.5 text-sm font-medium transition-colors ${
                               location.pathname === item.path
@@ -186,7 +220,10 @@ export function Layout({ children }: LayoutProps) {
               {hasAnyConfigMenu && (
                 <div className="space-y-1">
                   <button
-                    onClick={() => setMobileConfigOpen(!mobileConfigOpen)}
+                    type="button"
+                    aria-expanded={mobileConfigOpen}
+                    aria-controls="configuracoes-submenu-mobile"
+                    onClick={() => setMobileConfigOpen((open) => !open)}
                     className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors active:scale-95 ${
                       isConfigActive
                         ? 'bg-emerald-50 text-emerald-700'
@@ -205,7 +242,7 @@ export function Layout({ children }: LayoutProps) {
                   </button>
 
                   {mobileConfigOpen && (
-                    <div className="ml-4 space-y-1 border-l-2 border-slate-200 pl-2">
+                    <div id="configuracoes-submenu-mobile" className="ml-4 space-y-1 border-l-2 border-slate-200 pl-2">
                       {configMenuItems.map((item) => item.show && (
                         <button
                           key={item.path}
