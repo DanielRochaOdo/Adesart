@@ -1,0 +1,26 @@
+name: Verificar frontend
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/verify-frontend.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      # O typecheck geral já apresenta erros preexistentes fora deste escopo;
+      # manter o build como verificação automática e tratar a dívida separadamente.
+      - run: npm run build

@@ -1127,9 +1127,11 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
         responsavel_financeiro_codigo: responsavelSelecionado.codigo,
         responsavel_financeiro_nome: responsavelSelecionado.nome,
         responsavel_financeiro_cpf: responsavelSelecionado.cpf,
-        empresa_nome: empresaCompleta?.nomeFantasia || responsavelSelecionado.empresa,
+        empresa_id: empresaCodigo || responsavelSelecionado.codigoEmpresa,
+        empresa_nome: empresaCompleta?.nomeFantasia || empresaCompleta?.razaoSocial || empresaNome || responsavelSelecionado.empresa,
         empresa_codigo: empresaCodigo || responsavelSelecionado.codigoEmpresa,
         empresa_raw: empresaCompleta || null,
+        planos_raw: Array.isArray(empresaCompleta?.precoPlano) ? empresaCompleta.precoPlano : planosEmpresa,
         dependentes: dependentesData
       };
 
@@ -1439,6 +1441,63 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
             }
           }
         }
+      }
+
+      // O fluxo direto não criava registro em cadastros. Registrar somente após o
+      // sucesso confirmado no ERP, sem transformar uma falha de relatório em erro
+      // de adesão e sem executar um novo envio ao ERP.
+      try {
+        const codigoEmpresa = empresaCodigo || responsavelSelecionado.codigoEmpresa;
+        const vendedorEfetivo = vendedores.find(v => v.id === selectedVendedor);
+        const adesionistaEfetivo = adesionistas.find(a => a.id === selectedAdesionista);
+        const historicoInclusao = {
+          status: 'enviado',
+          tipo_cadastro: 'inclusao_dependente',
+          created_by: profile!.id,
+          team_id: profile?.team_id || null,
+          responsavel_financeiro_codigo: responsavelSelecionado.codigo,
+          responsavel_financeiro_nome: responsavelSelecionado.nome,
+          responsavel_financeiro_cpf: responsavelSelecionado.cpf,
+          empresa_id: codigoEmpresa,
+          empresa_codigo: codigoEmpresa,
+          empresa_nome: empresaCompleta?.nomeFantasia || empresaCompleta?.razaoSocial || empresaNome || responsavelSelecionado.empresa,
+          empresa_raw: empresaCompleta || null,
+          planos_raw: Array.isArray(empresaCompleta?.precoPlano) ? empresaCompleta.precoPlano : planosEmpresa,
+          vendedor_id: vendedorEfetivo?.id || (profile?.role === 'VENDEDOR' ? profile.id : null),
+          vendedor_codigo: String(codigoParceiro),
+          vendedor_nome: vendedorEfetivo?.name || (profile?.role === 'VENDEDOR' ? profile.name : null),
+          adesionista_id: adesionistaEfetivo?.id || null,
+          adesionista_codigo: adesionistaEfetivo?.external_id || null,
+          adesionista_nome: adesionistaEfetivo?.name || null,
+          dependentes: dependentesSalvos.map(dep => ({
+            tipo: dep.tipo,
+            nome: dep.nome,
+            cpf: removeCPFMask(dep.cpf || ''),
+            data_nascimento: normalizeToISO(dep.dataNascimento),
+            sexo: dep.sexo === 1 ? 'Masculino' : 'Feminino',
+            plano_codigo: dep.plano,
+            plano_valor: dep.planoValor,
+            nome_mae: dep.nomeMae,
+          })),
+          payload_erp: payload,
+          erp_response: result,
+        };
+        // Prazo máximo apenas para a gravação gerencial; o envio ao ERP já terminou.
+        // Se a rede atrasar, não manter o associado aguardando nem reenviar a adesão.
+        let timeoutHistorico: ReturnType<typeof setTimeout> | undefined;
+        const limiteHistorico = new Promise<{ error: Error }>((resolve) => {
+          timeoutHistorico = setTimeout(() => resolve({ error: new Error('Prazo excedido no registro gerencial') }), 4000);
+        });
+        const { error: historicoError } = await Promise.race([
+          supabase.from('cadastros').insert(historicoInclusao),
+          limiteHistorico,
+        ]);
+        if (timeoutHistorico) clearTimeout(timeoutHistorico);
+        if (historicoError) {
+          console.error('[InclusaoDependente] ERP concluiu, mas registro gerencial falhou:', historicoError);
+        }
+      } catch (historicoError) {
+        console.error('[InclusaoDependente] ERP concluiu, mas houve falha no registro gerencial:', historicoError);
       }
 
       setSuccess('Dependente(s) incluído(s) com sucesso! Arquivos em fila de envio.');
