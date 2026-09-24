@@ -39,6 +39,8 @@ export function ApiLogsTable() {
     1
   );
   const [totalPages, setTotalPages] = useState(1);
+  const [totalRegistros, setTotalRegistros] = useState(0);
+  const [erroBusca, setErroBusca] = useState<string | null>(null);
   const { value: dataInicio, setValue: setDataInicio } = usePersistentState<string>(
     profile?.id ? `ui:config-api-logs:${profile.id}:data-inicio` : null,
     ''
@@ -47,11 +49,73 @@ export function ApiLogsTable() {
     profile?.id ? `ui:config-api-logs:${profile.id}:data-fim` : null,
     ''
   );
+  // Campos de busca sensíveis ficam somente em memória (não em localStorage).
+  const [cpf, setCpf] = useState('');
+  const [usuario, setUsuario] = useState('');
+  const [codigoEmpresa, setCodigoEmpresa] = useState('');
+  const [endpoint, setEndpoint] = useState('');
+  const [aplicados, setAplicados] = useState({
+    cpf: '', usuario: '', codigoEmpresa: '', endpoint: '',
+  });
   const pageSize = 100;
 
   useEffect(() => {
-    fetchLogs();
-  }, [filter, page, dataInicio, dataFim]);
+    let ativo = true;
+
+    const carregar = async () => {
+      setLoading(true);
+      setErroBusca(null);
+
+      if (dataInicio && dataFim && dataInicio > dataFim) {
+        setErroBusca('A data inicial não pode ser posterior à data final.');
+        setLogs([]);
+        setTotalRegistros(0);
+        setTotalPages(1);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // O RPC filtra no banco antes de paginar. A busca nunca é limitada
+        // aos 100 itens da página previamente carregada.
+        const { data, error } = await supabase.rpc('search_api_logs', {
+          p_data_inicio: dataInicio
+            ? new Date(dataInicio + 'T00:00:00').toISOString()
+            : null,
+          p_data_fim_exclusiva: dataFim
+            ? new Date(dataFim + 'T00:00:00').getTime() + 86400000
+            : null,
+          p_status: filter,
+          p_cpf: aplicados.cpf || null,
+          p_usuario: aplicados.usuario || null,
+          p_codigo_empresa: aplicados.codigoEmpresa || null,
+          p_endpoint: aplicados.endpoint || null,
+          p_page: page,
+          p_page_size: pageSize,
+        });
+
+        if (error) throw error;
+        if (!ativo) return;
+        const resposta = data as { logs?: ApiLog[]; total?: number } | null;
+        const total = Number(resposta?.total || 0);
+        setLogs(Array.isArray(resposta?.logs) ? resposta.logs : []);
+        setTotalRegistros(total);
+        setTotalPages(Math.max(1, Math.ceil(total / pageSize)));
+      } catch (erro) {
+        if (!ativo) return;
+        console.error('Falha ao consultar logs de API:', erro);
+        setLogs([]);
+        setTotalRegistros(0);
+        setTotalPages(1);
+        setErroBusca('Não foi possível carregar os logs. Verifique se a migration de busca avançada foi aplicada e tente novamente.');
+      } finally {
+        if (ativo) setLoading(false);
+      }
+    };
+
+    void carregar();
+    return () => { ativo = false; };
+  }, [filter, page, dataInicio, dataFim, aplicados]);
 
   useEffect(() => {
     if (totalPages === 0 && page !== 1) {
@@ -64,53 +128,41 @@ export function ApiLogsTable() {
     }
   }, [page, totalPages, setPage]);
 
-  const fetchLogs = async () => {
-    try {
-      setLoading(true);
+  const aplicarPesquisa = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const cpfNumerico = cpf.replace(/\D/g, '');
+    const codigoNumerico = codigoEmpresa.trim();
 
-      let countQuery = supabase
-        .from('api_logs')
-        .select('id', { count: 'exact', head: true });
-
-      let query = supabase
-        .from('api_logs')
-        .select('id, user_email, endpoint, method, status_code, success, error_message, duration_ms, cost, created_at')
-        .order('created_at', { ascending: false })
-        .range((page - 1) * pageSize, page * pageSize - 1);
-
-      if (filter === 'success') {
-        query = query.eq('success', true);
-        countQuery = countQuery.eq('success', true);
-      } else if (filter === 'error') {
-        query = query.eq('success', false);
-        countQuery = countQuery.eq('success', false);
-      }
-
-      if (dataInicio) {
-        const startDate = new Date(dataInicio);
-        startDate.setHours(0, 0, 0, 0);
-        query = query.gte('created_at', startDate.toISOString());
-        countQuery = countQuery.gte('created_at', startDate.toISOString());
-      }
-
-      if (dataFim) {
-        const endDate = new Date(dataFim);
-        endDate.setHours(23, 59, 59, 999);
-        query = query.lte('created_at', endDate.toISOString());
-        countQuery = countQuery.lte('created_at', endDate.toISOString());
-      }
-
-      const { data, error } = await query;
-      const { count } = await countQuery;
-
-      if (error) throw error;
-      setLogs(data || []);
-      setTotalPages(Math.ceil((count || 0) / pageSize));
-    } catch (error) {
-      console.error('Error fetching logs:', error);
-    } finally {
-      setLoading(false);
+    if (cpf.trim() && cpfNumerico.length !== 11) {
+      setErroBusca('Informe um CPF com 11 dígitos.');
+      return;
     }
+    if (codigoNumerico && !/^\d+$/.test(codigoNumerico)) {
+      setErroBusca('O código da empresa deve conter somente números.');
+      return;
+    }
+
+    setErroBusca(null);
+    setPage(1);
+    setAplicados({
+      cpf: cpfNumerico,
+      usuario: usuario.trim(),
+      codigoEmpresa: codigoNumerico,
+      endpoint: endpoint.trim(),
+    });
+  };
+
+  const limparFiltros = () => {
+    setDataInicio('');
+    setDataFim('');
+    setFilter('all');
+    setCpf('');
+    setUsuario('');
+    setCodigoEmpresa('');
+    setEndpoint('');
+    setAplicados({ cpf: '', usuario: '', codigoEmpresa: '', endpoint: '' });
+    setErroBusca(null);
+    setPage(1);
   };
 
   const fetchLogDetail = async (logId: string) => {
@@ -201,14 +253,66 @@ export function ApiLogsTable() {
           />
           <div className="flex items-end">
             <button
-              onClick={() => { setDataInicio(''); setDataFim(''); setPage(1); }}
+              onClick={limparFiltros}
               className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
             >
               Limpar Filtros
             </button>
           </div>
         </div>
+
+        <form onSubmit={aplicarPesquisa} className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Input
+              label="CPF"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="11 dígitos"
+              value={cpf}
+              onChange={(e) => setCpf(e.target.value)}
+            />
+            <Input
+              label="Usuário"
+              autoComplete="off"
+              placeholder="Nome ou e-mail"
+              value={usuario}
+              onChange={(e) => setUsuario(e.target.value)}
+            />
+            <Input
+              label="Código da empresa"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="Código no ERP"
+              value={codigoEmpresa}
+              onChange={(e) => setCodigoEmpresa(e.target.value)}
+            />
+            <Input
+              label="Endpoint"
+              autoComplete="off"
+              placeholder="Ex.: lemit-consulta-pessoa"
+              value={endpoint}
+              onChange={(e) => setEndpoint(e.target.value)}
+            />
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-slate-500">
+              Os filtros podem ser combinados. CPF e empresa retornam somente logs que
+              registraram esses identificadores ou um cadastro vinculado; registros antigos
+              com CPF apenas em hash ou sem código da empresa não são pesquisáveis por esses campos.
+            </p>
+            <button type="submit" disabled={loading}
+              className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+              Pesquisar
+            </button>
+          </div>
+        </form>
       </div>
+
+      {erroBusca && (
+        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {erroBusca}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-8 text-gray-600">Carregando logs...</div>
@@ -288,12 +392,12 @@ export function ApiLogsTable() {
 
           <div className="flex items-center justify-between mt-4 px-4 py-3 bg-gray-50 rounded-lg">
             <div className="text-sm text-gray-600">
-              Página {page} de {totalPages} ({logs.length} registros)
+              Página {page} de {totalPages} ({totalRegistros} registros encontrados)
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
+                disabled={page === 1 || loading}
                 className="px-3 py-1 rounded bg-blue-600 text-white disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 flex items-center gap-1"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -301,7 +405,7 @@ export function ApiLogsTable() {
               </button>
               <button
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
+                disabled={page >= totalPages || loading}
                 className="px-3 py-1 rounded bg-blue-600 text-white disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 flex items-center gap-1"
               >
                 Próxima
