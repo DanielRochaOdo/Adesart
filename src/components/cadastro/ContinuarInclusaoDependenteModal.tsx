@@ -289,12 +289,19 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
     };
 
     if (selectedEmpresa) {
+      updateData.empresa_id = selectedEmpresa.id;
       updateData.empresa_codigo = selectedEmpresa.id;
-      updateData.empresa_nome = selectedEmpresa.nomeFantasia || empresaNome;
+      updateData.empresa_nome = selectedEmpresa.nomeFantasia || selectedEmpresa.razaoSocial || empresaNome;
       updateData.empresa_raw = selectedEmpresa.raw || selectedEmpresa;
+      updateData.empresa_cnpj = selectedEmpresa.cnpj || cadastro.empresa_cnpj;
+      // Snapshot dos planos já consultados, sem nova chamada ao ERP.
+      if (Array.isArray(selectedEmpresa.precoPlano) && selectedEmpresa.precoPlano.length > 0) {
+        updateData.planos_raw = selectedEmpresa.precoPlano;
+      }
     } else {
       updateData.empresa_codigo = empresaCodigo;
       updateData.empresa_nome = empresaNome;
+      if (empresaCodigo && !cadastro.empresa_id) updateData.empresa_id = empresaCodigo;
     }
 
     if (selectedVendedor) {
@@ -1437,7 +1444,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
         .update({
           empresa_id: empresa.id,
           empresa_codigo: empresa.id,
-          empresa_nome: empresa.nomeFantasia,
+          empresa_nome: empresa.nomeFantasia || empresa.razaoSocial,
           empresa_cnpj: empresa.cnpj,
           empresa_raw: empresa.raw || empresa,
           planos_raw: empresa.precoPlano,
@@ -1474,9 +1481,13 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
       const { error: updateError } = await supabase
         .from('cadastros')
         .update({
+          empresa_id: codigo,
           empresa_codigo: codigo,
-          empresa_nome: nome,
-          empresa_raw: empresaCompleta,
+          empresa_nome: empresaCompleta?.nomeFantasia || empresaCompleta?.razaoSocial || nome,
+          ...(empresaCompleta ? {
+            empresa_raw: empresaCompleta.raw || empresaCompleta,
+            planos_raw: empresaCompleta.precoPlano || planos,
+          } : {}),
           tipo_cadastro: 'inclusao_dependente'
         })
         .eq('id', cadastro.id);
@@ -1489,6 +1500,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
       const { error: updateError } = await supabase
         .from('cadastros')
         .update({
+          empresa_id: codigo,
           empresa_codigo: codigo,
           empresa_nome: nome,
           tipo_cadastro: 'inclusao_dependente'
