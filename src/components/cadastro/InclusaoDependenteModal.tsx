@@ -1481,7 +1481,17 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
           payload_erp: payload,
           erp_response: result,
         };
-        const { error: historicoError } = await supabase.from('cadastros').insert(historicoInclusao);
+        // Prazo máximo apenas para a gravação gerencial; o envio ao ERP já terminou.
+        // Se a rede atrasar, não manter o associado aguardando nem reenviar a adesão.
+        let timeoutHistorico: ReturnType<typeof setTimeout> | undefined;
+        const limiteHistorico = new Promise<{ error: Error }>((resolve) => {
+          timeoutHistorico = setTimeout(() => resolve({ error: new Error('Prazo excedido no registro gerencial') }), 4000);
+        });
+        const { error: historicoError } = await Promise.race([
+          supabase.from('cadastros').insert(historicoInclusao),
+          limiteHistorico,
+        ]);
+        if (timeoutHistorico) clearTimeout(timeoutHistorico);
         if (historicoError) {
           console.error('[InclusaoDependente] ERP concluiu, mas registro gerencial falhou:', historicoError);
         }
