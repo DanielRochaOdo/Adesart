@@ -85,7 +85,12 @@ BEGIN
            ) = v_cpf
         OR EXISTS (
           SELECT 1 FROM public.cadastros c
-          WHERE c.id::text = l.request_body ->> 'cadastro_id'
+          WHERE c.id = CASE
+            WHEN (l.request_body ->> 'cadastro_id') ~*
+                 '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            THEN (l.request_body ->> 'cadastro_id')::uuid
+            ELSE NULL
+          END
             AND regexp_replace(c.cpf, '[^0-9]', '', 'g') = v_cpf
         )
       )
@@ -97,7 +102,12 @@ BEGIN
         OR l.request_body ->> 'codigoContrato' = v_empresa
         OR EXISTS (
           SELECT 1 FROM public.cadastros c
-          WHERE c.id::text = l.request_body ->> 'cadastro_id'
+          WHERE c.id = CASE
+            WHEN (l.request_body ->> 'cadastro_id') ~*
+                 '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            THEN (l.request_body ->> 'cadastro_id')::uuid
+            ELSE NULL
+          END
             AND (c.empresa_codigo::text = v_empresa OR c.empresa_id::text = v_empresa)
         )
       )
