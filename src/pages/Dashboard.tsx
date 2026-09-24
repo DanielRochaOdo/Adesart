@@ -70,6 +70,74 @@ const EMPTY_FILTERS: Filtros = {
   adesionista: 'todos', canal: 'todos', status: 'todos', busca: '',
 };
 
+// Somente preferências de visualização, nunca dados de associados ou resultados do ERP.
+// A chave inclui o usuário para não reaproveitar os filtros de outra conta no mesmo navegador.
+const DASHBOARD_PREFERENCES_KEY = 'adesart:dashboard:preferencias:v1:';
+const PERIODOS: Periodo[] = ['7', '30', '90', 'mes', 'personalizado'];
+const FILTRO_KEYS: (keyof Filtros)[] = [
+  'equipe', 'empresa', 'vendedor', 'adesionista', 'canal', 'status', 'busca',
+];
+
+interface DashboardPreferences {
+  periodo: Periodo;
+  inicioPersonalizado: string;
+  fimPersonalizado: string;
+  filtros: Filtros;
+}
+
+function preferenciasPadrao(): DashboardPreferences {
+  const hoje = dataLocal(new Date().toISOString());
+  return {
+    periodo: 'mes',
+    inicioPersonalizado: mudarDia(hoje, -29),
+    fimPersonalizado: hoje,
+    filtros: { ...EMPTY_FILTERS },
+  };
+}
+
+function carregarPreferencias(userId: string): DashboardPreferences {
+  const padrao = preferenciasPadrao();
+  try {
+    const raw = window.localStorage.getItem(DASHBOARD_PREFERENCES_KEY + userId);
+    if (!raw) return padrao;
+    const saved: unknown = JSON.parse(raw);
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return padrao;
+
+    const value = saved as Record<string, unknown>;
+    const savedFilters = value.filtros && typeof value.filtros === 'object' &&
+      !Array.isArray(value.filtros) ? value.filtros as Record<string, unknown> : {};
+    const filtros = { ...padrao.filtros };
+    for (const key of FILTRO_KEYS) {
+      const selected = savedFilters[key];
+      if (typeof selected === 'string' && selected.length <= 500) filtros[key] = selected;
+    }
+    const dataValida = (date: unknown, fallback: string) =>
+      typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : fallback;
+
+    return {
+      periodo: typeof value.periodo === 'string' &&
+        PERIODOS.includes(value.periodo as Periodo) ? value.periodo as Periodo : padrao.periodo,
+      inicioPersonalizado: dataValida(value.inicioPersonalizado, padrao.inicioPersonalizado),
+      fimPersonalizado: dataValida(value.fimPersonalizado, padrao.fimPersonalizado),
+      filtros,
+    };
+  } catch {
+    // Navegação privada ou armazenamento indisponível: o Dashboard segue funcional.
+    return padrao;
+  }
+}
+
+function salvarPreferencias(userId: string, preferencias: DashboardPreferences): void {
+  try {
+    window.localStorage.setItem(
+      DASHBOARD_PREFERENCES_KEY + userId,
+      JSON.stringify(preferencias)
+    );
+  } catch {
+    // A persistência da interface nunca pode impedir a consulta do Dashboard.
+  }
+}
+
 const inteiro = (valor: number) => new Intl.NumberFormat('pt-BR').format(valor);
 const percentual = (valor: number) => new Intl.NumberFormat('pt-BR', {
   style: 'percent', minimumFractionDigits: 1, maximumFractionDigits: 1,
@@ -378,18 +446,43 @@ function TabelaProfissionais({ titulo, grupos, mostrarTaxa }: {
 
 export function Dashboard() {
   const { profile } = useAuth();
-  const [periodo, setPeriodo] = useState<Periodo>('30');
+  const [periodo, setPeriodo] = useState<Periodo>('mes');
   const [inicioPersonalizado, setInicioPersonalizado] = useState(
     mudarDia(dataLocal(new Date().toISOString()), -29)
   );
   const [fimPersonalizado, setFimPersonalizado] = useState(dataLocal(new Date().toISOString()));
-  const [filtros, setFiltros] = useState<Filtros>(EMPTY_FILTERS);
+  const [filtros, setFiltros] = useState<Filtros>({ ...EMPTY_FILTERS });
+  const [preferenciasRestauradasPara, setPreferenciasRestauradasPara] = useState<string | null>(null);
   const [registros, setRegistros] = useState<DashboardCadastro[]>([]);
   const [equipes, setEquipes] = useState<{ id: string; name: string }[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [atualizacao, setAtualizacao] = useState(0);
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
+
+  useEffect(() => {
+    if (!profile?.id) {
+      setPreferenciasRestauradasPara(null);
+      return;
+    }
+
+    const preferencias = carregarPreferencias(profile.id);
+    setPeriodo(preferencias.periodo);
+    setInicioPersonalizado(preferencias.inicioPersonalizado);
+    setFimPersonalizado(preferencias.fimPersonalizado);
+    setFiltros(preferencias.filtros);
+    setPreferenciasRestauradasPara(profile.id);
+  }, [profile?.id]);
+
+  useEffect(() => {
+    if (!profile?.id || preferenciasRestauradasPara !== profile.id) return;
+    salvarPreferencias(profile.id, {
+      periodo, inicioPersonalizado, fimPersonalizado, filtros,
+    });
+  }, [
+    profile?.id, preferenciasRestauradasPara,
+    periodo, inicioPersonalizado, fimPersonalizado, filtros,
+  ]);
 
   const gerencial = profile?.role === 'ADMINISTRADOR' || profile?.role === 'GERENTE';
   const equipeRestrita = profile?.role === 'SUPERVISOR' ? profile.team_id : null;
@@ -399,7 +492,7 @@ export function Dashboard() {
   );
 
   useEffect(() => {
-    if (!profile?.id) return;
+    if (!profile?.id || preferenciasRestauradasPara !== profile.id) return;
     if (!datas.valido) {
       setErro('Informe um intervalo válido de até 366 dias, com início não posterior a hoje.');
       setCarregando(false);
@@ -462,6 +555,7 @@ export function Dashboard() {
     return () => { ativo = false; };
   }, [
     profile?.id, profile?.role, profile?.team_id, profile?.external_id,
+    preferenciasRestauradasPara,
     datas.inicioAnterior, datas.fimExclusivo, datas.valido, atualizacao,
   ]);
 
@@ -507,8 +601,6 @@ export function Dashboard() {
     (c) => c.adesionista_nome || 'Sem adesionista').filter((g) => g.key !== 'sem-adesionista');
   const semVendedor = atual.cadastros.filter((c) => vendedorKey(c) === 'sem-vendedor').length;
   const semAdesionista = atual.cadastros.filter((c) => adesionistaKey(c) === 'sem-adesionista').length;
-  const enviadosSemAtribuicao = atual.cadastros.filter((c) => c.status === 'enviado' &&
-    (!c.vendedor_codigo || !c.vendedor_nome || !c.empresa_codigo || !c.empresa_nome)).length;
   const porEmpresa = agrupar(atual.cadastros, empresaKey,
     (c) => c.empresa_nome || 'Não informada');
   const porPlano = agrupar(atual.cadastros, planoKey,
@@ -621,10 +713,6 @@ export function Dashboard() {
           <CardIndicador titulo="Pendências" valor={atual.pendentes} anterior={anterior.pendentes}
             icone={AlertCircle} cor="bg-amber-50 text-amber-600" positivoQuandoCresce={false} />
         </div>
-        {enviadosSemAtribuicao > 0 && <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          {inteiro(enviadosSemAtribuicao)} cadastro(s) enviado(s) no período com empresa ou atribuição comercial incompleta nos dados locais.
-          Esses cadastros continuam nos totais gerais; os sem vendedor identificado aparecem separadamente na tabela de produção.
-        </div>}
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">
           <Painel titulo="Evolução de cadastros no período">
             <GraficoEvolucao registros={atuais} inicio={datas.inicioAtual} fimExclusivo={datas.fimExclusivo} />
