@@ -496,9 +496,11 @@ export function Dashboard() {
   const atual = calcular(atuais);
   const anterior = calcular(anteriores);
   const profissionaisVendedor = agrupar(atual.cadastros, vendedorKey,
-    (c) => c.vendedor_nome || 'Sem vendedor');
+    (c) => c.vendedor_nome || 'Sem vendedor').filter((g) => g.key !== 'sem-vendedor');
   const profissionaisAdesionista = agrupar(atual.cadastros, adesionistaKey,
-    (c) => c.adesionista_nome || 'Sem adesionista');
+    (c) => c.adesionista_nome || 'Sem adesionista').filter((g) => g.key !== 'sem-adesionista');
+  const semVendedor = atual.cadastros.filter((c) => vendedorKey(c) === 'sem-vendedor').length;
+  const semAdesionista = atual.cadastros.filter((c) => adesionistaKey(c) === 'sem-adesionista').length;
   const porEmpresa = agrupar(atual.cadastros, empresaKey,
     (c) => c.empresa_nome || 'Não informada');
   const porPlano = agrupar(atual.cadastros, planoKey,
@@ -674,7 +676,8 @@ export function Dashboard() {
               </div>
             </div>
             <p className="mt-4 text-xs text-slate-500">
-              {inteiro(atual.inclusoes)} registros de inclusão de dependente no período (fora dos totais de titulares e vidas desta visão).
+              {inteiro(semVendedor)} cadastros sem vendedor atribuído · {inteiro(semAdesionista)} sem adesionista atribuído.
+              {' '}{inteiro(atual.inclusoes)} registros de inclusão de dependente no período (fora dos totais de titulares e vidas desta visão).
             </p>
           </Painel>
         </div>
