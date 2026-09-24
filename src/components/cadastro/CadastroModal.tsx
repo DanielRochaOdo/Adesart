@@ -179,7 +179,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
       empresa_cnpj: selectedEmpresa?.cnpj || cadastroAtual.empresa_cnpj || null,
       empresa_exige_matricula:
         selectedEmpresa?.exigeMatricula ?? cadastroAtual.empresa_exige_matricula ?? null,
-      empresa_raw: selectedEmpresa?.raw || cadastroAtual.empresa_raw || (selectedEmpresa?.precoPlano?.length ? selectedEmpresa : null),
+      empresa_raw: selectedEmpresa?.raw || cadastroAtual.empresa_raw || null,
       planos_raw:
         Array.isArray(selectedEmpresa?.precoPlano) && selectedEmpresa.precoPlano.length > 0
           ? selectedEmpresa.precoPlano
