@@ -1127,9 +1127,11 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
         responsavel_financeiro_codigo: responsavelSelecionado.codigo,
         responsavel_financeiro_nome: responsavelSelecionado.nome,
         responsavel_financeiro_cpf: responsavelSelecionado.cpf,
-        empresa_nome: empresaCompleta?.nomeFantasia || responsavelSelecionado.empresa,
+        empresa_id: empresaCodigo || responsavelSelecionado.codigoEmpresa,
+        empresa_nome: empresaCompleta?.nomeFantasia || empresaCompleta?.razaoSocial || empresaNome || responsavelSelecionado.empresa,
         empresa_codigo: empresaCodigo || responsavelSelecionado.codigoEmpresa,
         empresa_raw: empresaCompleta || null,
+        planos_raw: Array.isArray(empresaCompleta?.precoPlano) ? empresaCompleta.precoPlano : planosEmpresa,
         dependentes: dependentesData
       };
 
@@ -1439,6 +1441,52 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
             }
           }
         }
+      }
+
+      // Uma inclusão direta só entra nas métricas após sucesso do ERP.
+      // Falha na gravação gerencial não reenvia dependentes nem muda o resultado da adesão.
+      try {
+        const codigoEmpresa = empresaCodigo || responsavelSelecionado.codigoEmpresa;
+        const vendedorEfetivo = vendedores.find(v => v.id === selectedVendedor);
+        const adesionistaEfetivo = adesionistas.find(a => a.id === selectedAdesionista);
+        const historicoInclusao = {
+          status: 'enviado',
+          tipo_cadastro: 'inclusao_dependente',
+          created_by: profile!.id,
+          team_id: profile?.team_id || null,
+          responsavel_financeiro_codigo: responsavelSelecionado.codigo,
+          responsavel_financeiro_nome: responsavelSelecionado.nome,
+          responsavel_financeiro_cpf: responsavelSelecionado.cpf,
+          empresa_id: codigoEmpresa,
+          empresa_codigo: codigoEmpresa,
+          empresa_nome: empresaCompleta?.nomeFantasia || empresaCompleta?.razaoSocial || empresaNome || responsavelSelecionado.empresa,
+          empresa_raw: empresaCompleta || null,
+          planos_raw: Array.isArray(empresaCompleta?.precoPlano) ? empresaCompleta.precoPlano : planosEmpresa,
+          vendedor_id: vendedorEfetivo?.id || (profile?.role === 'VENDEDOR' ? profile.id : null),
+          vendedor_codigo: String(codigoParceiro),
+          vendedor_nome: vendedorEfetivo?.name || (profile?.role === 'VENDEDOR' ? profile.name : null),
+          adesionista_id: adesionistaEfetivo?.id || null,
+          adesionista_codigo: adesionistaEfetivo?.external_id || null,
+          adesionista_nome: adesionistaEfetivo?.name || null,
+          dependentes: dependentesSalvos.map(dep => ({
+            tipo: dep.tipo,
+            nome: dep.nome,
+            cpf: removeCPFMask(dep.cpf || ''),
+            data_nascimento: normalizeToISO(dep.dataNascimento),
+            sexo: dep.sexo === 1 ? 'Masculino' : 'Feminino',
+            plano_codigo: dep.plano,
+            plano_valor: dep.planoValor,
+            nome_mae: dep.nomeMae,
+          })),
+          payload_erp: payload,
+          erp_response: result,
+        };
+        const { error: historicoError } = await supabase.from('cadastros').insert(historicoInclusao);
+        if (historicoError) {
+          console.error('[InclusaoDependente] ERP concluiu, mas registro gerencial falhou:', historicoError);
+        }
+      } catch (historicoError) {
+        console.error('[InclusaoDependente] ERP concluiu, mas houve falha no registro gerencial:', historicoError);
       }
 
       setSuccess('Dependente(s) incluído(s) com sucesso! Arquivos em fila de envio.');
