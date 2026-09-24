@@ -51,6 +51,16 @@ interface Grupo {
   pendentes: number;
 }
 
+interface PlanoConfigurado {
+  plano_id: number;
+  nome_exibicao: string;
+  ativo: boolean;
+}
+
+interface PlanoRanking extends PlanoConfigurado {
+  total: number;
+}
+
 const COLUNAS = [
   'id', 'created_at', 'status', 'tipo_cadastro', 'created_by', 'team_id',
   'vendedor_id', 'vendedor_codigo', 'vendedor_nome', 'adesionista_id',
@@ -194,12 +204,6 @@ function empresaKey(c: DashboardCadastro): string {
     : String(c.empresa_codigo);
 }
 
-function planoKey(c: DashboardCadastro): string {
-  return c.plano_codigo == null
-    ? (c.plano_nome || 'Não informado')
-    : String(c.plano_codigo);
-}
-
 function canalKey(c: DashboardCadastro): string {
   return c.fluxo_publico || c.origem_link_id ? 'publico' : 'interno';
 }
@@ -229,6 +233,51 @@ function agrupar(
   return Array.from(grupos.values()).sort((a, b) =>
     b.total - a.total || a.nome.localeCompare(b.nome, 'pt-BR')
   );
+}
+
+// Cada titular ou dependente pode usar um plano diferente dentro da mesma adesão.
+// Não deduzir o plano a partir da empresa ou dos preços atuais do ERP.
+function codigoPlano(valor: unknown): number | null {
+  if (typeof valor !== 'number' && typeof valor !== 'string') return null;
+  const texto = String(valor).trim();
+  if (!/^\d+$/.test(texto)) return null;
+  const codigo = Number(texto);
+  return Number.isSafeInteger(codigo) && codigo > 0 ? codigo : null;
+}
+
+function planoDaVida(valor: unknown): number | null {
+  if (!valor || typeof valor !== 'object' || Array.isArray(valor)) return null;
+  const dados = valor as Record<string, unknown>;
+  const candidatos = [
+    dados.plano, dados.plano_codigo, dados.planoCodigo,
+    dados.codigoPlano, dados.Plano,
+  ];
+  for (const candidato of candidatos) {
+    const codigo = codigoPlano(candidato);
+    if (codigo !== null) return codigo;
+  }
+  return null;
+}
+
+function montarRankingPlanos(registros: DashboardCadastro[], catalogo: PlanoConfigurado[]): PlanoRanking[] {
+  const contagens = new Map<number, number>();
+  // Todos os planos cadastrados participam, inclusive os desativados e os sem produção.
+  for (const plano of catalogo) contagens.set(plano.plano_id, 0);
+
+  for (const cadastro of registros) {
+    if (cadastro.status !== 'enviado' || !Array.isArray(cadastro.dependentes)) continue;
+    for (const dependente of cadastro.dependentes) {
+      const codigo = planoDaVida(dependente);
+      if (codigo !== null && contagens.has(codigo)) {
+        contagens.set(codigo, (contagens.get(codigo) || 0) + 1);
+      }
+    }
+  }
+
+  return catalogo.map((plano) => ({
+    ...plano, total: contagens.get(plano.plano_id) || 0,
+  })).sort((a, b) => b.total - a.total ||
+    a.nome_exibicao.localeCompare(b.nome_exibicao, 'pt-BR') || a.plano_id - b.plano_id);
 }
 
 function calcular(registros: DashboardCadastro[]) {
@@ -330,6 +379,57 @@ function Barras({ grupos, cor = 'bg-blue-500', vazio = 'Sem dados no período.' 
       </div>
       <span className="min-w-9 text-right font-semibold tabular-nums text-slate-700">{inteiro(g.total)}</span>
     </div>)}
+  </div>;
+}
+
+function RankingPlanos({ catalogo, registros, erro }: {
+  catalogo: PlanoConfigurado[];
+  registros: DashboardCadastro[];
+  erro: string | null;
+}) {
+  if (erro) {
+    return <p role="status" className="py-6 text-sm text-slate-600">{erro}</p>;
+  }
+  if (!catalogo.length) {
+    return <p className="py-6 text-sm text-slate-500">Nenhum plano cadastrado em Configurações &gt; Planos.</p>;
+  }
+
+  const ranking = montarRankingPlanos(registros, catalogo);
+  const maior = Math.max(1, ...ranking.map((plano) => plano.total));
+  const totalVidas = ranking.reduce((total, plano) => total + plano.total, 0);
+
+  return <div className="space-y-3">
+    <p className="text-xs text-slate-500">
+      {inteiro(totalVidas)} vidas com plano identificado · {inteiro(catalogo.length)} planos cadastrados
+    </p>
+    <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+      {ranking.map((plano, index) => <div key={plano.plano_id} className="space-y-1">
+        <div className="flex items-center gap-2 text-xs sm:text-sm">
+          <span className="w-6 shrink-0 text-right tabular-nums text-slate-400">
+            {plano.total > 0 ? index + 1 + 'º' : '–'}
+          </span>
+          <span className="min-w-0 flex-1 truncate font-medium text-slate-700"
+            title={plano.nome_exibicao + ' · ERP ' + plano.plano_id}>
+            {plano.nome_exibicao}
+          </span>
+          <span className={'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ' +
+            (plano.ativo ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500')}>
+            {plano.ativo ? 'Ativo' : 'Inativo'}
+          </span>
+          <strong className="w-10 shrink-0 text-right tabular-nums text-slate-800"
+            title={inteiro(plano.total) + ' vidas'}>{inteiro(plano.total)}</strong>
+        </div>
+        <div className="ml-8 h-2 overflow-hidden rounded-full bg-slate-100">
+          <div className="h-full rounded-full bg-emerald-500"
+            style={{ width: (100 * plano.total / maior) + '%' }} />
+        </div>
+      </div>)}
+    </div>
+    <p className="text-xs text-slate-500">
+      Vidas de cadastros e inclusões de dependentes marcados como enviados ao ERP,
+      por data de criação e filtros selecionados. Só entram no ranking os códigos
+      encontrados em Configurações &gt; Planos, ativos ou inativos.
+    </p>
   </div>;
 }
 
@@ -455,6 +555,8 @@ export function Dashboard() {
   const [preferenciasRestauradasPara, setPreferenciasRestauradasPara] = useState<string | null>(null);
   const [registros, setRegistros] = useState<DashboardCadastro[]>([]);
   const [equipes, setEquipes] = useState<{ id: string; name: string }[]>([]);
+  const [catalogoPlanos, setCatalogoPlanos] = useState<PlanoConfigurado[]>([]);
+  const [erroCatalogoPlanos, setErroCatalogoPlanos] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [atualizacao, setAtualizacao] = useState(0);
@@ -539,9 +641,24 @@ export function Dashboard() {
         }
         const { data: listaEquipes } = await supabase.from('teams')
           .select('id,name').order('name').range(0, 999);
+
+        // A consulta ao catálogo é somente leitura e não bloqueia os demais indicadores.
+        // Não filtrar por ativo: planos inativos também participam do histórico.
+        const { data: planosConfigurados, error: erroPlanos } = await supabase
+          .from('cadastro_planos_map')
+          .select('plano_id,nome_exibicao,ativo')
+          .order('plano_id', { ascending: true })
+          .range(0, 999);
         if (!ativo) return;
         setRegistros(dados);
         setEquipes(listaEquipes || []);
+        if (erroPlanos || (planosConfigurados?.length || 0) >= 1000) {
+          setCatalogoPlanos([]);
+          setErroCatalogoPlanos('Não foi possível carregar a lista completa de planos cadastrados.');
+        } else {
+          setCatalogoPlanos((planosConfigurados || []) as PlanoConfigurado[]);
+          setErroCatalogoPlanos(null);
+        }
         setAtualizadoEm(new Date());
       } catch (falha) {
         if (!ativo) return;
@@ -603,8 +720,6 @@ export function Dashboard() {
   const semAdesionista = atual.cadastros.filter((c) => adesionistaKey(c) === 'sem-adesionista').length;
   const porEmpresa = agrupar(atual.cadastros, empresaKey,
     (c) => c.empresa_nome || 'Não informada');
-  const porPlano = agrupar(atual.cadastros, planoKey,
-    (c) => c.plano_nome || 'Não informado');
   const motivos = ESTADOS.filter((s) => s.key !== 'enviado')
     .map((s) => ({ ...s, total: atual.cadastros.filter((c) => c.status === s.key).length }));
 
@@ -729,7 +844,9 @@ export function Dashboard() {
         </div>
         <div className="grid gap-4 xl:grid-cols-3">
           <Painel titulo="Produção por empresa"><Barras grupos={porEmpresa} /></Painel>
-          <Painel titulo="Produção por plano"><Barras grupos={porPlano} cor="bg-emerald-500" /></Painel>
+          <Painel titulo="Ranking de planos">
+            <RankingPlanos catalogo={catalogoPlanos} registros={atuais} erro={erroCatalogoPlanos} />
+          </Painel>
           <Painel titulo="Canais de origem"><Rosca centro={atual.titulares} legenda="cadastros"
             entradas={[
               { nome: 'Interno', valor: atual.cadastros.filter((c) => canalKey(c) === 'interno').length, cor: '#16a34a' },
