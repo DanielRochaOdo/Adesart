@@ -100,7 +100,7 @@ function datasPeriodo(periodo: Periodo, inicio: string, fim: string) {
   const inicioAtual = periodo === 'personalizado' ? inicio
     : periodo === 'mes' ? primeiroDiaMes : mudarDia(hoje, 1 - Number(periodo));
   const ultimoDia = periodo === 'personalizado' ? fim : hoje;
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(inicioAtual) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(ultimoDia)) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(inicioAtual) || !/^\d{4}-\d{2}-\d{2}$/.test(ultimoDia)) {
     return { inicioAtual: hoje, fimExclusivo: mudarDia(hoje, 1), inicioAnterior: hoje, valido: false };
   }
   const fimExclusivo = mudarDia(ultimoDia, 1);
