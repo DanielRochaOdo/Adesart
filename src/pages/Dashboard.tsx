@@ -169,9 +169,13 @@ function calcular(registros: DashboardCadastro[]) {
   const dependentes = cadastros.reduce((total, c) => total + vidas(c) - 1, 0);
   const enviados = cadastros.filter((c) => c.status === 'enviado').length;
   const pendentes = cadastros.filter((c) => c.status !== 'enviado').length;
+  const inclusoes = registros.filter((c) => c.tipo_cadastro === 'inclusao_dependente');
+  const dependentesIncluidos = inclusoes
+    .filter((c) => c.status === 'enviado')
+    .reduce((total, c) => total + (Array.isArray(c.dependentes) ? c.dependentes.length : 0), 0);
   return {
     cadastros, titulares, dependentes, vidas: titulares + dependentes,
-    enviados, pendentes, inclusoes: registros.length - titulares,
+    enviados, pendentes, inclusoes: inclusoes.length, dependentesIncluidos,
   };
 }
 
@@ -609,7 +613,9 @@ export function Dashboard() {
           <CardIndicador titulo="Titulares" valor={atual.titulares} anterior={anterior.titulares}
             icone={UserRound} cor="bg-blue-50 text-blue-600" />
           <CardIndicador titulo="Dependentes" valor={atual.dependentes} anterior={anterior.dependentes}
-            icone={Users} cor="bg-violet-50 text-violet-600" />
+            icone={Users} cor="bg-violet-50 text-violet-600" detalhe="Dependentes dos novos cadastros; não inclui inclusões posteriores." />
+          <CardIndicador titulo="Dependentes incluídos" valor={atual.dependentesIncluidos} anterior={anterior.dependentesIncluidos}
+            icone={Users} cor="bg-violet-50 text-violet-600" detalhe="Somente inclusões enviadas registradas no Adesart; não somar aos titulares." />
           <CardIndicador titulo="Total de vidas" valor={atual.vidas} anterior={anterior.vidas}
             icone={UserRoundCheck} cor="bg-emerald-50 text-emerald-600" detalhe="Titulares + dependentes dos cadastros." />
           <CardIndicador titulo="Pendências" valor={atual.pendentes} anterior={anterior.pendentes}
