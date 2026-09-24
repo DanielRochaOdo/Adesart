@@ -692,6 +692,9 @@ export function Dashboard() {
     };
   }, [registros, equipes, datas.inicioAtual, datas.fimExclusivo, gerencial, profile?.team_id]);
 
+  const nomePlanosPorCodigo = new Map(catalogoPlanos.map((plano) => [
+    plano.plano_id, plano.nome_exibicao.toLocaleLowerCase('pt-BR'),
+  ]));
   const aplicar = (c: DashboardCadastro) => {
     const equipe = equipeRestrita || filtros.equipe;
     if (equipe !== 'todos' && c.team_id !== equipe) return false;
@@ -701,8 +704,13 @@ export function Dashboard() {
     if (filtros.canal !== 'todos' && canalKey(c) !== filtros.canal) return false;
     if (filtros.status !== 'todos' && c.status !== filtros.status) return false;
     const termo = filtros.busca.trim().toLocaleLowerCase('pt-BR');
-    return !termo || [c.empresa_nome, c.plano_nome, c.vendedor_nome, c.adesionista_nome]
-      .some((texto) => (texto || '').toLocaleLowerCase('pt-BR').includes(termo));
+    return !termo ||
+      [c.empresa_nome, c.plano_nome, c.vendedor_nome, c.adesionista_nome]
+        .some((texto) => (texto || '').toLocaleLowerCase('pt-BR').includes(termo)) ||
+      (Array.isArray(c.dependentes) && c.dependentes.some((vida) => {
+        const codigo = planoDaVida(vida);
+        return codigo !== null && (nomePlanosPorCodigo.get(codigo) || '').includes(termo);
+      }));
   };
   const filtrados = registros.filter(aplicar);
   const limiteInicioAtual = new Date(datas.inicioAtual + 'T00:00:00').toISOString();
