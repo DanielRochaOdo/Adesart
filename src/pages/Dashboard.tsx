@@ -394,19 +394,23 @@ function RankingPlanos({ catalogo, registros, erro }: {
     return <p className="py-6 text-sm text-slate-500">Nenhum plano cadastrado em Configurações &gt; Planos.</p>;
   }
 
-  const ranking = montarRankingPlanos(registros, catalogo);
+  // O catálogo serve para identificar os planos, não para exibir linhas sem produção.
+  const ranking = montarRankingPlanos(registros, catalogo).filter((plano) => plano.total > 0);
+  if (!ranking.length) {
+    return <p className="py-6 text-sm text-slate-500">Nenhum plano com produção no período selecionado.</p>;
+  }
   const maior = Math.max(1, ...ranking.map((plano) => plano.total));
   const totalVidas = ranking.reduce((total, plano) => total + plano.total, 0);
 
   return <div className="space-y-3">
     <p className="text-xs text-slate-500">
-      {inteiro(totalVidas)} vidas com plano identificado · {inteiro(catalogo.length)} planos cadastrados
+      {inteiro(totalVidas)} vidas com plano identificado · {inteiro(ranking.length)} planos com produção
     </p>
     <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
       {ranking.map((plano, index) => <div key={plano.plano_id} className="space-y-1">
         <div className="flex items-center gap-2 text-xs sm:text-sm">
           <span className="w-6 shrink-0 text-right tabular-nums text-slate-400">
-            {plano.total > 0 ? index + 1 + 'º' : '–'}
+            {index + 1}º
           </span>
           <span className="min-w-0 flex-1 truncate font-medium text-slate-700"
             title={plano.nome_exibicao + ' · ERP ' + plano.plano_id}>
@@ -428,7 +432,7 @@ function RankingPlanos({ catalogo, registros, erro }: {
     <p className="text-xs text-slate-500">
       Vidas de cadastros e inclusões de dependentes marcados como enviados ao ERP,
       por data de criação e filtros selecionados. Só entram no ranking os códigos
-      encontrados em Configurações &gt; Planos, ativos ou inativos.
+      encontrados em Configurações &gt; Planos, ativos ou inativos, com produção no período.
     </p>
   </div>;
 }
