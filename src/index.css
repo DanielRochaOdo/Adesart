@@ -144,3 +144,15 @@
   .dark .to-teal-50 { --tw-gradient-to: #042f2e var(--tw-gradient-to-position); }
   .dark .to-blue-50 { --tw-gradient-to: #172554 var(--tw-gradient-to-position); }
 }
+
+/* Oculta a barra apenas no ranking; o conteúdo continua rolável por mouse, toque e teclado. */
+@layer utilities {
+  .dashboard-scrollbar-hidden {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .dashboard-scrollbar-hidden::-webkit-scrollbar {
+    display: none;
+  }
+}
