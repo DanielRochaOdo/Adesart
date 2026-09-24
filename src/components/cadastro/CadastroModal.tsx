@@ -175,15 +175,25 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
       arquivo_path: arquivo ? arquivo.path : null,
       empresa_id: selectedEmpresa?.id || cadastroAtual.empresa_id || null,
       empresa_codigo: selectedEmpresa?.id || cadastroAtual.empresa_codigo || null,
-      empresa_nome: selectedEmpresa?.nomeFantasia || cadastroAtual.empresa_nome || null,
+      empresa_nome: selectedEmpresa?.nomeFantasia || selectedEmpresa?.razaoSocial || cadastroAtual.empresa_nome || null,
       empresa_cnpj: selectedEmpresa?.cnpj || cadastroAtual.empresa_cnpj || null,
       empresa_exige_matricula:
         selectedEmpresa?.exigeMatricula ?? cadastroAtual.empresa_exige_matricula ?? null,
-      empresa_raw: selectedEmpresa?.raw || cadastroAtual.empresa_raw || null,
+      empresa_raw: selectedEmpresa?.raw || cadastroAtual.empresa_raw || (selectedEmpresa?.precoPlano?.length ? selectedEmpresa : null),
       planos_raw:
         Array.isArray(selectedEmpresa?.precoPlano) && selectedEmpresa.precoPlano.length > 0
           ? selectedEmpresa.precoPlano
           : cadastroAtual.planos_raw || null,
+      // Apenas o próprio vendedor: não substitui uma atribuição comercial existente.
+      ...(profile?.role === 'VENDEDOR' && profile.id && profile.external_id &&
+        (!cadastroAtual.vendedor_id || cadastroAtual.vendedor_id === profile.id) &&
+        (!cadastroAtual.vendedor_codigo || cadastroAtual.vendedor_codigo === profile.external_id)
+        ? {
+            vendedor_id: profile.id,
+            vendedor_codigo: profile.external_id,
+            vendedor_nome: cadastroAtual.vendedor_nome || profile.name || null,
+          }
+        : {}),
     };
   };
 
@@ -516,7 +526,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
       await updateCadastro(cadastroAtual.id, {
         empresa_id: empresa.id,
         empresa_codigo: empresa.id,
-        empresa_nome: empresa.nomeFantasia,
+        empresa_nome: empresa.nomeFantasia || empresa.razaoSocial,
         empresa_cnpj: empresa.cnpj,
         empresa_exige_matricula: empresa.exigeMatricula || 0,
         empresa_raw: empresa.raw || empresa,
