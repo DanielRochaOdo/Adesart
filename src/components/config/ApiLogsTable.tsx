@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { supabase } from '../../lib/supabase';
 import { AlertCircle, CheckCircle, Clock, User, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Input } from '../Input';
@@ -83,7 +83,7 @@ export function ApiLogsTable() {
             ? new Date(dataInicio + 'T00:00:00').toISOString()
             : null,
           p_data_fim_exclusiva: dataFim
-            ? new Date(dataFim + 'T00:00:00').getTime() + 86400000
+            ? new Date(new Date(dataFim + 'T00:00:00').getTime() + 86400000).toISOString()
             : null,
           p_status: filter,
           p_cpf: aplicados.cpf || null,
@@ -128,7 +128,7 @@ export function ApiLogsTable() {
     }
   }, [page, totalPages, setPage]);
 
-  const aplicarPesquisa = (event: React.FormEvent<HTMLFormElement>) => {
+  const aplicarPesquisa = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const cpfNumerico = cpf.replace(/\D/g, '');
     const codigoNumerico = codigoEmpresa.trim();
