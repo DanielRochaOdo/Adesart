@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   AlertCircle, ArrowDownRight, ArrowUpRight, BarChart3, CalendarDays,
   CheckCircle2, ClipboardList, Download, FileText, Filter, Loader2,
@@ -85,7 +85,7 @@ function dataLocal(iso: string): string {
 function mudarDia(iso: string, dias: number): string {
   const data = new Date(iso + 'T12:00:00');
   data.setDate(data.getDate() + dias);
-  return dataLocal(data.toISOString().slice(0, 10) + 'T12:00:00');
+  return String(data.getFullYear()) + '-' + String(data.getMonth() + 1).padStart(2, '0') + '-' + String(data.getDate()).padStart(2, '0');
 }
 
 function diasEntre(inicio: string, fim: string): number {
@@ -95,16 +95,19 @@ function diasEntre(inicio: string, fim: string): number {
 }
 
 function datasPeriodo(periodo: Periodo, inicio: string, fim: string) {
-  const hoje = dataLocal(new Date().toISOString().slice(0, 10) + 'T12:00:00');
+  const hoje = dataLocal(new Date().toISOString());
   const primeiroDiaMes = hoje.slice(0, 8) + '01';
   const inicioAtual = periodo === 'personalizado' ? inicio
     : periodo === 'mes' ? primeiroDiaMes : mudarDia(hoje, 1 - Number(periodo));
   const ultimoDia = periodo === 'personalizado' ? fim : hoje;
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(inicioAtual) || !/^\\d{4}-\\d{2}-\\d{2}$/.test(ultimoDia)) {
+    return { inicioAtual: hoje, fimExclusivo: mudarDia(hoje, 1), inicioAnterior: hoje, valido: false };
+  }
   const fimExclusivo = mudarDia(ultimoDia, 1);
   const duracao = diasEntre(inicioAtual, fimExclusivo);
   return {
     inicioAtual, fimExclusivo, inicioAnterior: mudarDia(inicioAtual, -duracao),
-    valido: duracao > 0 && duracao <= 366 && inicioAtual <= hoje,
+    valido: duracao > 0 && duracao <= 366 && inicioAtual <= hoje && ultimoDia <= hoje,
   };
 }
 
@@ -203,7 +206,7 @@ function exportarCSV(registros: DashboardCadastro[]) {
 }
 
 function Painel({ titulo, children, extra, className = '' }: {
-  titulo: string; children: React.ReactNode; extra?: React.ReactNode; className?: string;
+  titulo: string; children: ReactNode; extra?: ReactNode; className?: string;
 }) {
   return <section className={'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 ' + className}>
     <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -214,9 +217,9 @@ function Painel({ titulo, children, extra, className = '' }: {
   </section>;
 }
 
-function CardIndicador({ titulo, valor, anterior, icone: Icone, cor, detalhe }: {
+function CardIndicador({ titulo, valor, anterior, icone: Icone, cor, detalhe, positivoQuandoCresce = true }: {
   titulo: string; valor: number; anterior: number;
-  icone: typeof FileText; cor: string; detalhe?: string;
+  icone: typeof FileText; cor: string; detalhe?: string; positivoQuandoCresce?: boolean;
 }) {
   const variacao = anterior === 0 ? null : (valor - anterior) / anterior;
   return <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -231,7 +234,7 @@ function CardIndicador({ titulo, valor, anterior, icone: Icone, cor, detalhe }: 
       {variacao === null ? 'Sem base no período anterior' : <>
         {variacao >= 0 ? <ArrowUpRight className="h-3.5 w-3.5" /> :
           <ArrowDownRight className="h-3.5 w-3.5" />}
-        <span className={variacao >= 0 ? 'text-emerald-700' : 'text-rose-700'}>
+        <span className={(variacao >= 0) === positivoQuandoCresce ? 'text-emerald-700' : 'text-rose-700'}>
           {variacao > 0 ? '+' : ''}{percentual(variacao)}
         </span>
         <span>vs. período anterior</span>
@@ -604,7 +607,7 @@ export function Dashboard() {
           <CardIndicador titulo="Total de vidas" valor={atual.vidas} anterior={anterior.vidas}
             icone={UserRoundCheck} cor="bg-emerald-50 text-emerald-600" detalhe="Titulares + dependentes dos cadastros." />
           <CardIndicador titulo="Pendências" valor={atual.pendentes} anterior={anterior.pendentes}
-            icone={AlertCircle} cor="bg-amber-50 text-amber-600" />
+            icone={AlertCircle} cor="bg-amber-50 text-amber-600" positivoQuandoCresce={false} />
         </div>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">
           <Painel titulo="Evolução de cadastros no período">
