@@ -460,7 +460,7 @@ function Rosca({ entradas, centro, legenda, compacto = false }: {
         <span className="text-xs text-slate-500">{legenda}</span>
       </div>
     </div>
-    <div className={compacto ? 'min-w-[160px] flex-1 space-y-2.5' : 'min-w-0 space-y-2.5'}>
+    <div className={compacto ? 'min-w-[190px] flex-1 space-y-2.5' : 'min-w-0 space-y-2.5'}>
       {entradas.map((entrada) => <div key={entrada.nome} className="flex items-center gap-2 text-xs sm:text-sm">
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: entrada.cor }} />
         <span className="min-w-0 flex-1 text-slate-600">{entrada.nome}</span>
