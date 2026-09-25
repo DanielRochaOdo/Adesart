@@ -61,6 +61,24 @@ interface PlanoRanking extends PlanoConfigurado {
   total: number;
 }
 
+interface DashboardCacheEntry {
+  expiresAt: number;
+  registros: DashboardCadastro[];
+  equipes: { id: string; name: string }[];
+  catalogoPlanos: PlanoConfigurado[];
+  erroCatalogoPlanos: string | null;
+  atualizadoEm: number;
+}
+
+const DASHBOARD_CACHE_TTL_MS = 90_000;
+const dashboardDataCache = new Map<string, DashboardCacheEntry>();
+
+function limparCacheDashboard(userId: string): void {
+  for (const key of dashboardDataCache.keys()) {
+    if (key.startsWith(userId + '|')) dashboardDataCache.delete(key);
+  }
+}
+
 const COLUNAS = [
   'id', 'created_at', 'status', 'tipo_cadastro', 'created_by', 'team_id',
   'vendedor_id', 'vendedor_codigo', 'vendedor_nome', 'adesionista_id',
@@ -610,64 +628,120 @@ export function Dashboard() {
     }
     let ativo = true;
     const carregar = async () => {
-      setCarregando(true);
       setErro(null);
       try {
         if (profile.role === 'SUPERVISOR' && !profile.team_id) {
           throw new Error('Seu perfil não possui equipe vinculada. Solicite a regularização do cadastro.');
         }
+
         const doInicio = new Date(datas.inicioAnterior + 'T00:00:00').toISOString();
         const ateFim = new Date(datas.fimExclusivo + 'T00:00:00').toISOString();
-        const dados: DashboardCadastro[] = [];
-        const pagina = 1000;
-        for (let deslocamento = 0; deslocamento < 50000; deslocamento += pagina) {
-          let consulta = supabase.from('cadastros').select(COLUNAS)
-            .gte('created_at', doInicio).lt('created_at', ateFim)
-            .order('created_at', { ascending: true })
-            .order('id', { ascending: true })
-            .range(deslocamento, deslocamento + pagina - 1);
-          if (profile.role === 'SUPERVISOR') {
-            consulta = consulta.eq('team_id', profile.team_id);
-          }
-          if (profile.role === 'VENDEDOR') {
-            consulta = consulta.or('created_by.eq.' + profile.id + ',vendedor_id.eq.' + profile.id);
-          }
-          if (profile.role === 'ADESIONISTA') {
-            const codigo = profile.external_id;
-            consulta = codigo && /^[a-zA-Z0-9_-]+$/.test(codigo)
-              ? consulta.or('adesionista_id.eq.' + profile.id + ',adesionista_codigo.eq.' + codigo)
-              : consulta.eq('adesionista_id', profile.id);
-          }
-          const { data, error } = await consulta;
-          if (error) throw error;
-          const lote = (data || []) as DashboardCadastro[];
-          dados.push(...lote);
-          if (lote.length < pagina) break;
-          if (deslocamento + pagina >= 50000) {
-            throw new Error('O intervalo contém mais de 50 mil registros. Reduza o período para obter totais completos.');
-          }
-        }
-        const { data: listaEquipes } = await supabase.from('teams')
-          .select('id,name').order('name').range(0, 999);
+        const cacheKey = [
+          profile.id, profile.role, profile.team_id || '', profile.external_id || '',
+          doInicio, ateFim,
+        ].join('|');
+        const cache = dashboardDataCache.get(cacheKey);
 
-        // A consulta ao catálogo é somente leitura e não bloqueia os demais indicadores.
-        // Não filtrar por ativo: planos inativos também participam do histórico.
-        const { data: planosConfigurados, error: erroPlanos } = await supabase
-          .from('cadastro_planos_map')
+        if (cache && cache.expiresAt > Date.now()) {
+          if (!ativo) return;
+          setRegistros(cache.registros);
+          setEquipes(cache.equipes);
+          setCatalogoPlanos(cache.catalogoPlanos);
+          setErroCatalogoPlanos(cache.erroCatalogoPlanos);
+          setAtualizadoEm(new Date(cache.atualizadoEm));
+          setCarregando(false);
+          return;
+        }
+
+        setCarregando(true);
+
+        const consultaRapida = supabase.rpc('get_dashboard_cadastros_fast_v1', {
+          p_inicio: doInicio,
+          p_fim: ateFim,
+        });
+        const equipesPromise = supabase.from('teams')
+          .select('id,name').order('name').range(0, 999);
+        const planosPromise = supabase.from('cadastro_planos_map')
           .select('plano_id,nome_exibicao,ativo')
           .order('plano_id', { ascending: true })
           .range(0, 999);
+
+        const [resultadoRapido, equipesResult, planosResult] = await Promise.all([
+          consultaRapida, equipesPromise, planosPromise,
+        ]);
+
+        let dados: DashboardCadastro[];
+        if (!resultadoRapido.error) {
+          if (!Array.isArray(resultadoRapido.data)) {
+            throw new Error('Resposta inválida da consulta otimizada do Dashboard.');
+          }
+          dados = resultadoRapido.data as DashboardCadastro[];
+        } else {
+          const funcaoAusente =
+            resultadoRapido.error.code === 'PGRST202' ||
+            resultadoRapido.error.code === '42883' ||
+            resultadoRapido.error.message?.includes('get_dashboard_cadastros_fast_v1');
+
+          if (!funcaoAusente) throw resultadoRapido.error;
+
+          // Compatibilidade temporária enquanto a migration ainda não foi aplicada.
+          dados = [];
+          const pagina = 1000;
+          for (let deslocamento = 0; deslocamento < 50000; deslocamento += pagina) {
+            let consulta = supabase.from('cadastros').select(COLUNAS)
+              .gte('created_at', doInicio).lt('created_at', ateFim)
+              .order('created_at', { ascending: true })
+              .order('id', { ascending: true })
+              .range(deslocamento, deslocamento + pagina - 1);
+            if (profile.role === 'SUPERVISOR') consulta = consulta.eq('team_id', profile.team_id);
+            if (profile.role === 'VENDEDOR') {
+              consulta = consulta.or('created_by.eq.' + profile.id + ',vendedor_id.eq.' + profile.id);
+            }
+            if (profile.role === 'ADESIONISTA') {
+              const codigo = profile.external_id;
+              consulta = codigo && /^[a-zA-Z0-9_-]+$/.test(codigo)
+                ? consulta.or('adesionista_id.eq.' + profile.id + ',adesionista_codigo.eq.' + codigo)
+                : consulta.eq('adesionista_id', profile.id);
+            }
+            const { data, error } = await consulta;
+            if (error) throw error;
+            const lote = (data || []) as DashboardCadastro[];
+            dados.push(...lote);
+            if (lote.length < pagina) break;
+            if (deslocamento + pagina >= 50000) {
+              throw new Error('O intervalo contém mais de 50 mil registros. Reduza o período para obter totais completos.');
+            }
+          }
+        }
+
+        if (equipesResult.error) throw equipesResult.error;
+
+        const erroPlanos = planosResult.error;
+        const planosConfigurados = planosResult.data;
+        const catalogoValido = !erroPlanos && (planosConfigurados?.length || 0) < 1000;
+        const catalogo = catalogoValido
+          ? (planosConfigurados || []) as PlanoConfigurado[]
+          : [];
+        const erroCatalogo = catalogoValido
+          ? null
+          : 'Não foi possível carregar a lista completa de planos cadastrados.';
+
+        const agora = Date.now();
+        dashboardDataCache.set(cacheKey, {
+          expiresAt: agora + DASHBOARD_CACHE_TTL_MS,
+          registros: dados,
+          equipes: equipesResult.data || [],
+          catalogoPlanos: catalogo,
+          erroCatalogoPlanos: erroCatalogo,
+          atualizadoEm: agora,
+        });
+
         if (!ativo) return;
         setRegistros(dados);
-        setEquipes(listaEquipes || []);
-        if (erroPlanos || (planosConfigurados?.length || 0) >= 1000) {
-          setCatalogoPlanos([]);
-          setErroCatalogoPlanos('Não foi possível carregar a lista completa de planos cadastrados.');
-        } else {
-          setCatalogoPlanos((planosConfigurados || []) as PlanoConfigurado[]);
-          setErroCatalogoPlanos(null);
-        }
-        setAtualizadoEm(new Date());
+        setEquipes(equipesResult.data || []);
+        setCatalogoPlanos(catalogo);
+        setErroCatalogoPlanos(erroCatalogo);
+        setAtualizadoEm(new Date(agora));
       } catch (falha) {
         if (!ativo) return;
         setRegistros([]);
@@ -742,6 +816,11 @@ export function Dashboard() {
   const alterarFiltro = (nome: keyof Filtros, valor: string) =>
     setFiltros((estado) => ({ ...estado, [nome]: valor }));
 
+  const atualizarDashboard = () => {
+    if (profile?.id) limparCacheDashboard(profile.id);
+    setAtualizacao((n) => n + 1);
+  };
+
   const CampoFiltro = ({ nome, titulo, escolhas, desabilitado = false }: {
     nome: keyof Filtros; titulo: string; escolhas: { value: string; label: string }[];
     desabilitado?: boolean;
@@ -777,7 +856,7 @@ export function Dashboard() {
               <option value="personalizado">Personalizado</option>
             </select>
           </label>
-          <button type="button" onClick={() => setAtualizacao((n) => n + 1)}
+          <button type="button" onClick={atualizarDashboard}
             disabled={carregando} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
             <RefreshCw className={'h-4 w-4 ' + (carregando ? 'animate-spin' : '')} /> Atualizar
           </button>
