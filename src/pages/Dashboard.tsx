@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   AlertCircle, ArrowDownRight, ArrowUpRight, BarChart3, CalendarDays,
   CheckCircle2, ClipboardList, Download, FileText, Filter, Loader2,
-  RefreshCw, ShieldCheck, Users, UserRound, UserRoundCheck,
+  RefreshCw, ShieldCheck, Users, UserRound, UserRoundCheck, X,
 } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +10,14 @@ import { supabase } from '../lib/supabase';
 
 type StatusCadastro = 'incompleto' | 'adesoes_pendentes' | 'erro_envio' | 'enviado';
 type Periodo = '7' | '30' | '90' | 'mes' | 'personalizado';
+type IndicadorId =
+  | 'cadastros'
+  | 'enviados'
+  | 'titulares'
+  | 'dependentes'
+  | 'dependentes_incluidos'
+  | 'vidas'
+  | 'pendencias';
 
 interface DashboardCadastro {
   id: string;
@@ -59,6 +67,18 @@ interface PlanoConfigurado {
 
 interface PlanoRanking extends PlanoConfigurado {
   total: number;
+}
+
+interface IndicadorRegistro {
+  cadastro: DashboardCadastro;
+  quantidade: number;
+}
+
+interface IndicadorDetalhes {
+  titulo: string;
+  valor: number;
+  rotuloQuantidade: string;
+  registros: IndicadorRegistro[];
 }
 
 interface DashboardCacheEntry {
@@ -357,12 +377,18 @@ function Painel({ titulo, children, extra, className = '' }: {
   </section>;
 }
 
-function CardIndicador({ titulo, valor, anterior, icone: Icone, cor, detalhe, positivoQuandoCresce = true }: {
+function CardIndicador({ titulo, valor, anterior, icone: Icone, cor, detalhe, positivoQuandoCresce = true, onClick }: {
   titulo: string; valor: number; anterior: number;
   icone: typeof FileText; cor: string; detalhe?: string; positivoQuandoCresce?: boolean;
+  onClick: () => void;
 }) {
   const variacao = anterior === 0 ? null : (valor - anterior) / anterior;
-  return <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+  return <button
+    type="button"
+    onClick={onClick}
+    aria-label={'Ver registros de ' + titulo}
+    className="group min-w-0 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+  >
     <div className="flex items-start gap-3">
       <div className={'rounded-xl p-2.5 ' + cor}><Icone className="h-5 w-5" /></div>
       <div className="min-w-0">
@@ -381,6 +407,157 @@ function CardIndicador({ titulo, valor, anterior, icone: Icone, cor, detalhe, po
       </>}
     </p>
     {detalhe && <p className="mt-1 text-xs text-slate-500">{detalhe}</p>}
+    <p className="mt-2 text-xs font-semibold text-slate-400 transition group-hover:text-slate-600">
+      Ver registros
+    </p>
+  </button>;
+}
+
+function ModalIndicador({ detalhes, onClose }: {
+  detalhes: IndicadorDetalhes;
+  onClose: () => void;
+}) {
+  const [pagina, setPagina] = useState(1);
+  const porPagina = 50;
+  const ordenados = [...detalhes.registros].sort((a, b) =>
+    b.cadastro.created_at.localeCompare(a.cadastro.created_at)
+  );
+  const totalPaginas = Math.max(1, Math.ceil(ordenados.length / porPagina));
+  const paginaAtual = Math.min(pagina, totalPaginas);
+  const inicio = (paginaAtual - 1) * porPagina;
+  const exibidos = ordenados.slice(inicio, inicio + porPagina);
+
+  useEffect(() => {
+    setPagina(1);
+  }, [detalhes.titulo]);
+
+  useEffect(() => {
+    const fecharComEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', fecharComEsc);
+    return () => window.removeEventListener('keydown', fecharComEsc);
+  }, [onClose]);
+
+  return <div
+    className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 p-3 sm:p-6"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="dashboard-indicador-modal-titulo"
+    onMouseDown={(e) => {
+      if (e.target === e.currentTarget) onClose();
+    }}
+  >
+    <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+      <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-4 sm:p-5">
+        <div>
+          <h2 id="dashboard-indicador-modal-titulo" className="text-lg font-bold text-slate-900 sm:text-xl">
+            {detalhes.titulo}
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            {inteiro(detalhes.valor)} {detalhes.rotuloQuantidade} · {inteiro(detalhes.registros.length)} registros relacionados
+          </p>
+          <p className="mt-1 text-xs text-slate-500">
+            Lista respeitando o período e todos os filtros atualmente aplicados no Dashboard.
+          </p>
+        </div>
+        <button type="button" onClick={onClose}
+          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+          aria-label="Fechar detalhes do indicador">
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto">
+        {!detalhes.registros.length ? (
+          <div className="flex min-h-48 items-center justify-center p-8 text-sm text-slate-500">
+            Nenhum registro compõe este indicador com os filtros atuais.
+          </div>
+        ) : (
+          <table className="w-full min-w-[1050px] border-collapse text-left text-xs sm:text-sm">
+            <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
+              <tr>
+                <th className="px-4 py-3 font-semibold">Data</th>
+                <th className="px-4 py-3 font-semibold">Registro</th>
+                <th className="px-4 py-3 font-semibold">Empresa</th>
+                <th className="px-4 py-3 font-semibold">Vendedor</th>
+                <th className="px-4 py-3 font-semibold">Adesionista</th>
+                <th className="px-4 py-3 font-semibold">Canal</th>
+                <th className="px-4 py-3 font-semibold">Situação</th>
+                <th className="px-4 py-3 text-right font-semibold">{detalhes.rotuloQuantidade}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {exibidos.map(({ cadastro, quantidade }) => (
+                <tr key={cadastro.id} className="border-t border-slate-100 hover:bg-slate-50/70">
+                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                    {new Date(cadastro.created_at).toLocaleString('pt-BR', {
+                      day: '2-digit', month: '2-digit', year: 'numeric',
+                      hour: '2-digit', minute: '2-digit',
+                    })}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-slate-700">
+                      {cadastro.tipo_cadastro === 'cadastro' ? 'Cadastro' : 'Inclusão de dependente'}
+                    </div>
+                    <div className="mt-0.5 max-w-48 truncate font-mono text-[10px] text-slate-400" title={cadastro.id}>
+                      {cadastro.id}
+                    </div>
+                  </td>
+                  <td className="max-w-56 px-4 py-3 text-slate-600">
+                    <span className="block truncate" title={cadastro.empresa_nome || 'Não informada'}>
+                      {cadastro.empresa_nome || 'Não informada'}
+                    </span>
+                  </td>
+                  <td className="max-w-56 px-4 py-3 text-slate-600">
+                    <span className="block truncate" title={cadastro.vendedor_nome || 'Não atribuído'}>
+                      {cadastro.vendedor_nome || (cadastro.vendedor_codigo ? 'Código ' + cadastro.vendedor_codigo : 'Não atribuído')}
+                    </span>
+                  </td>
+                  <td className="max-w-56 px-4 py-3 text-slate-600">
+                    <span className="block truncate" title={cadastro.adesionista_nome || 'Não atribuído'}>
+                      {cadastro.adesionista_nome || 'Não atribuído'}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                    {canalKey(cadastro) === 'publico' ? 'Link / QR Code' : 'Interno'}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                    {ESTADOS.find((s) => s.key === cadastro.status)?.titulo || cadastro.status}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold tabular-nums text-slate-800">
+                    {inteiro(quantidade)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {detalhes.registros.length > porPagina && (
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 sm:px-5">
+          <p className="text-xs text-slate-500">
+            Exibindo {inteiro(inicio + 1)}–{inteiro(Math.min(inicio + porPagina, ordenados.length))} de {inteiro(ordenados.length)}
+          </p>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => setPagina((p) => Math.max(1, p - 1))}
+              disabled={paginaAtual <= 1}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+              Anterior
+            </button>
+            <span className="text-xs tabular-nums text-slate-500">
+              Página {paginaAtual} de {totalPaginas}
+            </span>
+            <button type="button" onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
+              disabled={paginaAtual >= totalPaginas}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+              Próxima
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   </div>;
 }
 
@@ -587,6 +764,7 @@ export function Dashboard() {
   const [erro, setErro] = useState<string | null>(null);
   const [atualizacao, setAtualizacao] = useState(0);
   const [atualizadoEm, setAtualizadoEm] = useState<Date | null>(null);
+  const [indicadorAberto, setIndicadorAberto] = useState<IndicadorId | null>(null);
 
   useEffect(() => {
     if (!profile?.id) {
@@ -838,6 +1016,63 @@ export function Dashboard() {
   const motivos = ESTADOS.filter((s) => s.key !== 'enviado')
     .map((s) => ({ ...s, total: atual.cadastros.filter((c) => c.status === s.key).length }));
 
+  const indicadorDetalhes: Record<IndicadorId, IndicadorDetalhes> = {
+    cadastros: {
+      titulo: 'Cadastros iniciados',
+      valor: atual.titulares,
+      rotuloQuantidade: 'Cadastros',
+      registros: atual.cadastros.map((cadastro) => ({ cadastro, quantidade: 1 })),
+    },
+    enviados: {
+      titulo: 'Enviados ao ERP',
+      valor: atual.enviados,
+      rotuloQuantidade: 'Cadastros',
+      registros: atual.cadastros
+        .filter((cadastro) => cadastro.status === 'enviado')
+        .map((cadastro) => ({ cadastro, quantidade: 1 })),
+    },
+    titulares: {
+      titulo: 'Titulares',
+      valor: atual.titulares,
+      rotuloQuantidade: 'Titulares',
+      registros: atual.cadastros.map((cadastro) => ({ cadastro, quantidade: 1 })),
+    },
+    dependentes: {
+      titulo: 'Dependentes',
+      valor: atual.dependentes,
+      rotuloQuantidade: 'Dependentes',
+      registros: atual.cadastros
+        .map((cadastro) => ({ cadastro, quantidade: Math.max(0, vidas(cadastro) - 1) }))
+        .filter((item) => item.quantidade > 0),
+    },
+    dependentes_incluidos: {
+      titulo: 'Dependentes incluídos',
+      valor: atual.dependentesIncluidos,
+      rotuloQuantidade: 'Dependentes',
+      registros: atual.inclusoes
+        .filter((cadastro) => cadastro.status === 'enviado')
+        .map((cadastro) => ({
+          cadastro,
+          quantidade: Array.isArray(cadastro.dependentes) ? cadastro.dependentes.length : 0,
+        }))
+        .filter((item) => item.quantidade > 0),
+    },
+    vidas: {
+      titulo: 'Total de vidas',
+      valor: atual.vidas,
+      rotuloQuantidade: 'Vidas',
+      registros: atual.cadastros.map((cadastro) => ({ cadastro, quantidade: vidas(cadastro) })),
+    },
+    pendencias: {
+      titulo: 'Pendências',
+      valor: atual.pendentes,
+      rotuloQuantidade: 'Pendências',
+      registros: atual.cadastros
+        .filter((cadastro) => cadastro.status !== 'enviado')
+        .map((cadastro) => ({ cadastro, quantidade: 1 })),
+    },
+  };
+
   const alterarFiltro = (nome: keyof Filtros, valor: string) =>
     setFiltros((estado) => ({ ...estado, [nome]: valor }));
 
@@ -934,19 +1169,24 @@ export function Dashboard() {
       </div> : erro ? null : <>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
           <CardIndicador titulo="Cadastros iniciados" valor={atual.titulares} anterior={anterior.titulares}
-            icone={FileText} cor="bg-blue-50 text-blue-600" />
+            icone={FileText} cor="bg-blue-50 text-blue-600" onClick={() => setIndicadorAberto('cadastros')} />
           <CardIndicador titulo="Enviados ao ERP" valor={atual.enviados} anterior={anterior.enviados}
-            icone={CheckCircle2} cor="bg-emerald-50 text-emerald-600" detalhe="Não significa aceitação confirmada pelo ERP." />
+            icone={CheckCircle2} cor="bg-emerald-50 text-emerald-600" detalhe="Não significa aceitação confirmada pelo ERP."
+            onClick={() => setIndicadorAberto('enviados')} />
           <CardIndicador titulo="Titulares" valor={atual.titulares} anterior={anterior.titulares}
-            icone={UserRound} cor="bg-blue-50 text-blue-600" />
+            icone={UserRound} cor="bg-blue-50 text-blue-600" onClick={() => setIndicadorAberto('titulares')} />
           <CardIndicador titulo="Dependentes" valor={atual.dependentes} anterior={anterior.dependentes}
-            icone={Users} cor="bg-violet-50 text-violet-600" detalhe="Dependentes dos novos cadastros; não inclui inclusões posteriores." />
+            icone={Users} cor="bg-violet-50 text-violet-600" detalhe="Dependentes dos novos cadastros; não inclui inclusões posteriores."
+            onClick={() => setIndicadorAberto('dependentes')} />
           <CardIndicador titulo="Dependentes incluídos" valor={atual.dependentesIncluidos} anterior={anterior.dependentesIncluidos}
-            icone={Users} cor="bg-violet-50 text-violet-600" detalhe="Somente inclusões enviadas registradas no Adesart; não somar aos titulares." />
+            icone={Users} cor="bg-violet-50 text-violet-600" detalhe="Somente inclusões enviadas registradas no Adesart; não somar aos titulares."
+            onClick={() => setIndicadorAberto('dependentes_incluidos')} />
           <CardIndicador titulo="Total de vidas" valor={atual.vidas} anterior={anterior.vidas}
-            icone={UserRoundCheck} cor="bg-emerald-50 text-emerald-600" detalhe="Titulares + dependentes dos cadastros." />
+            icone={UserRoundCheck} cor="bg-emerald-50 text-emerald-600" detalhe="Titulares + dependentes dos cadastros."
+            onClick={() => setIndicadorAberto('vidas')} />
           <CardIndicador titulo="Pendências" valor={atual.pendentes} anterior={anterior.pendentes}
-            icone={AlertCircle} cor="bg-amber-50 text-amber-600" positivoQuandoCresce={false} />
+            icone={AlertCircle} cor="bg-amber-50 text-amber-600" positivoQuandoCresce={false}
+            onClick={() => setIndicadorAberto('pendencias')} />
         </div>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">
           <Painel titulo="Evolução de cadastros no período">
@@ -1027,6 +1267,13 @@ export function Dashboard() {
           {atualizadoEm && ' Atualizado às ' + atualizadoEm.toLocaleTimeString('pt-BR') + '.'}
         </p>
       </>}
+
+      {indicadorAberto && (
+        <ModalIndicador
+          detalhes={indicadorDetalhes[indicadorAberto]}
+          onClose={() => setIndicadorAberto(null)}
+        />
+      )}
     </main>
   </Layout>;
 }
