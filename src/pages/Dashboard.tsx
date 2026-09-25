@@ -1049,8 +1049,11 @@ export function Dashboard() {
       titulo: 'Dependentes incluídos',
       valor: atual.dependentesIncluidos,
       rotuloQuantidade: 'Dependentes',
-      registros: atual.inclusoes
-        .filter((cadastro) => cadastro.status === 'enviado')
+      registros: atuais
+        .filter((cadastro) =>
+          cadastro.tipo_cadastro === 'inclusao_dependente' &&
+          cadastro.status === 'enviado'
+        )
         .map((cadastro) => ({
           cadastro,
           quantidade: Array.isArray(cadastro.dependentes) ? cadastro.dependentes.length : 0,
