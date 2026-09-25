@@ -677,14 +677,14 @@ export function Dashboard() {
           }
           dados = resultadoRapido.data as DashboardCadastro[];
         } else {
-          const funcaoAusente =
-            resultadoRapido.error.code === 'PGRST202' ||
-            resultadoRapido.error.code === '42883' ||
-            resultadoRapido.error.message?.includes('get_dashboard_cadastros_fast_v1');
+          // A RPC e uma otimizacao, nao um ponto unico de falha.
+          // Qualquer erro (inclusive timeout/HTTP 500) cai para a leitura paginada
+          // anterior, preservando a disponibilidade do Dashboard.
+          console.warn(
+            '[Dashboard] Consulta otimizada indisponivel; usando fallback paginado.',
+            resultadoRapido.error
+          );
 
-          if (!funcaoAusente) throw resultadoRapido.error;
-
-          // Compatibilidade temporária enquanto a migration ainda não foi aplicada.
           dados = [];
           const pagina = 1000;
           for (let deslocamento = 0; deslocamento < 50000; deslocamento += pagina) {
