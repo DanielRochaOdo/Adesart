@@ -31,6 +31,8 @@
 CREATE TABLE IF NOT EXISTS public.cadastro_vendedor_legacy_resolution (
   cadastro_id uuid PRIMARY KEY
     REFERENCES public.cadastros(id) ON DELETE CASCADE,
+  created_by uuid,
+  team_id uuid,
   vendedor_id uuid
     REFERENCES public.profiles(id) ON DELETE SET NULL,
   vendedor_codigo text NOT NULL,
@@ -58,10 +60,16 @@ CREATE POLICY "Authenticated view visible legacy vendedor resolution"
   FOR SELECT
   TO authenticated
   USING (
-    EXISTS (
-      SELECT 1
-      FROM public.cadastros AS c
-      WHERE c.id = cadastro_vendedor_legacy_resolution.cadastro_id
+    (auth.jwt() -> 'app_metadata' ->> 'role') IN (
+      'ADMINISTRADOR', 'GERENTE', 'CADASTRO', 'ADESIONISTA'
+    )
+    OR (
+      (auth.jwt() -> 'app_metadata' ->> 'role') = 'SUPERVISOR'
+      AND team_id::text = (auth.jwt() -> 'app_metadata' ->> 'team_id')
+    )
+    OR (
+      (auth.jwt() -> 'app_metadata' ->> 'role') = 'VENDEDOR'
+      AND (created_by = auth.uid() OR vendedor_id = auth.uid())
     )
   );
 
@@ -83,7 +91,8 @@ elegiveis AS (
   SELECT
     c.id AS cadastro_id,
     c.created_at AS cadastro_created_at,
-    c.created_by
+    c.created_by,
+    c.team_id
   FROM public.cadastros AS c
   LEFT JOIN public.profiles AS criador
     ON criador.id = c.created_by
@@ -122,6 +131,8 @@ matches_brutos AS (
   SELECT
     e.cadastro_id,
     e.cadastro_created_at,
+    e.created_by,
+    e.team_id,
     l.api_log_id,
     l.log_created_at,
     l.vendedor_codigo,
@@ -152,6 +163,8 @@ stats_log AS (
 seguros AS (
   SELECT
     m.cadastro_id,
+    m.created_by,
+    m.team_id,
     vu.vendedor_id,
     m.vendedor_codigo,
     vu.vendedor_nome,
@@ -170,6 +183,8 @@ seguros AS (
 )
 INSERT INTO public.cadastro_vendedor_legacy_resolution (
   cadastro_id,
+  created_by,
+  team_id,
   vendedor_id,
   vendedor_codigo,
   vendedor_nome,
@@ -178,6 +193,8 @@ INSERT INTO public.cadastro_vendedor_legacy_resolution (
 )
 SELECT
   s.cadastro_id,
+  s.created_by,
+  s.team_id,
   s.vendedor_id,
   s.vendedor_codigo,
   s.vendedor_nome,
@@ -185,6 +202,31 @@ SELECT
   s.diferenca_milisegundos
 FROM seguros AS s
 ON CONFLICT (cadastro_id) DO NOTHING;
+
+/*
+  O vendedor precisa conseguir enxergar no proprio Dashboard uma inclusao
+  legada que foi criada por ADMIN/CADASTRO, mas cujo vendedor foi comprovado
+  pelo mapa acima. Mantemos todas as demais regras da policy atual.
+*/
+DROP POLICY IF EXISTS "Vendedor view own cadastros" ON public.cadastros;
+
+CREATE POLICY "Vendedor view own cadastros"
+  ON public.cadastros
+  FOR SELECT
+  TO authenticated
+  USING (
+    (auth.jwt() -> 'app_metadata' ->> 'role') = 'VENDEDOR'
+    AND (
+      created_by = auth.uid()
+      OR vendedor_id = auth.uid()
+      OR EXISTS (
+        SELECT 1
+        FROM public.cadastro_vendedor_legacy_resolution AS legacy
+        WHERE legacy.cadastro_id = cadastros.id
+          AND legacy.vendedor_id = auth.uid()
+      )
+    )
+  );
 
 /*
   Mantem a RPC rapida: o trabalho de correlacionar api_logs acontece apenas
@@ -215,6 +257,8 @@ AS $function$
     SELECT c.*
     FROM public.cadastros AS c
     CROSS JOIN perfil_atual AS p
+    LEFT JOIN public.cadastro_vendedor_legacy_resolution AS legacy_visibilidade
+      ON legacy_visibilidade.cadastro_id = c.id
     WHERE c.created_at >= p_inicio
       AND c.created_at < p_fim
       AND (
@@ -226,7 +270,11 @@ AS $function$
         )
         OR (
           p.role = 'VENDEDOR'
-          AND (c.created_by = p.id OR c.vendedor_id = p.id)
+          AND (
+            c.created_by = p.id
+            OR c.vendedor_id = p.id
+            OR legacy_visibilidade.vendedor_id = p.id
+          )
         )
         OR (
           p.role = 'ADESIONISTA'
