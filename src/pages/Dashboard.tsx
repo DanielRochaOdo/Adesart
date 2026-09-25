@@ -694,9 +694,8 @@ export function Dashboard() {
               .order('id', { ascending: true })
               .range(deslocamento, deslocamento + pagina - 1);
             if (profile.role === 'SUPERVISOR') consulta = consulta.eq('team_id', profile.team_id);
-            if (profile.role === 'VENDEDOR') {
-              consulta = consulta.or('created_by.eq.' + profile.id + ',vendedor_id.eq.' + profile.id);
-            }
+            // Para VENDEDOR, a RLS do banco define a visibilidade, inclusive
+            // recuperacoes historicas comprovadas no mapa legado.
             if (profile.role === 'ADESIONISTA') {
               const codigo = profile.external_id;
               consulta = codigo && /^[a-zA-Z0-9_-]+$/.test(codigo)
@@ -711,6 +710,32 @@ export function Dashboard() {
             if (deslocamento + pagina >= 50000) {
               throw new Error('O intervalo contém mais de 50 mil registros. Reduza o período para obter totais completos.');
             }
+          }
+
+          // Se a RPC otimizada estiver indisponivel, manter a mesma atribuicao
+          // historica do vendedor no fallback paginado. A tabela pode ainda nao
+          // existir durante uma publicacao fora de ordem; nesse caso, ignoramos
+          // somente o enriquecimento legado e preservamos a disponibilidade.
+          const { data: legacyRows, error: legacyError } = await supabase
+            .from('cadastro_vendedor_legacy_resolution')
+            .select('cadastro_id,vendedor_id,vendedor_codigo,vendedor_nome');
+
+          if (!legacyError && Array.isArray(legacyRows) && legacyRows.length > 0) {
+            const legadoPorCadastro = new Map(
+              legacyRows.map((row: any) => [String(row.cadastro_id), row])
+            );
+
+            dados = dados.map((cadastro) => {
+              const legado = legadoPorCadastro.get(String(cadastro.id));
+              if (!legado) return cadastro;
+
+              return {
+                ...cadastro,
+                vendedor_id: cadastro.vendedor_id || legado.vendedor_id || null,
+                vendedor_codigo: cadastro.vendedor_codigo || legado.vendedor_codigo || null,
+                vendedor_nome: cadastro.vendedor_nome || legado.vendedor_nome || null,
+              };
+            });
           }
         }
 
