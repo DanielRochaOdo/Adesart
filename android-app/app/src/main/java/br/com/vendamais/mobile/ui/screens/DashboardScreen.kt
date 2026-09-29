@@ -402,12 +402,22 @@ fun DashboardScreen(
             }
         }
 
-        if (state.dashboardCadastrosLoading && !state.dashboardCadastrosLoaded) {
+        if (state.dashboardLoading) {
             item {
                 VendaLoadingState(
                     title = "Carregando indicadores",
-                    message = "Buscando os registros necessarios para o Dashboard.",
+                    message = "Consultando a mesma fonte canônica utilizada pelo Web.",
                 )
+            }
+        } else if (state.dashboardError != null) {
+            item {
+                WebCard(title = "Não foi possível carregar os dados") {
+                    Text(
+                        text = state.dashboardError,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         } else if (range != null && currentRecords.isEmpty()) {
             item {
