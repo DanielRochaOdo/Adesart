@@ -13,10 +13,10 @@ class CadastroApiErrorMapperTest {
     }
 
     @Test
-    fun `mapErpError should map dependente ativo message`() {
+    fun `mapErpError should not infer dependente ativo from textual message`() {
         val error = CadastroApiErrorMapper.mapErpError("Dependente(s) ja cadastrado(s) e ativo no contrato.")
 
-        assertThat(error).isInstanceOf(CadastroErpError.DependenteAtivo::class.java)
+        assertThat(error).isNull()
     }
 
     @Test
