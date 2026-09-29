@@ -100,6 +100,45 @@ data class CadastroStats(
 )
 
 @Serializable
+data class DashboardCadastro(
+    val id: String,
+    val status: String,
+    @SerialName("tipo_cadastro")
+    val tipoCadastro: String = "cadastro",
+    @SerialName("created_by")
+    val createdBy: String? = null,
+    @SerialName("team_id")
+    val teamId: String? = null,
+    @SerialName("vendedor_id")
+    val vendedorId: String? = null,
+    @SerialName("vendedor_codigo")
+    val vendedorCodigo: String? = null,
+    @SerialName("vendedor_nome")
+    val vendedorNome: String? = null,
+    @SerialName("adesionista_id")
+    val adesionistaId: String? = null,
+    @SerialName("adesionista_codigo")
+    val adesionistaCodigo: String? = null,
+    @SerialName("adesionista_nome")
+    val adesionistaNome: String? = null,
+    @SerialName("empresa_codigo")
+    val empresaCodigo: Int? = null,
+    @SerialName("empresa_nome")
+    val empresaNome: String? = null,
+    @SerialName("plano_codigo")
+    val planoCodigo: Int? = null,
+    @SerialName("plano_nome")
+    val planoNome: String? = null,
+    val dependentes: JsonElement? = null,
+    @SerialName("fluxo_publico")
+    val fluxoPublico: Boolean? = null,
+    @SerialName("origem_link_id")
+    val origemLinkId: String? = null,
+    @SerialName("created_at")
+    val createdAt: String,
+)
+
+@Serializable
 data class CadastroResumo(
     val id: String,
     val status: String,
