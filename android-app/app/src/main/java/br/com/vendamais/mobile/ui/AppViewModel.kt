@@ -2651,11 +2651,17 @@ class AppViewModel(
             runCatching {
                 val activeSession = ensureFreshSession(session)
                 repository.reprocessUploadQueueItem(activeSession, id)
-                repository.fetchErpUploadQueue(activeSession)
-            }.onSuccess { items ->
+                repository.fetchErpUploadQueue(
+                    activeSession,
+                    status = _uiState.value.uploadQueueFilter.takeIf { it != "todos" },
+                    page = _uiState.value.uploadQueuePage,
+                    pageSize = _uiState.value.uploadQueuePageSize,
+                )
+            }.onSuccess { result ->
                 _uiState.update {
                     it.copy(
-                        uploadQueue = items,
+                        uploadQueue = result.items,
+                        uploadQueueTotal = result.total,
                         adminFeatureLoading = false,
                         noticeMessage = "Item marcado para reprocessamento.",
                     )
