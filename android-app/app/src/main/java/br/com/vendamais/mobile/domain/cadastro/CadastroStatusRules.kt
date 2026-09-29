@@ -4,6 +4,7 @@ import java.util.Locale
 
 private val pendingCadastroStatuses = setOf(
     "incompleto",
+    "adesoes_pendentes",
 )
 
 fun isPendingCadastroStatus(status: String?): Boolean {
