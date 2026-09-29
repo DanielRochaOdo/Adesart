@@ -156,7 +156,7 @@ fun LoginScreen(
 
                     state.errorMessage?.let { message ->
                         VendaInlineFeedback(
-                            title = "Nao foi possivel entrar",
+                            title = "Não foi possível entrar",
                             message = message,
                             tone = VendaFeedbackTone.ERROR,
                         )

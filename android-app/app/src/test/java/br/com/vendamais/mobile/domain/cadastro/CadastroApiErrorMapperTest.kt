@@ -67,7 +67,19 @@ class CadastroApiErrorMapperTest {
         )
 
         assertThat(mapped).isEqualTo(
-            "O ERP retornou uma falha tecnica ao finalizar o cadastro. Verifique se o cadastro ja foi criado no ERP antes de reenviar.",
+            "Nao foi possivel concluir esta operacao no momento. Verifique se o cadastro ja foi atualizado antes de tentar novamente. Se o problema continuar, entre em contato com o suporte.",
+        )
+    }
+
+    @Test
+    fun `mapUserMessage should hide erp insert select mismatch failure`() {
+        val mapped = CadastroApiErrorMapper.mapUserMessage(
+            "The select list for the INSERT statement contains more items than the insert list. The number of SELECT values must match the number of INSERT columns.",
+            "Falha ao incluir dependentes.",
+        )
+
+        assertThat(mapped).isEqualTo(
+            "Nao foi possivel concluir esta operacao no momento. Verifique se o cadastro ja foi atualizado antes de tentar novamente. Se o problema continuar, entre em contato com o suporte.",
         )
     }
 
@@ -79,7 +91,7 @@ class CadastroApiErrorMapperTest {
         )
 
         assertThat(mapped).isEqualTo(
-            "O ERP retornou uma falha tecnica ao finalizar o cadastro. Verifique se o cadastro ja foi criado no ERP antes de reenviar.",
+            "Nao foi possivel concluir esta operacao no momento. Verifique se o cadastro ja foi atualizado antes de tentar novamente. Se o problema continuar, entre em contato com o suporte.",
         )
     }
 }

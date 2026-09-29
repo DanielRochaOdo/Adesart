@@ -22,7 +22,7 @@ export function Login() {
       await signIn(email, password);
       navigate('/dashboard');
     } catch (err) {
-      setError('Email ou senha inválidos');
+      setError('Usuário ou senha inválidos. Por favor, tente novamente.');
       console.error('Login error:', err);
     } finally {
       setLoading(false);

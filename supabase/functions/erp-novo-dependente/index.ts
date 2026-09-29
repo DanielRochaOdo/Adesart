@@ -1,6 +1,16 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, createServiceClient, jsonResponse, requireInternalUser } from "../_shared/public-flow.ts";
 
+const ERP_DEPENDENTE_FALHA_INTERNA =
+  "Não foi possível concluir a inclusão do dependente. Verifique se ele já aparece no cadastro antes de tentar novamente. Se o problema continuar, entre em contato com o suporte.";
+
+const isTechnicalErpFailure = (message: string) => {
+  const normalized = message.toLowerCase().replace(/\s+/g, " ").trim();
+  return normalized.includes("the select list for the insert statement contains more items than the insert list") ||
+    normalized.includes("the number of select values must match the number of insert columns") ||
+    normalized.includes("incorrect syntax near");
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Metodo nao permitido" }, 405);
@@ -27,9 +37,15 @@ Deno.serve(async (req: Request) => {
     });
     const result = await response.json().catch(() => ({}));
     const ok = response.ok && Boolean(result?.dados);
+    const technicalMessage = String(
+      result?.message || result?.mensagem || "Erro ao incluir dependente no ERP",
+    );
+    const userMessage = isTechnicalErpFailure(technicalMessage)
+      ? ERP_DEPENDENTE_FALHA_INTERNA
+      : technicalMessage;
     const responseBody = ok
       ? { success: true, data: result }
-      : { error: String(result?.message || result?.mensagem || "Erro ao incluir dependente no ERP") };
+      : { error: userMessage };
 
     await supabase.from("api_logs").insert({
       user_id: auth.user.id,
@@ -37,10 +53,15 @@ Deno.serve(async (req: Request) => {
       endpoint: "erp-novo-dependente",
       method: "POST",
       request_body: { sanitized: true },
-      response_body: ok ? { success: true } : responseBody,
+      response_body: ok
+        ? { success: true }
+        : {
+            error: userMessage,
+            technical_error: technicalMessage,
+          },
       status_code: ok ? 200 : response.status,
       success: ok,
-      error_message: ok ? null : responseBody.error,
+      error_message: ok ? null : technicalMessage,
       duration_ms: Date.now() - startedAt,
     }).catch(() => undefined);
 
