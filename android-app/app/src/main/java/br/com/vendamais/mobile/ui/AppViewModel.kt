@@ -24,6 +24,7 @@ import br.com.vendamais.mobile.data.models.CadastroLinkItem
 import br.com.vendamais.mobile.data.models.CadastroLinkMetrics
 import br.com.vendamais.mobile.data.models.CadastroResumo
 import br.com.vendamais.mobile.data.models.CadastroStats
+import br.com.vendamais.mobile.data.models.DashboardCadastro
 import br.com.vendamais.mobile.data.models.CpfConsultInput
 import br.com.vendamais.mobile.data.models.ErpUploadQueueItem
 import br.com.vendamais.mobile.data.models.EmpresaResumo
@@ -183,6 +184,10 @@ data class AppUiState(
     val cadastros: List<CadastroResumo> = emptyList(),
     val cadastrosLoading: Boolean = false,
     val cadastrosLoaded: Boolean = false,
+    val dashboardCadastros: List<DashboardCadastro> = emptyList(),
+    val dashboardLoading: Boolean = false,
+    val dashboardError: String? = null,
+    val dashboardRangeKey: String? = null,
     val cadastroSupportLoading: Boolean = false,
     val cadastroSupportLoaded: Boolean = false,
     val selectedCadastro: CadastroDetalhe? = null,
@@ -475,7 +480,7 @@ class AppViewModel(
     fun login() {
         val current = _uiState.value
         if (current.configurationMissing) {
-            _uiState.update { it.copy(errorMessage = "Configure o Supabase em android-app/local.properties.") }
+            _uiState.update { it.copy(errorMessage = "O aplicativo ainda não está configurado para acesso. Entre em contato com o suporte.") }
             return
         }
         if (current.email.isBlank() || current.password.isBlank()) {
@@ -504,7 +509,7 @@ class AppViewModel(
                     _uiState.update {
                         it.copy(
                             loading = false,
-                            errorMessage = throwable.message ?: "Erro inesperado ao autenticar.",
+                            errorMessage = friendlyLoginMessage(throwable.message),
                         )
                     }
                 }
@@ -522,8 +527,12 @@ class AppViewModel(
         _uiState.update { it.copy(activeTab = tab, errorMessage = null, noticeMessage = null) }
         when (tab) {
             MainTab.DASHBOARD -> {
-                ensureCadastroResourcesLoaded(force = true)
-                if (_uiState.value.profile?.role in setOf("ADMINISTRADOR", "ADMIN", "GERENTE", "GESTOR", "SUPERVISOR")) {
+                val session = currentSession
+                val profile = _uiState.value.profile
+                if (session != null && profile != null) {
+                    prefetchCadastroSupport(session, profile)
+                }
+                if (profile?.role in setOf("ADMINISTRADOR", "ADMIN", "GERENTE", "GESTOR", "SUPERVISOR")) {
                     ensureAdminResourcesLoaded()
                 }
             }
@@ -566,6 +575,53 @@ class AppViewModel(
             viewModelScope.launch { refreshAll(session) }
         }
         checkForAppUpdate(force = true)
+    }
+
+    fun loadDashboardRange(
+        startIso: String,
+        endIso: String,
+        force: Boolean = false,
+    ) {
+        val session = currentSession ?: return
+        val rangeKey = "$startIso|$endIso"
+        val current = _uiState.value
+        if (!force && current.dashboardRangeKey == rangeKey && !current.dashboardLoading) return
+
+        _uiState.update {
+            it.copy(
+                dashboardLoading = true,
+                dashboardError = null,
+                dashboardRangeKey = rangeKey,
+            )
+        }
+
+        viewModelScope.launch {
+            runCatching {
+                val activeSession = ensureFreshSession(session)
+                withContext(Dispatchers.IO) {
+                    repository.fetchDashboardCadastros(activeSession, startIso, endIso)
+                }
+            }.onSuccess { registros ->
+                _uiState.update { state ->
+                    if (state.dashboardRangeKey != rangeKey) state
+                    else state.copy(
+                        dashboardCadastros = registros,
+                        dashboardLoading = false,
+                        dashboardError = null,
+                    )
+                }
+            }.onFailure { throwable ->
+                Log.e(logTag, "Falha ao carregar Dashboard canônico", throwable)
+                _uiState.update { state ->
+                    if (state.dashboardRangeKey != rangeKey) state
+                    else state.copy(
+                        dashboardCadastros = emptyList(),
+                        dashboardLoading = false,
+                        dashboardError = "Não foi possível carregar os indicadores. Tente atualizar novamente.",
+                    )
+                }
+            }
+        }
     }
 
     fun checkForAppUpdate(force: Boolean = false) {
@@ -3090,6 +3146,10 @@ class AppViewModel(
                 cadastros = emptyList(),
                 cadastrosLoading = false,
                 cadastrosLoaded = false,
+                dashboardCadastros = emptyList(),
+                dashboardLoading = false,
+                dashboardError = null,
+                dashboardRangeKey = null,
                 cadastroSupportLoading = false,
                 cadastroSupportLoaded = false,
                 vendedores = emptyList(),
@@ -3127,7 +3187,7 @@ class AppViewModel(
                 applyCriticalSessionData(critical, null)
                 registerCurrentAppVersionBestEffort(session)
                 prefetchCadastroSupport(session, critical.profile)
-                if (_uiState.value.activeTab in setOf(MainTab.DASHBOARD, MainTab.CADASTROS)) {
+                if (_uiState.value.activeTab == MainTab.CADASTROS) {
                     ensureCadastroResourcesLoaded()
                 }
                 if (
@@ -3219,7 +3279,7 @@ class AppViewModel(
                     )
                 }
                 prefetchCadastroSupport(session, critical.profile, force = true)
-                if (_uiState.value.activeTab in setOf(MainTab.DASHBOARD, MainTab.CADASTROS) || _uiState.value.cadastrosLoaded) {
+                if (_uiState.value.activeTab == MainTab.CADASTROS || _uiState.value.cadastrosLoaded) {
                     ensureCadastroResourcesLoaded(force = true)
                 }
                 if (
@@ -3736,6 +3796,25 @@ class AppViewModel(
             }
         }
     }
+    private fun friendlyLoginMessage(message: String?): String {
+        val normalized = message.orEmpty().lowercase(Locale.ROOT)
+        return when {
+            normalized.contains("invalid login credentials") ||
+                normalized.contains("invalid credentials") ||
+                normalized.contains("invalid_credentials") ||
+                normalized.contains("falha ao autenticar no supabase") ||
+                normalized.contains("usuário ou senha inválidos") ||
+                normalized.contains("usuario ou senha invalidos") ->
+                "Usuário ou senha inválidos. Por favor, tente novamente."
+            normalized.contains("conex") ||
+                normalized.contains("network") ||
+                normalized.contains("timeout") ->
+                "Não foi possível entrar no momento. Verifique sua conexão e tente novamente."
+            else ->
+                "Não foi possível entrar no momento. Por favor, tente novamente."
+        }
+    }
+
 }
 
 private data class CriticalSessionData(
