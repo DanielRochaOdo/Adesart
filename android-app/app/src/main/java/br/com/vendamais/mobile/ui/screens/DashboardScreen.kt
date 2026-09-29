@@ -1,49 +1,58 @@
 package br.com.vendamais.mobile.ui.screens
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Assessment
+import androidx.compose.material.icons.rounded.AlertCircle
+import androidx.compose.material.icons.rounded.Business
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Description
+import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.Groups
-import androidx.compose.material.icons.rounded.HourglassEmpty
-import androidx.compose.material.icons.rounded.Shield
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PersonAdd
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.TrendingUp
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import br.com.vendamais.mobile.data.models.VendedorStats
+import br.com.vendamais.mobile.data.models.CadastroResumo
+import br.com.vendamais.mobile.data.models.PlanoMap
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.DashboardMetricType
 import br.com.vendamais.mobile.ui.components.ScreenHeading
+import br.com.vendamais.mobile.ui.components.VendaButton
+import br.com.vendamais.mobile.ui.components.VendaButtonStyle
+import br.com.vendamais.mobile.ui.components.VendaEmptyState
+import br.com.vendamais.mobile.ui.components.VendaLoadingState
 import br.com.vendamais.mobile.ui.components.WebCard
-import br.com.vendamais.mobile.ui.components.VendaStatusChip
-import br.com.vendamais.mobile.ui.components.VendaStatusTone
 import br.com.vendamais.mobile.ui.theme.Amber100
 import br.com.vendamais.mobile.ui.theme.Amber500
 import br.com.vendamais.mobile.ui.theme.Blue100
@@ -51,19 +60,181 @@ import br.com.vendamais.mobile.ui.theme.Blue500
 import br.com.vendamais.mobile.ui.theme.Emerald
 import br.com.vendamais.mobile.ui.theme.EmeraldDark
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
+import br.com.vendamais.mobile.ui.theme.Red100
+import br.com.vendamais.mobile.ui.theme.Red500
+import br.com.vendamais.mobile.ui.theme.Slate100
+import br.com.vendamais.mobile.ui.theme.Slate500
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import java.time.LocalDate
+import java.time.OffsetDateTime
+import java.time.temporal.ChronoUnit
+import java.util.Locale
+import kotlin.math.max
+
+private enum class DashboardPeriod(val label: String) {
+    DAYS_7("Ultimos 7 dias"),
+    DAYS_30("Ultimos 30 dias"),
+    DAYS_90("Ultimos 90 dias"),
+    MONTH("Mes atual"),
+    CUSTOM("Personalizado"),
+}
+
+private data class DashboardRange(
+    val start: LocalDate,
+    val endExclusive: LocalDate,
+    val previousStart: LocalDate,
+)
+
+private data class DashboardNumbers(
+    val titulares: Int = 0,
+    val dependentes: Int = 0,
+    val enviados: Int = 0,
+    val pendentes: Int = 0,
+    val dependentesIncluidos: Int = 0,
+    val vidas: Int = 0,
+)
+
+private data class DashboardGroup(
+    val key: String,
+    val name: String,
+    val total: Int,
+    val enviados: Int,
+    val pendentes: Int,
+)
+
+private data class DashboardIndicator(
+    val label: String,
+    val current: Int,
+    val previous: Int,
+    val icon: ImageVector,
+    val container: Color,
+    val content: Color,
+    val detail: String? = null,
+)
 
 @Composable
 fun DashboardScreen(
     state: AppUiState,
     onOpenDrilldown: (String, DashboardMetricType) -> Unit,
     onCloseDrilldown: () -> Unit,
+    onRefresh: () -> Unit = {},
 ) {
-    val profile = state.profile ?: return
-    val canViewSystemOverview = profile.role in setOf("ADMINISTRADOR", "ADMIN", "GERENTE")
-    val canOpenDrilldown = profile.role in setOf("ADMINISTRADOR", "ADMIN", "GERENTE", "SUPERVISOR")
-    val totalMes = state.cadastroStats.cadastro_total + state.cadastroStats.inclusao_total
-    val pendentesMes = state.cadastroStats.cadastro_incompletos + state.cadastroStats.inclusao_incompletos
-    val enviadosMes = state.cadastroStats.cadastro_enviados + state.cadastroStats.inclusao_enviados
+    val context = LocalContext.current
+    var period by rememberSaveable { mutableStateOf(DashboardPeriod.MONTH) }
+    var customStart by rememberSaveable {
+        mutableStateOf(LocalDate.now().withDayOfMonth(1).toString())
+    }
+    var customEnd by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
+    var teamFilter by rememberSaveable { mutableStateOf("todos") }
+    var companyFilter by rememberSaveable { mutableStateOf("todos") }
+    var sellerFilter by rememberSaveable { mutableStateOf("todos") }
+    var adesionistaFilter by rememberSaveable { mutableStateOf("todos") }
+    var channelFilter by rememberSaveable { mutableStateOf("todos") }
+    var statusFilter by rememberSaveable { mutableStateOf("todos") }
+    var search by rememberSaveable { mutableStateOf("") }
+    var exportMessage by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val range = dashboardRange(period, customStart, customEnd)
+    val currentUnfiltered = if (range == null) {
+        emptyList()
+    } else {
+        state.cadastros.filter { it.dashboardDate() in range.start..<range.endExclusive }
+    }
+
+    val teamNames = state.adminTeams.associate { it.id to it.name }
+    val teamOptions = currentUnfiltered
+        .mapNotNull { cadastro ->
+            cadastro.teamId?.takeIf { it.isNotBlank() }?.let { id ->
+                id to (teamNames[id] ?: "Equipe")
+            }
+        }
+        .distinctBy { it.first }
+        .sortedBy { it.second.lowercase(Locale.ROOT) }
+    val companyOptions = currentUnfiltered
+        .map { dashboardCompanyKey(it) to (it.empresaNome ?: "Nao informada") }
+        .distinctBy { it.first }
+        .sortedBy { it.second.lowercase(Locale.ROOT) }
+    val sellerOptions = currentUnfiltered
+        .map { dashboardSellerKey(it) to (it.vendedorNome ?: "Sem vendedor") }
+        .distinctBy { it.first }
+        .sortedBy { it.second.lowercase(Locale.ROOT) }
+    val adesionistaOptions = currentUnfiltered
+        .mapNotNull {
+            val key = dashboardAdesionistaKey(it)
+            if (key == "sem-adesionista") null else key to (it.adesionistaNome ?: "Sem adesionista")
+        }
+        .distinctBy { it.first }
+        .sortedBy { it.second.lowercase(Locale.ROOT) }
+
+    val filteredWindow = if (range == null) {
+        emptyList()
+    } else {
+        state.cadastros.filter { cadastro ->
+            val date = cadastro.dashboardDate()
+            date >= range.previousStart &&
+                date < range.endExclusive &&
+                dashboardMatchesFilters(
+                    cadastro = cadastro,
+                    team = teamFilter,
+                    company = companyFilter,
+                    seller = sellerFilter,
+                    adesionista = adesionistaFilter,
+                    channel = channelFilter,
+                    status = statusFilter,
+                    search = search,
+                    planos = state.planosMap,
+                )
+        }
+    }
+    val currentRecords = if (range == null) emptyList() else filteredWindow.filter {
+        val date = it.dashboardDate()
+        date >= range.start && date < range.endExclusive
+    }
+    val previousRecords = if (range == null) emptyList() else filteredWindow.filter {
+        val date = it.dashboardDate()
+        date >= range.previousStart && date < range.start
+    }
+
+    val current = calculateDashboard(currentRecords)
+    val previous = calculateDashboard(previousRecords)
+    val currentCadastros = currentRecords.filter { it.tipoCadastro == "cadastro" }
+    val sellerGroups = dashboardGroups(currentCadastros, ::dashboardSellerKey) {
+        it.vendedorNome ?: it.vendedorCodigo?.let { code -> "Codigo $code" } ?: "Sem vendedor"
+    }
+    val adesionistaGroups = dashboardGroups(currentCadastros, ::dashboardAdesionistaKey) {
+        it.adesionistaNome ?: "Sem adesionista"
+    }.filter { it.key != "sem-adesionista" }
+    val companyGroups = dashboardGroups(currentCadastros, ::dashboardCompanyKey) {
+        it.empresaNome ?: "Nao informada"
+    }
+    val planRanking = dashboardPlanRanking(currentRecords, state.planosMap)
+    val statusCounts = listOf(
+        "Enviado ao ERP" to currentCadastros.count { it.status == "enviado" },
+        "Incompleto" to currentCadastros.count { it.status == "incompleto" },
+        "Adesoes pendentes" to currentCadastros.count { it.status == "adesoes_pendentes" },
+        "Erro de envio" to currentCadastros.count { it.status == "erro_envio" },
+    )
+    val evolution = currentCadastros
+        .groupBy { it.dashboardDate() }
+        .toSortedMap()
+        .map { (date, items) -> date.toString() to items.size }
+    val internalCount = currentCadastros.count { dashboardChannelKey(it) == "interno" }
+    val publicCount = currentCadastros.count { dashboardChannelKey(it) == "publico" }
+
+    val indicators = listOf(
+        DashboardIndicator("Cadastros iniciados", current.titulares, previous.titulares, Icons.Rounded.Description, Blue100, Blue500),
+        DashboardIndicator("Enviados ao ERP", current.enviados, previous.enviados, Icons.Rounded.CheckCircle, EmeraldSoft, EmeraldDark, "Envio registrado no Adesart."),
+        DashboardIndicator("Titulares", current.titulares, previous.titulares, Icons.Rounded.Person, Blue100, Blue500),
+        DashboardIndicator("Dependentes", current.dependentes, previous.dependentes, Icons.Rounded.Groups, Slate100, Slate500, "Dependentes dos novos cadastros."),
+        DashboardIndicator("Dependentes incluidos", current.dependentesIncluidos, previous.dependentesIncluidos, Icons.Rounded.PersonAdd, Slate100, Slate500),
+        DashboardIndicator("Total de vidas", current.vidas, previous.vidas, Icons.Rounded.TrendingUp, EmeraldSoft, EmeraldDark),
+        DashboardIndicator("Pendencias", current.pendentes, previous.pendentes, Icons.Rounded.AlertCircle, Amber100, Amber500),
+    )
 
     LazyColumn(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
@@ -71,508 +242,380 @@ fun DashboardScreen(
     ) {
         item {
             ScreenHeading(
-                eyebrow = "ADESART · VISÃO GERENCIAL",
+                eyebrow = "ADESART · VISAO GERENCIAL",
                 title = "Dashboard Gerencial",
-                subtitle = "Produção comercial e acompanhamento dos cadastros · mês atual",
+                subtitle = "Producao comercial, indicadores e acompanhamento dos cadastros.",
             )
         }
 
         item {
-            WebCard {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(
-                                text = "Produção no mês",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            Text(
-                                text = "Cadastros e inclusões de dependentes",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        VendaStatusChip(
-                            label = "Mês atual",
-                            tone = VendaStatusTone.SUCCESS,
-                        )
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        SummaryMetric(
-                            modifier = Modifier.weight(1f),
-                            label = "Total",
-                            value = totalMes,
-                            icon = Icons.Rounded.Description,
-                            container = Blue100,
-                            content = Blue500,
-                        )
-                        SummaryMetric(
-                            modifier = Modifier.weight(1f),
-                            label = "Pendentes",
-                            value = pendentesMes,
-                            icon = Icons.Rounded.HourglassEmpty,
-                            container = Amber100,
-                            content = Amber500,
-                        )
-                        SummaryMetric(
-                            modifier = Modifier.weight(1f),
-                            label = "Enviados",
-                            value = enviadosMes,
-                            icon = Icons.Rounded.CheckCircle,
-                            container = EmeraldSoft,
-                            content = EmeraldDark,
-                        )
-                    }
-                }
-            }
-        }
-
-        item {
-            MetricSection(
-                title = "Cadastro",
-                total = state.cadastroStats.cadastro_total,
-                pendentes = state.cadastroStats.cadastro_incompletos,
-                enviados = state.cadastroStats.cadastro_enviados,
-                totalDetail = "${state.cadastroStats.cadastro_cadastros} cad. + ${state.cadastroStats.cadastro_dependentes} dep.",
-                pendentesDetail = "${state.cadastroStats.cadastro_incompletos_cadastros} cad. + ${state.cadastroStats.cadastro_incompletos_dependentes} dep.",
-                enviadosDetail = "${state.cadastroStats.cadastro_enviados_cadastros} cad. + ${state.cadastroStats.cadastro_enviados_dependentes} dep.",
-                clickable = canOpenDrilldown,
-                onMetricClick = { metricType -> onOpenDrilldown("cadastro", metricType) },
-            )
-        }
-
-        item {
-            MetricSection(
-                title = "Inclusão de dependente",
-                total = state.cadastroStats.inclusao_total,
-                pendentes = state.cadastroStats.inclusao_incompletos,
-                enviados = state.cadastroStats.inclusao_enviados,
-                totalDetail = "${state.cadastroStats.inclusao_cadastros} cad. + ${state.cadastroStats.inclusao_dependentes} dep.",
-                pendentesDetail = "${state.cadastroStats.inclusao_incompletos_cadastros} cad. + ${state.cadastroStats.inclusao_incompletos_dependentes} dep.",
-                enviadosDetail = "${state.cadastroStats.inclusao_enviados_cadastros} cad. + ${state.cadastroStats.inclusao_enviados_dependentes} dep.",
-                clickable = canOpenDrilldown,
-                onMetricClick = { metricType -> onOpenDrilldown("inclusao_dependente", metricType) },
-            )
-        }
-
-        if (state.dashboardDrilldownLoading) {
-            item {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-        }
-
-        item {
-            WebCard(title = "Seu contexto") {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    OverviewLine(
-                        icon = Icons.Rounded.Shield,
-                        title = "Perfil",
-                        value = profile.role,
-                        detail = roleDescription(profile.role),
-                        background = EmeraldSoft,
-                        tint = EmeraldDark,
+            WebCard(title = "Periodo e acoes") {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SelectionField(
+                        label = "Periodo",
+                        value = period.label,
+                        options = DashboardPeriod.entries.map { it to it.label },
+                        onSelected = { period = it },
                     )
-                    state.team?.let { team ->
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                        OverviewLine(
-                            icon = Icons.Rounded.Groups,
-                            title = "Equipe",
-                            value = team.name,
-                            detail = if (team.isActive) "Equipe ativa" else "Equipe inativa",
-                            background = Blue100,
-                            tint = Blue500,
+                    if (period == DashboardPeriod.CUSTOM) {
+                        OutlinedTextField(
+                            value = customStart,
+                            onValueChange = { customStart = it },
+                            label = { Text("Inicio (YYYY-MM-DD)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
                         )
+                        OutlinedTextField(
+                            value = customEnd,
+                            onValueChange = { customEnd = it },
+                            label = { Text("Fim (YYYY-MM-DD)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    if (range == null) {
+                        Text(
+                            "Periodo invalido. Use datas validas, com no maximo 366 dias e sem datas futuras.",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        VendaButton(
+                            label = "Atualizar",
+                            leadingIcon = Icons.Rounded.Refresh,
+                            onClick = onRefresh,
+                            style = VendaButtonStyle.SECONDARY,
+                            modifier = Modifier.weight(1f),
+                        )
+                        VendaButton(
+                            label = "Exportar CSV",
+                            leadingIcon = Icons.Rounded.FileDownload,
+                            onClick = {
+                                val uri = DashboardCsvExporter.exportToDownloads(context, currentRecords)
+                                exportMessage = if (uri != null) {
+                                    "CSV salvo em Downloads/VendaMais."
+                                } else {
+                                    "Nao foi possivel gerar o CSV."
+                                }
+                            },
+                            enabled = currentRecords.isNotEmpty(),
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    exportMessage?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
         }
 
-        if (canViewSystemOverview) {
-            item {
-                WebCard(title = "Sistema") {
-                    Row(
+        item {
+            WebCard(title = "Filtros") {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SelectionField(
+                        "Equipe",
+                        dashboardSelectedLabel(teamFilter, teamOptions, "Todas as equipes"),
+                        listOf("todos" to "Todas as equipes") + teamOptions,
+                        onSelected = { teamFilter = it },
+                    )
+                    SelectionField(
+                        "Empresa",
+                        dashboardSelectedLabel(companyFilter, companyOptions, "Todas as empresas"),
+                        listOf("todos" to "Todas as empresas") + companyOptions,
+                        onSelected = { companyFilter = it },
+                    )
+                    SelectionField(
+                        "Vendedor",
+                        dashboardSelectedLabel(sellerFilter, sellerOptions, "Todos os vendedores"),
+                        listOf("todos" to "Todos os vendedores") + sellerOptions,
+                        onSelected = { sellerFilter = it },
+                    )
+                    SelectionField(
+                        "Adesionista",
+                        dashboardSelectedLabel(adesionistaFilter, adesionistaOptions, "Todos os adesionistas"),
+                        listOf("todos" to "Todos os adesionistas") + adesionistaOptions,
+                        onSelected = { adesionistaFilter = it },
+                    )
+                    SelectionField(
+                        "Canal",
+                        when (channelFilter) {
+                            "interno" -> "Interno"
+                            "publico" -> "Link / QR Code"
+                            else -> "Todos"
+                        },
+                        listOf("todos" to "Todos", "interno" to "Interno", "publico" to "Link / QR Code"),
+                        onSelected = { channelFilter = it },
+                    )
+                    SelectionField(
+                        "Situacao",
+                        dashboardStatusLabel(statusFilter),
+                        listOf(
+                            "todos" to "Todas",
+                            "enviado" to "Enviado ao ERP",
+                            "incompleto" to "Incompleto",
+                            "adesoes_pendentes" to "Adesoes pendentes",
+                            "erro_envio" to "Erro de envio",
+                        ),
+                        onSelected = { statusFilter = it },
+                    )
+                    OutlinedTextField(
+                        value = search,
+                        onValueChange = { search = it },
+                        label = { Text("Buscar empresa, plano ou profissional") },
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        SystemMetric(
-                            modifier = Modifier.weight(1f),
-                            label = "Usuários",
-                            value = state.systemOverview.totalUsers,
+                    )
+                }
+            }
+        }
+
+        if (state.cadastrosLoading && !state.cadastrosLoaded) {
+            item {
+                VendaLoadingState(
+                    title = "Carregando indicadores",
+                    message = "Buscando os registros necessarios para o Dashboard.",
+                )
+            }
+        } else if (range != null && currentRecords.isEmpty()) {
+            item {
+                VendaEmptyState(
+                    title = "Nenhum registro no periodo",
+                    message = "Ajuste o periodo ou os filtros para consultar outros dados.",
+                )
+            }
+        } else if (range != null) {
+            item {
+                IndicatorGrid(indicators)
+            }
+
+            item {
+                WebCard(title = "Evolucao de cadastros no periodo") {
+                    DashboardBars(
+                        entries = evolution.takeLast(31),
+                        emptyMessage = "Sem cadastros para montar a evolucao.",
+                    )
+                }
+            }
+
+            item {
+                WebCard(title = "Distribuicao dos cadastros por status") {
+                    DashboardDistribution(statusCounts)
+                }
+            }
+
+            item {
+                WebCard(title = "Producao por vendedor") {
+                    DashboardGroupList(sellerGroups, showRate = true)
+                }
+            }
+
+            item {
+                WebCard(title = "Producao por adesionista") {
+                    DashboardGroupList(adesionistaGroups, showRate = false)
+                }
+            }
+
+            item {
+                WebCard(title = "Producao por empresa") {
+                    DashboardGroupList(companyGroups, showRate = false)
+                }
+            }
+
+            item {
+                WebCard(title = "Ranking de planos") {
+                    if (planRanking.isEmpty()) {
+                        Text("Sem producao com plano identificado.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        DashboardBars(
+                            entries = planRanking.take(15).map { it.first to it.second },
+                            emptyMessage = "Sem producao com plano identificado.",
                         )
-                        SystemMetric(
-                            modifier = Modifier.weight(1f),
-                            label = "Ativos",
-                            value = state.systemOverview.activeUsers,
-                        )
-                        SystemMetric(
-                            modifier = Modifier.weight(1f),
-                            label = "Equipes",
-                            value = state.systemOverview.totalTeams,
-                        )
+                    }
+                }
+            }
+
+            item {
+                WebCard(title = "Canais de origem") {
+                    DashboardDistribution(
+                        listOf(
+                            "Interno" to internalCount,
+                            "Link / QR Code" to publicCount,
+                        ),
+                    )
+                }
+            }
+
+            item {
+                WebCard(title = "Pendencias operacionais") {
+                    DashboardDistribution(
+                        statusCounts.filter { it.first != "Enviado ao ERP" },
+                    )
+                }
+            }
+
+            item {
+                WebCard(title = "Resumo de performance") {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        PerformanceLine(Icons.Rounded.Person, "Vendedor com maior volume", sellerGroups.firstOrNull()?.name, sellerGroups.firstOrNull()?.total)
+                        PerformanceLine(Icons.Rounded.Groups, "Adesionista com maior volume", adesionistaGroups.firstOrNull()?.name, adesionistaGroups.firstOrNull()?.total)
+                        PerformanceLine(Icons.Rounded.Business, "Empresa com maior volume", companyGroups.firstOrNull()?.name, companyGroups.firstOrNull()?.total)
+                        PerformanceLine(Icons.Rounded.Link, "Canal predominante", if (publicCount > internalCount) "Link / QR Code" else "Interno", max(publicCount, internalCount))
                     }
                 }
             }
         }
     }
 
-    state.dashboardDrilldown?.let { drilldown ->
-        StatsByVendedorSheet(
-            title = drilldown.title,
-            metricType = drilldown.metricType,
-            stats = drilldown.items,
-            onDismiss = onCloseDrilldown,
-        )
+    // Mantidos na assinatura por compatibilidade com o shell atual. O novo Dashboard
+    // usa detalhamentos locais respeitando periodo e filtros, como o Web.
+    remember(onOpenDrilldown, onCloseDrilldown) { Unit }
+}
+
+@Composable
+private fun IndicatorGrid(indicators: List<DashboardIndicator>) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        indicators.chunked(2).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                row.forEach { indicator ->
+                    IndicatorCard(indicator, Modifier.weight(1f))
+                }
+                if (row.size == 1) {
+                    Box(modifier = Modifier.weight(1f))
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun SummaryMetric(
-    label: String,
-    value: Int,
-    icon: ImageVector,
-    container: Color,
-    content: Color,
-    modifier: Modifier = Modifier,
-) {
+private fun IndicatorCard(indicator: DashboardIndicator, modifier: Modifier = Modifier) {
+    val variation = if (indicator.previous == 0) null
+    else (indicator.current - indicator.previous).toDouble() / indicator.previous.toDouble()
+
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(
             modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Surface(
-                modifier = Modifier.size(30.dp),
+                modifier = Modifier.size(32.dp),
                 shape = RoundedCornerShape(10.dp),
-                color = container,
+                color = indicator.container,
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = content,
-                    )
+                    Icon(indicator.icon, contentDescription = null, modifier = Modifier.size(17.dp), tint = indicator.content)
                 }
             }
+            Text(indicator.label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(indicator.current.toString(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text(
-                text = value.toString(),
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
-
-@Composable
-private fun MetricSection(
-    title: String,
-    total: Int,
-    pendentes: Int,
-    enviados: Int,
-    totalDetail: String,
-    pendentesDetail: String,
-    enviadosDetail: String,
-    clickable: Boolean,
-    onMetricClick: (DashboardMetricType) -> Unit,
-) {
-    WebCard(title = title) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            MetricTile(
-                modifier = Modifier.weight(1f),
-                label = "Total",
-                value = total,
-                detail = totalDetail,
-                clickable = clickable,
-                container = Blue100,
-                content = Blue500,
-                icon = Icons.Rounded.Description,
-                onClick = { onMetricClick(DashboardMetricType.TOTAL) },
-            )
-            MetricTile(
-                modifier = Modifier.weight(1f),
-                label = "Pendentes",
-                value = pendentes,
-                detail = pendentesDetail,
-                clickable = clickable,
-                container = Amber100,
-                content = Amber500,
-                icon = Icons.Rounded.HourglassEmpty,
-                onClick = { onMetricClick(DashboardMetricType.PENDENTES) },
-            )
-            MetricTile(
-                modifier = Modifier.weight(1f),
-                label = "Enviados",
-                value = enviados,
-                detail = enviadosDetail,
-                clickable = clickable,
-                container = EmeraldSoft,
-                content = EmeraldDark,
-                icon = Icons.Rounded.CheckCircle,
-                onClick = { onMetricClick(DashboardMetricType.CADASTRADOS) },
-            )
-        }
-    }
-}
-
-@Composable
-private fun MetricTile(
-    label: String,
-    value: Int,
-    detail: String,
-    clickable: Boolean,
-    container: Color,
-    content: Color,
-    icon: ImageVector,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier.then(if (clickable) Modifier.clickable(onClick = onClick) else Modifier),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(7.dp),
-        ) {
-            Surface(
-                modifier = Modifier.size(30.dp),
-                shape = RoundedCornerShape(10.dp),
-                color = container,
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        modifier = Modifier.size(16.dp),
-                        tint = content,
-                    )
-                }
-            }
-            Text(
-                text = value.toString(),
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = detail,
+                text = variation?.let {
+                    val prefix = if (it > 0) "+" else ""
+                    "${prefix}${String.format(Locale("pt", "BR"), "%.1f", it * 100)}% vs. periodo anterior"
+                } ?: "Sem base no periodo anterior",
                 style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                minLines = 2,
-                maxLines = 2,
+                color = if (variation != null && variation >= 0) Emerald else MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            indicator.detail?.let {
+                Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
     }
 }
 
 @Composable
-private fun OverviewLine(
-    icon: ImageVector,
-    title: String,
-    value: String,
-    detail: String,
-    background: Color,
-    tint: Color,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Surface(
-            modifier = Modifier.size(40.dp),
-            shape = MaterialTheme.shapes.small,
-            color = background,
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = tint,
-                    modifier = Modifier.size(20.dp),
+private fun DashboardBars(entries: List<Pair<String, Int>>, emptyMessage: String) {
+    if (entries.isEmpty() || entries.all { it.second == 0 }) {
+        Text(emptyMessage, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
+    val maxValue = entries.maxOf { it.second }.coerceAtLeast(1)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        entries.forEach { (label, value) ->
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(label, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(value.toString(), style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(7.dp)
+                        .background(Slate100, RoundedCornerShape(999.dp)),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(value.toFloat() / maxValue.toFloat())
+                            .height(7.dp)
+                            .background(Emerald, RoundedCornerShape(999.dp)),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DashboardDistribution(entries: List<Pair<String, Int>>) {
+    val total = entries.sumOf { it.second }
+    if (total == 0) {
+        Text("Sem registros para esta distribuicao.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        entries.forEach { (label, value) ->
+            val percentage = value.toDouble() / total.toDouble()
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(label, style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "$value · ${String.format(Locale("pt", "BR"), "%.1f", percentage * 100)}%",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
                 )
             }
         }
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            Text(
-                text = title,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.labelMedium,
-            )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            Text(
-                text = detail,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
     }
 }
 
 @Composable
-private fun SystemMetric(
-    label: String,
-    value: Int,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        Column(
-            modifier = Modifier.padding(10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Assessment,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                text = value.toString(),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-            )
-        }
+private fun DashboardGroupList(groups: List<DashboardGroup>, showRate: Boolean) {
+    if (groups.isEmpty()) {
+        Text("Sem dados para este agrupamento.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
     }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun StatsByVendedorSheet(
-    title: String,
-    metricType: DashboardMetricType,
-    stats: List<VendedorStats>,
-    onDismiss: () -> Unit,
-) {
-    val sortedStats = stats.sortedByDescending {
-        when (metricType) {
-            DashboardMetricType.TOTAL -> it.total
-            DashboardMetricType.PENDENTES -> it.incompletos
-            DashboardMetricType.CADASTRADOS -> it.enviados
-        }
-    }
-
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        groups.take(15).forEach { group ->
+            Surface(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(group.name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Text(
-                        text = "Desempenho por vendedor",
+                        "Total ${group.total} · Enviados ${group.enviados} · Pendentes ${group.pendentes}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                }
-                TextButton(onClick = onDismiss) { Text("Fechar") }
-            }
-
-            if (sortedStats.isEmpty()) {
-                WebCard {
-                    Text(
-                        text = "Nenhum dado disponível.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 520.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(sortedStats) { stat ->
-                        WebCard {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(
-                                    modifier = Modifier.weight(1f),
-                                    verticalArrangement = Arrangement.spacedBy(3.dp),
-                                ) {
-                                    Text(stat.vendedorNome, fontWeight = FontWeight.SemiBold)
-                                    Text(
-                                        "Total ${stat.total} · Pendentes ${stat.incompletos} · Enviados ${stat.enviados}",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                }
-                                Text(
-                                    text = when (metricType) {
-                                        DashboardMetricType.TOTAL -> stat.total.toString()
-                                        DashboardMetricType.PENDENTES -> stat.incompletos.toString()
-                                        DashboardMetricType.CADASTRADOS -> stat.enviados.toString()
-                                    },
-                                    color = Emerald,
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                        }
+                    if (showRate) {
+                        val rate = if (group.total == 0) 0.0 else group.enviados.toDouble() / group.total.toDouble()
+                        Text(
+                            "Taxa de envio: ${String.format(Locale("pt", "BR"), "%.1f", rate * 100)}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Emerald,
+                        )
                     }
                 }
             }
@@ -580,14 +623,196 @@ private fun StatsByVendedorSheet(
     }
 }
 
-private fun roleDescription(role: String): String {
-    return when (role) {
-        "ADMINISTRADOR", "ADMIN" -> "Acesso total ao sistema"
-        "GERENTE", "GESTOR" -> "Gerenciamento de equipes e usuários"
-        "SUPERVISOR" -> "Supervisão de equipe"
-        "VENDEDOR" -> "Execução de vendas"
-        "ADESIONISTA" -> "Processos de adesão"
-        "CADASTRO" -> "Operação de cadastros"
-        else -> ""
+@Composable
+private fun PerformanceLine(icon: ImageVector, label: String, value: String?, total: Int?) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(modifier = Modifier.size(36.dp), shape = RoundedCornerShape(10.dp), color = EmeraldSoft) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, tint = Emerald, modifier = Modifier.size(18.dp))
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(value ?: "Nao informado", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+        }
+        Text((total ?: 0).toString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
     }
+}
+
+private fun dashboardRange(period: DashboardPeriod, customStart: String, customEnd: String): DashboardRange? {
+    val today = LocalDate.now()
+    val start: LocalDate
+    val endInclusive: LocalDate
+    when (period) {
+        DashboardPeriod.DAYS_7 -> {
+            start = today.minusDays(6)
+            endInclusive = today
+        }
+        DashboardPeriod.DAYS_30 -> {
+            start = today.minusDays(29)
+            endInclusive = today
+        }
+        DashboardPeriod.DAYS_90 -> {
+            start = today.minusDays(89)
+            endInclusive = today
+        }
+        DashboardPeriod.MONTH -> {
+            start = today.withDayOfMonth(1)
+            endInclusive = today
+        }
+        DashboardPeriod.CUSTOM -> {
+            start = runCatching { LocalDate.parse(customStart) }.getOrNull() ?: return null
+            endInclusive = runCatching { LocalDate.parse(customEnd) }.getOrNull() ?: return null
+        }
+    }
+    if (endInclusive.isBefore(start) || endInclusive.isAfter(today)) return null
+    val endExclusive = endInclusive.plusDays(1)
+    val duration = ChronoUnit.DAYS.between(start, endExclusive)
+    if (duration <= 0 || duration > 366) return null
+    return DashboardRange(
+        start = start,
+        endExclusive = endExclusive,
+        previousStart = start.minusDays(duration),
+    )
+}
+
+private fun CadastroResumo.dashboardDate(): LocalDate {
+    return runCatching { OffsetDateTime.parse(createdAt).toLocalDate() }
+        .getOrElse { LocalDate.MIN }
+}
+
+private fun calculateDashboard(records: List<CadastroResumo>): DashboardNumbers {
+    val cadastros = records.filter { it.tipoCadastro == "cadastro" }
+    val titulares = cadastros.size
+    val dependentes = cadastros.sumOf { (dashboardLives(it) - 1).coerceAtLeast(0) }
+    val enviados = cadastros.count { it.status == "enviado" }
+    val pendentes = cadastros.count { it.status != "enviado" }
+    val dependentesIncluidos = records
+        .filter { it.tipoCadastro == "inclusao_dependente" && it.status == "enviado" }
+        .sumOf { cadastro -> runCatching { cadastro.dependentes?.jsonArray?.size ?: 0 }.getOrDefault(0) }
+    return DashboardNumbers(
+        titulares = titulares,
+        dependentes = dependentes,
+        enviados = enviados,
+        pendentes = pendentes,
+        dependentesIncluidos = dependentesIncluidos,
+        vidas = titulares + dependentes,
+    )
+}
+
+private fun dashboardLives(cadastro: CadastroResumo): Int {
+    val count = runCatching { cadastro.dependentes?.jsonArray?.size }.getOrNull()
+    return max(1, count ?: 1)
+}
+
+private fun dashboardGroups(
+    records: List<CadastroResumo>,
+    key: (CadastroResumo) -> String,
+    name: (CadastroResumo) -> String,
+): List<DashboardGroup> {
+    return records.groupBy(key).map { (groupKey, items) ->
+        DashboardGroup(
+            key = groupKey,
+            name = name(items.first()),
+            total = items.size,
+            enviados = items.count { it.status == "enviado" },
+            pendentes = items.count { it.status != "enviado" },
+        )
+    }.sortedWith(compareByDescending<DashboardGroup> { it.total }.thenBy { it.name })
+}
+
+private fun dashboardPlanRanking(
+    records: List<CadastroResumo>,
+    planos: List<PlanoMap>,
+): List<Pair<String, Int>> {
+    val names = planos.associate { it.planoId to it.nomeExibicao }
+    val counts = mutableMapOf<Int, Int>()
+    records.filter { it.status == "enviado" }.forEach { cadastro ->
+        val lives = runCatching { cadastro.dependentes?.jsonArray }.getOrNull().orEmpty()
+        lives.forEach { life ->
+            dashboardPlanCode(life)?.let { code -> counts[code] = (counts[code] ?: 0) + 1 }
+        }
+    }
+    return counts.entries
+        .map { (code, total) -> (names[code] ?: "Plano $code") to total }
+        .sortedByDescending { it.second }
+}
+
+private fun dashboardPlanCode(element: JsonElement): Int? {
+    val obj = runCatching { element.jsonObject }.getOrNull() ?: return null
+    val candidates = listOf("plano", "plano_codigo", "planoCodigo", "codigoPlano", "Plano")
+    candidates.forEach { key ->
+        val primitive = obj[key]?.jsonPrimitive ?: return@forEach
+        primitive.intOrNull?.let { if (it > 0) return it }
+        primitive.contentOrNull?.toIntOrNull()?.let { if (it > 0) return it }
+    }
+    return null
+}
+
+private fun dashboardSellerKey(cadastro: CadastroResumo): String =
+    cadastro.vendedorCodigo?.takeIf { it.isNotBlank() }
+        ?: cadastro.vendedorId?.takeIf { it.isNotBlank() }
+        ?: "sem-vendedor"
+
+private fun dashboardAdesionistaKey(cadastro: CadastroResumo): String =
+    cadastro.adesionistaId?.takeIf { it.isNotBlank() }
+        ?: cadastro.adesionistaCodigo?.takeIf { it.isNotBlank() }
+        ?: "sem-adesionista"
+
+private fun dashboardCompanyKey(cadastro: CadastroResumo): String =
+    cadastro.empresaCodigo?.toString()
+        ?: cadastro.empresaNome?.takeIf { it.isNotBlank() }
+        ?: "nao-informada"
+
+private fun dashboardChannelKey(cadastro: CadastroResumo): String =
+    if (cadastro.fluxoPublico == true || !cadastro.origemLinkId.isNullOrBlank()) "publico" else "interno"
+
+private fun dashboardMatchesFilters(
+    cadastro: CadastroResumo,
+    team: String,
+    company: String,
+    seller: String,
+    adesionista: String,
+    channel: String,
+    status: String,
+    search: String,
+    planos: List<PlanoMap>,
+): Boolean {
+    if (team != "todos" && cadastro.teamId != team) return false
+    if (company != "todos" && dashboardCompanyKey(cadastro) != company) return false
+    if (seller != "todos" && dashboardSellerKey(cadastro) != seller) return false
+    if (adesionista != "todos" && dashboardAdesionistaKey(cadastro) != adesionista) return false
+    if (channel != "todos" && dashboardChannelKey(cadastro) != channel) return false
+    if (status != "todos" && cadastro.status != status) return false
+    val term = search.trim().lowercase(Locale("pt", "BR"))
+    if (term.isBlank()) return true
+    val direct = listOf(
+        cadastro.empresaNome,
+        cadastro.planoNome,
+        cadastro.vendedorNome,
+        cadastro.adesionistaNome,
+    ).any { it.orEmpty().lowercase(Locale("pt", "BR")).contains(term) }
+    if (direct) return true
+    val planNames = planos.associate { it.planoId to it.nomeExibicao.lowercase(Locale("pt", "BR")) }
+    return runCatching { cadastro.dependentes?.jsonArray }.getOrNull().orEmpty().any { life ->
+        dashboardPlanCode(life)?.let { planNames[it]?.contains(term) } == true
+    }
+}
+
+private fun dashboardSelectedLabel(
+    selected: String,
+    options: List<Pair<String, String>>,
+    allLabel: String,
+): String = if (selected == "todos") allLabel else options.firstOrNull { it.first == selected }?.second ?: allLabel
+
+private fun dashboardStatusLabel(status: String): String = when (status) {
+    "enviado" -> "Enviado ao ERP"
+    "incompleto" -> "Incompleto"
+    "adesoes_pendentes" -> "Adesoes pendentes"
+    "erro_envio" -> "Erro de envio"
+    else -> "Todas"
 }
