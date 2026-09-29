@@ -159,6 +159,9 @@ fun DashboardScreen(
         state.dashboardCadastros.filter { val date = it.dashboardDate(); date >= range.start && date < range.endExclusive }
     }
 
+    val profileRole = state.profile?.role.orEmpty()
+    val isManagerial = profileRole in setOf("ADMINISTRADOR", "GERENTE")
+    val supervisorTeamId = state.profile?.teamId?.takeIf { profileRole == "SUPERVISOR" }
     val teamNames = state.adminTeams.associate { it.id to it.name }
     val teamOptions = currentUnfiltered
         .mapNotNull { cadastro ->
@@ -333,12 +336,21 @@ fun DashboardScreen(
         item {
             WebCard(title = "Filtros") {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SelectionField(
-                        "Equipe",
-                        dashboardSelectedLabel(teamFilter, teamOptions, "Todas as equipes"),
-                        listOf("todos" to "Todas as equipes") + teamOptions,
-                        onSelected = { teamFilter = it },
-                    )
+                    if (isManagerial) {
+                        SelectionField(
+                            "Equipe",
+                            dashboardSelectedLabel(teamFilter, teamOptions, "Todas as equipes"),
+                            listOf("todos" to "Todas as equipes") + teamOptions,
+                            onSelected = { teamFilter = it },
+                        )
+                    } else {
+                        DashboardReadOnlyFilter(
+                            label = "Equipe",
+                            value = supervisorTeamId
+                                ?.let { teamNames[it] ?: "Minha equipe" }
+                                ?: "Escopo do meu perfil",
+                        )
+                    }
                     SelectionField(
                         "Empresa",
                         dashboardSelectedLabel(companyFilter, companyOptions, "Todas as empresas"),
@@ -490,6 +502,29 @@ fun DashboardScreen(
     // Mantidos na assinatura por compatibilidade com o shell atual. O novo Dashboard
     // usa detalhamentos locais respeitando periodo e filtros, como o Web.
     remember(onOpenDrilldown, onCloseDrilldown) { Unit }
+}
+
+@Composable
+private fun DashboardReadOnlyFilter(label: String, value: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        ) {
+            Text(
+                text = value,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 13.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 @Composable
