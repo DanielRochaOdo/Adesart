@@ -245,7 +245,12 @@ fun VendaMaisApp(
                         state = state,
                         onOpenDrilldown = viewModel::openDashboardDrilldown,
                         onCloseDrilldown = viewModel::closeDashboardDrilldown,
-                        onRefresh = viewModel::refresh,
+                        onLoadRange = { startIso, endIso ->
+                            viewModel.loadDashboardRange(startIso, endIso)
+                        },
+                        onRefreshRange = { startIso, endIso ->
+                            viewModel.loadDashboardRange(startIso, endIso, force = true)
+                        },
                     )
 
                     MainTab.CADASTROS -> CadastrosScreen(

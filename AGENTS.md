@@ -15,6 +15,8 @@ Não considerar uma melhoria compartilhada concluída se apenas um dos clientes 
 
 Regras compartilhadas não devem ser duplicadas desnecessariamente entre Web e Android.
 
+Quando o Web consumir uma RPC, view, Edge Function ou outro contrato canônico que resolva regra de negócio, o Android deve consumir a mesma fonte. É proibido substituir essa fonte por leitura direta de tabela seguida de reconstrução local da regra no aplicativo.
+
 Quando possível:
 
 1. centralizar a decisão no backend canônico;

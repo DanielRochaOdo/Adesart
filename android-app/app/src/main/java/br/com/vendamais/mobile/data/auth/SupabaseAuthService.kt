@@ -128,12 +128,20 @@ class SupabaseAuthService(
 
         if (resolvedAccessToken.isNullOrBlank() || resolvedRefreshToken.isNullOrBlank() || resolvedUserId.isNullOrBlank()) {
             val backendMessage = message?.takeIf { it.isNotBlank() } ?: error?.takeIf { it.isNotBlank() }
-            val fallbackMessage = if (isRefreshFlow) {
-                "Refresh token invalido ou sessao expirada. Faca login novamente."
+            val normalized = backendMessage.orEmpty().lowercase()
+            val userMessage = if (isRefreshFlow) {
+                "Sua sessão expirou. Faça login novamente para continuar."
+            } else if (
+                normalized.contains("invalid login credentials") ||
+                normalized.contains("invalid credentials") ||
+                normalized.contains("invalid_credentials") ||
+                normalized.contains("falha ao autenticar no supabase")
+            ) {
+                "Usuário ou senha inválidos. Por favor, tente novamente."
             } else {
                 "Não foi possível entrar no momento. Por favor, tente novamente."
             }
-            throw IllegalStateException(backendMessage ?: fallbackMessage)
+            throw IllegalStateException(userMessage)
         }
 
         return SavedSession(
