@@ -1,7 +1,6 @@
 package br.com.vendamais.mobile.ui.screens
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,7 +42,6 @@ import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.DashboardMetricType
 import br.com.vendamais.mobile.ui.components.ScreenHeading
 import br.com.vendamais.mobile.ui.components.WebCard
-import br.com.vendamais.mobile.ui.components.VendaMetricCard
 import br.com.vendamais.mobile.ui.components.VendaStatusChip
 import br.com.vendamais.mobile.ui.components.VendaStatusTone
 import br.com.vendamais.mobile.ui.theme.Amber100
@@ -73,8 +71,9 @@ fun DashboardScreen(
     ) {
         item {
             ScreenHeading(
-                title = "Visao geral",
-                subtitle = "Acompanhe a operacao do mes atual",
+                eyebrow = "ADESART · VISÃO GERENCIAL",
+                title = "Dashboard Gerencial",
+                subtitle = "Produção comercial e acompanhamento dos cadastros · mês atual",
             )
         }
 
@@ -88,18 +87,18 @@ fun DashboardScreen(
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
-                                text = "Resumo do mes",
+                                text = "Produção no mês",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                             )
                             Text(
-                                text = "Cadastros e inclusoes de dependentes",
+                                text = "Cadastros e inclusões de dependentes",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         VendaStatusChip(
-                            label = "Atual",
+                            label = "Mês atual",
                             tone = VendaStatusTone.SUCCESS,
                         )
                     }
@@ -111,6 +110,7 @@ fun DashboardScreen(
                             modifier = Modifier.weight(1f),
                             label = "Total",
                             value = totalMes,
+                            icon = Icons.Rounded.Description,
                             container = Blue100,
                             content = Blue500,
                         )
@@ -118,6 +118,7 @@ fun DashboardScreen(
                             modifier = Modifier.weight(1f),
                             label = "Pendentes",
                             value = pendentesMes,
+                            icon = Icons.Rounded.HourglassEmpty,
                             container = Amber100,
                             content = Amber500,
                         )
@@ -125,6 +126,7 @@ fun DashboardScreen(
                             modifier = Modifier.weight(1f),
                             label = "Enviados",
                             value = enviadosMes,
+                            icon = Icons.Rounded.CheckCircle,
                             container = EmeraldSoft,
                             content = EmeraldDark,
                         )
@@ -149,7 +151,7 @@ fun DashboardScreen(
 
         item {
             MetricSection(
-                title = "Inclusao de dependente",
+                title = "Inclusão de dependente",
                 total = state.cadastroStats.inclusao_total,
                 pendentes = state.cadastroStats.inclusao_incompletos,
                 enviados = state.cadastroStats.inclusao_enviados,
@@ -202,7 +204,7 @@ fun DashboardScreen(
                     ) {
                         SystemMetric(
                             modifier = Modifier.weight(1f),
-                            label = "Usuarios",
+                            label = "Usuários",
                             value = state.systemOverview.totalUsers,
                         )
                         SystemMetric(
@@ -235,17 +237,51 @@ fun DashboardScreen(
 private fun SummaryMetric(
     label: String,
     value: Int,
+    icon: ImageVector,
     container: Color,
     content: Color,
     modifier: Modifier = Modifier,
 ) {
-    VendaMetricCard(
-        value = value.toString(),
-        label = label,
+    Surface(
         modifier = modifier,
-        containerColor = container,
-        contentColor = content,
-    )
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            Surface(
+                modifier = Modifier.size(30.dp),
+                shape = RoundedCornerShape(10.dp),
+                color = container,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = content,
+                    )
+                }
+            }
+            Text(
+                text = value.toString(),
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
 }
 
 @Composable
@@ -314,48 +350,52 @@ private fun MetricTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .background(container.copy(alpha = 0.72f), MaterialTheme.shapes.small)
-            .then(if (clickable) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(7.dp),
+    Surface(
+        modifier = modifier.then(if (clickable) Modifier.clickable(onClick = onClick) else Modifier),
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
-        Surface(
-            modifier = Modifier.size(28.dp),
-            shape = RoundedCornerShape(9.dp),
-            color = content,
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = Color.White,
-                )
+            Surface(
+                modifier = Modifier.size(30.dp),
+                shape = RoundedCornerShape(10.dp),
+                color = container,
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = content,
+                    )
+                }
             }
+            Text(
+                text = value.toString(),
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                minLines = 2,
+                maxLines = 2,
+            )
         }
-        Text(
-            text = value.toString(),
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = content,
-            fontWeight = FontWeight.SemiBold,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Text(
-            text = detail,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            minLines = 2,
-            maxLines = 2,
-        )
     }
 }
 
@@ -418,8 +458,9 @@ private fun SystemMetric(
 ) {
     Surface(
         modifier = modifier,
-        shape = MaterialTheme.shapes.small,
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
     ) {
         Column(
             modifier = Modifier.padding(10.dp),
@@ -493,7 +534,7 @@ private fun StatsByVendedorSheet(
             if (sortedStats.isEmpty()) {
                 WebCard {
                     Text(
-                        text = "Nenhum dado disponivel.",
+                        text = "Nenhum dado disponível.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -542,11 +583,11 @@ private fun StatsByVendedorSheet(
 private fun roleDescription(role: String): String {
     return when (role) {
         "ADMINISTRADOR", "ADMIN" -> "Acesso total ao sistema"
-        "GERENTE", "GESTOR" -> "Gerenciamento de equipes e usuarios"
-        "SUPERVISOR" -> "Supervisao de equipe"
-        "VENDEDOR" -> "Execucao de vendas"
-        "ADESIONISTA" -> "Processos de adesao"
-        "CADASTRO" -> "Operacao de cadastros"
+        "GERENTE", "GESTOR" -> "Gerenciamento de equipes e usuários"
+        "SUPERVISOR" -> "Supervisão de equipe"
+        "VENDEDOR" -> "Execução de vendas"
+        "ADESIONISTA" -> "Processos de adesão"
+        "CADASTRO" -> "Operação de cadastros"
         else -> ""
     }
 }
