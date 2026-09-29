@@ -1,5 +1,7 @@
 # Adesão+ - Sistema Completo de Gestão ERP
 
+> **Repositório canônico Web + Android.** O Web (`src/`) define a referência funcional do produto; o Android nativo vive em `android-app/` e deve seguir as mesmas regras. Backend, Edge Functions, RLS e migrations existem somente em `supabase/`. O antigo `vendamais-mobile` não é mais fonte de regras. Veja `docs/ARQUITETURA_CANONICA_WEB_ANDROID.md`.
+
 Sistema ERP completo para gestão de planos de saúde, incluindo autenticação, controle de acesso baseado em roles (RBAC), cadastro de clientes com consulta de CPF, integração com APIs externas e gestão de equipes.
 
 ## 📋 Índice
