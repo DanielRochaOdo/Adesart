@@ -2,7 +2,7 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, createServiceClient, jsonResponse, requireInternalUser } from "../_shared/public-flow.ts";
 
 const ERP_DEPENDENTE_FALHA_INTERNA =
-  "Nao foi possivel concluir a inclusao do dependente. Verifique se ele ja aparece no cadastro antes de tentar novamente. Se o problema continuar, entre em contato com o suporte.";
+  "Não foi possível concluir a inclusão do dependente. Verifique se ele já aparece no cadastro antes de tentar novamente. Se o problema continuar, entre em contato com o suporte.";
 
 const isTechnicalErpFailure = (message: string) => {
   const normalized = message.toLowerCase().replace(/\s+/g, " ").trim();
