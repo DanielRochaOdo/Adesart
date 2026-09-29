@@ -1502,6 +1502,53 @@ class AppViewModel(
                     ?.contentOrNull
                     ?.trim()
                     ?.takeIf { it.isNotBlank() }
+                val vendedorIdFromPayload = payloadHint
+                    ?.get("vendedor_id")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                val vendedorCodigoFromPayload = payloadHint
+                    ?.get("vendedor_codigo")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                val vendedorNomeFromPayload = payloadHint
+                    ?.get("vendedor_nome")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                val adesionistaIdFromPayload = payloadHint
+                    ?.get("adesionista_id")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                val adesionistaCodigoFromPayload = payloadHint
+                    ?.get("adesionista_codigo")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                val adesionistaNomeFromPayload = payloadHint
+                    ?.get("adesionista_nome")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                val titularPlanoNomeFromPayload = runCatching {
+                    dependentesFromPayload
+                        ?.jsonArray
+                        ?.firstOrNull()
+                        ?.jsonObject
+                        ?.get("planoNome")
+                        ?.jsonPrimitive
+                        ?.contentOrNull
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() }
+                }.getOrNull()
                 val arquivoPathFromPayload = payloadHint
                     ?.get("arquivo_path")
                     ?.jsonPrimitive
@@ -1652,6 +1699,22 @@ class AppViewModel(
                                 ?: cadastro.statusAdesaoId
                                     ?.takeIf { it.isNotBlank() }
                                     ?.let { put("status_adesao_id", it) }
+                            vendedorIdFromPayload?.let { put("vendedor_id", it) }
+                                ?: cadastro.vendedorId?.takeIf { it.isNotBlank() }?.let { put("vendedor_id", it) }
+                            vendedorCodigoFromPayload?.let { put("vendedor_codigo", it) }
+                                ?: cadastro.vendedorCodigo?.takeIf { it.isNotBlank() }?.let { put("vendedor_codigo", it) }
+                            vendedorNomeFromPayload?.let { put("vendedor_nome", it) }
+                                ?: cadastro.vendedorNome?.takeIf { it.isNotBlank() }?.let { put("vendedor_nome", it) }
+                            adesionistaIdFromPayload?.let { put("adesionista_id", it) }
+                                ?: cadastro.adesionistaId?.takeIf { it.isNotBlank() }?.let { put("adesionista_id", it) }
+                            adesionistaCodigoFromPayload?.let { put("adesionista_codigo", it) }
+                                ?: cadastro.adesionistaCodigo?.takeIf { it.isNotBlank() }?.let { put("adesionista_codigo", it) }
+                            adesionistaNomeFromPayload?.let { put("adesionista_nome", it) }
+                                ?: cadastro.adesionistaNome?.takeIf { it.isNotBlank() }?.let { put("adesionista_nome", it) }
+                            titularPlanoFromPayload?.takeIf { it > 0 }?.let { put("plano_codigo", it) }
+                                ?: cadastro.planoCodigo?.takeIf { it > 0 }?.let { put("plano_codigo", it) }
+                            titularPlanoNomeFromPayload?.let { put("plano_nome", it) }
+                                ?: cadastro.planoNome?.takeIf { it.isNotBlank() }?.let { put("plano_nome", it) }
                             (arquivoPathFinalForSend ?: arquivoPathFromPayload)?.let { put("arquivo_path", it) } ?: cadastro.arquivoPath
                                 ?.takeIf { it.isNotBlank() }
                                 ?.let { put("arquivo_path", it) }
@@ -3668,15 +3731,31 @@ class AppViewModel(
         cachedCadastro: CadastroDetalhe? = null,
     ): CadastroDetalhe {
         var detalhe = cachedCadastro ?: workflowRepository.fetchCadastroDetalhe(session, cadastroId)
-        if ((detalhe.empresaId ?: detalhe.empresaCodigo) != null) return detalhe
-
         val inferredFromRaw = inferEmpresaCodigoFromRaw(detalhe.empresaRaw)
-        val empresaId = fallbackEmpresa?.id?.takeIf { it > 0 } ?: inferredFromRaw
-        val empresaCodigo = fallbackEmpresa?.codigo?.takeIf { it > 0 } ?: empresaId
+        val empresaId = detalhe.empresaId
+            ?: detalhe.empresaCodigo
+            ?: fallbackEmpresa?.id?.takeIf { it > 0 }
+            ?: inferredFromRaw
+        val empresaCodigo = detalhe.empresaCodigo
+            ?: detalhe.empresaId
+            ?: fallbackEmpresa?.codigo?.takeIf { it > 0 }
+            ?: empresaId
+        val empresaNomeAtual = detalhe.empresaNome?.trim()?.takeIf { it.isNotBlank() }
+        val empresaNomeFallback = fallbackEmpresa?.nomeFantasia?.trim()?.takeIf { it.isNotBlank() }
+            ?: fallbackEmpresa?.razaoSocial?.trim()?.takeIf { it.isNotBlank() }
+            ?: inferEmpresaNomeFromRaw(detalhe.empresaRaw)
 
         if (empresaId == null || empresaCodigo == null) {
             throw IllegalStateException("Selecione uma empresa antes de enviar.")
         }
+
+        val precisaAtualizarEmpresa =
+            detalhe.empresaId == null ||
+                detalhe.empresaCodigo == null ||
+                empresaNomeAtual == null ||
+                (detalhe.empresaCnpj.isNullOrBlank() && !fallbackEmpresa?.cnpj.isNullOrBlank())
+
+        if (!precisaAtualizarEmpresa) return detalhe
 
         detalhe = workflowRepository.updateCadastro(
             session = session,
@@ -3684,11 +3763,10 @@ class AppViewModel(
             payload = buildJsonObject {
                 put("empresa_id", empresaId)
                 put("empresa_codigo", empresaCodigo)
-                fallbackEmpresa?.nomeFantasia
+                (empresaNomeAtual ?: empresaNomeFallback)
                     ?.takeIf { it.isNotBlank() }
                     ?.let { put("empresa_nome", it) }
-                fallbackEmpresa?.cnpj
-                    ?.takeIf { it.isNotBlank() }
+                (detalhe.empresaCnpj?.takeIf { it.isNotBlank() } ?: fallbackEmpresa?.cnpj?.takeIf { it.isNotBlank() })
                     ?.let { put("empresa_cnpj", it) }
                 fallbackEmpresa?.raw?.let { put("empresa_raw", it) }
                     ?: detalhe.empresaRaw?.let { put("empresa_raw", it) }
@@ -3717,6 +3795,28 @@ class AppViewModel(
         }
         return null
     }
+
+    private fun inferEmpresaNomeFromRaw(raw: JsonElement?): String? {
+        val obj = runCatching { raw?.jsonObject }.getOrNull() ?: return null
+        val keys = listOf(
+            "nomeFantasia",
+            "NomeFantazia",
+            "NomeFantasia",
+            "razaoSocial",
+            "RazaoSocial",
+            "nome",
+        )
+        for (key in keys) {
+            obj[key]
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?.let { return it }
+        }
+        return null
+    }
+
 
     private fun mapCadastroFlowErrorMessage(message: String?, fallback: String): String {
         val normalized = message?.lowercase().orEmpty()
