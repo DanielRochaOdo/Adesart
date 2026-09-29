@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.AlertCircle
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material.icons.rounded.Business
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Description
@@ -143,7 +143,7 @@ fun DashboardScreen(
     val currentUnfiltered = if (range == null) {
         emptyList()
     } else {
-        state.cadastros.filter { it.dashboardDate() in range.start..<range.endExclusive }
+        state.cadastros.filter { val date = it.dashboardDate(); date >= range.start && date < range.endExclusive }
     }
 
     val teamNames = state.adminTeams.associate { it.id to it.name }
@@ -233,7 +233,7 @@ fun DashboardScreen(
         DashboardIndicator("Dependentes", current.dependentes, previous.dependentes, Icons.Rounded.Groups, Slate100, Slate500, "Dependentes dos novos cadastros."),
         DashboardIndicator("Dependentes incluidos", current.dependentesIncluidos, previous.dependentesIncluidos, Icons.Rounded.PersonAdd, Slate100, Slate500),
         DashboardIndicator("Total de vidas", current.vidas, previous.vidas, Icons.Rounded.TrendingUp, EmeraldSoft, EmeraldDark),
-        DashboardIndicator("Pendencias", current.pendentes, previous.pendentes, Icons.Rounded.AlertCircle, Amber100, Amber500),
+        DashboardIndicator("Pendencias", current.pendentes, previous.pendentes, Icons.Rounded.WarningAmber, Amber100, Amber500),
     )
 
     LazyColumn(
