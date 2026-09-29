@@ -221,14 +221,20 @@ data class CadastroDetalhe(
     val numeroMatricula: String? = null,
     @SerialName("status_adesao_id")
     val statusAdesaoId: String? = null,
+    @SerialName("vendedor_id")
+    val vendedorId: String? = null,
     @SerialName("vendedor_nome")
     val vendedorNome: String? = null,
     @SerialName("vendedor_codigo")
     val vendedorCodigo: String? = null,
+    @SerialName("adesionista_id")
+    val adesionistaId: String? = null,
     @SerialName("adesionista_nome")
     val adesionistaNome: String? = null,
     @SerialName("adesionista_codigo")
     val adesionistaCodigo: String? = null,
+    @SerialName("plano_nome")
+    val planoNome: String? = null,
     @SerialName("responsavel_financeiro_codigo")
     val responsavelFinanceiroCodigo: Int? = null,
     @SerialName("responsavel_financeiro_nome")
