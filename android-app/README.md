@@ -1,6 +1,8 @@
 # Android App
 
-Aplicacao Android nativa em Kotlin + Jetpack Compose para substituir gradualmente o app web.
+Aplicação Android nativa em Kotlin + Jetpack Compose do Adesart.
+
+Este diretório faz parte do repositório canônico `Tecnologia-odonto/Adesart`. O Android é outro cliente do mesmo produto e deve consumir as mesmas Edge Functions, migrations e regras de negócio usadas pelo Web. Não existe backend específico do Mobile.
 
 ## Estado atual
 
