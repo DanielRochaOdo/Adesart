@@ -64,22 +64,19 @@ fun FilaUploadErpScreen(
     var fileError by rememberSaveable { mutableStateOf<String?>(null) }
     val itemsPerPage = 20
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(selectedFilter, currentPage) {
         while (true) {
-            viewModel.loadUploadQueue()
+            viewModel.loadUploadQueue(
+                status = selectedFilter,
+                page = currentPage,
+                pageSize = itemsPerPage,
+            )
             delay(5000)
         }
     }
 
-    val filteredItems = state.uploadQueue.filter { item ->
-        selectedFilter == "todos" || item.status == selectedFilter
-    }
-    val totalPages = ((filteredItems.size + itemsPerPage - 1) / itemsPerPage).coerceAtLeast(1)
+    val totalPages = ((state.uploadQueueTotal + itemsPerPage - 1) / itemsPerPage).coerceAtLeast(1)
     if (currentPage > totalPages) currentPage = totalPages
-    val pagedItems = filteredItems.drop((currentPage - 1) * itemsPerPage).take(itemsPerPage)
-    val pendingCount = state.uploadQueue.count { it.status in setOf("queued", "retry_wait") }
-    val processingCount = state.uploadQueue.count { it.status == "processing" }
-    val failedCount = state.uploadQueue.count { it.status == "failed" }
 
     LazyColumn(
         modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
@@ -98,24 +95,24 @@ fun FilaUploadErpScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 QueueMetric(
-                    label = "Aguardando",
-                    value = pendingCount,
+                    label = "Resultados",
+                    value = state.uploadQueueTotal,
                     container = Amber100,
                     content = Amber500,
                     modifier = Modifier.weight(1f),
                 )
                 QueueMetric(
-                    label = "Processando",
-                    value = processingCount,
+                    label = "Pagina",
+                    value = currentPage,
                     container = Blue100,
                     content = Blue500,
                     modifier = Modifier.weight(1f),
                 )
                 QueueMetric(
-                    label = "Falhas",
-                    value = failedCount,
-                    container = Red100,
-                    content = Red500,
+                    label = "Exibidos",
+                    value = state.uploadQueue.size,
+                    container = EmeraldSoft,
+                    content = Emerald,
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -147,7 +144,13 @@ fun FilaUploadErpScreen(
                     ) {
                         VendaButton(
                             label = "Atualizar",
-                            onClick = { viewModel.loadUploadQueue() },
+                            onClick = {
+                                viewModel.loadUploadQueue(
+                                    status = selectedFilter,
+                                    page = currentPage,
+                                    pageSize = itemsPerPage,
+                                )
+                            },
                             enabled = !state.adminFeatureLoading,
                             style = VendaButtonStyle.SECONDARY,
                             modifier = Modifier.weight(1f),
@@ -196,14 +199,14 @@ fun FilaUploadErpScreen(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = "${filteredItems.size} item(ns)",
+                    text = "${state.uploadQueueTotal} item(ns)",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
 
-        if (filteredItems.isEmpty()) {
+        if (state.uploadQueue.isEmpty()) {
             item {
                 VendaEmptyState(
                     title = "Nenhum documento na fila",
@@ -211,7 +214,7 @@ fun FilaUploadErpScreen(
                 )
             }
         } else {
-            items(pagedItems) { item ->
+            items(state.uploadQueue) { item ->
                 WebCard {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Row(
@@ -255,7 +258,38 @@ fun FilaUploadErpScreen(
                             )
                         }
 
-                        item.cadastroId?.takeIf { it.isNotBlank() }?.let { cadastroId ->
+                        item.cadastro?.let { cadastro ->
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(3.dp),
+                                ) {
+                                    Text(
+                                        text = cadastro.nome?.takeIf { it.isNotBlank() } ?: "Associado nao informado",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    cadastro.cpf?.takeIf { it.isNotBlank() }?.let { cpf ->
+                                        Text(
+                                            text = "CPF: ${formatQueueCpf(cpf)}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    cadastro.empresaNome?.takeIf { it.isNotBlank() }?.let { empresa ->
+                                        Text(
+                                            text = "Empresa: $empresa",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        } ?: item.cadastroId?.takeIf { it.isNotBlank() }?.let { cadastroId ->
                             Text(
                                 text = "Cadastro ${cadastroId.take(8)}",
                                 style = MaterialTheme.typography.bodySmall,
@@ -426,4 +460,13 @@ private fun formatQueueDateTime(value: String): String {
         java.time.OffsetDateTime.parse(value)
             .format(java.time.format.DateTimeFormatter.ofPattern("dd/MM HH:mm"))
     }.getOrDefault(value)
+}
+
+private fun formatQueueCpf(value: String): String {
+    val digits = value.filter(Char::isDigit)
+    return if (digits.length == 11) {
+        "${digits.substring(0, 3)}.${digits.substring(3, 6)}.${digits.substring(6, 9)}-${digits.substring(9)}"
+    } else {
+        value
+    }
 }

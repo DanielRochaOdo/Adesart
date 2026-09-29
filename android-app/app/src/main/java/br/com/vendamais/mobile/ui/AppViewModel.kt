@@ -11,6 +11,7 @@ import br.com.vendamais.mobile.data.auth.SessionStore
 import br.com.vendamais.mobile.data.auth.SupabaseAuthService
 import br.com.vendamais.mobile.data.models.AdminTeam
 import br.com.vendamais.mobile.data.models.AdminUser
+import br.com.vendamais.mobile.data.models.ApiLogDetail
 import br.com.vendamais.mobile.data.models.ApiLogItem
 import br.com.vendamais.mobile.data.models.AuditLemmitResponse
 import br.com.vendamais.mobile.data.models.CadastroConfig
@@ -202,7 +203,14 @@ data class AppUiState(
     val adminLoaded: Boolean = false,
     val auditLemmit: AuditLemmitResponse = AuditLemmitResponse(),
     val apiLogs: List<ApiLogItem> = emptyList(),
+    val apiLogsTotal: Int = 0,
+    val apiLogDetail: ApiLogDetail? = null,
+    val apiLogDetailLoading: Boolean = false,
     val uploadQueue: List<ErpUploadQueueItem> = emptyList(),
+    val uploadQueueTotal: Int = 0,
+    val uploadQueueFilter: String = "todos",
+    val uploadQueuePage: Int = 1,
+    val uploadQueuePageSize: Int = 20,
     val uploadQueueOperation: ProcessUploadQueueResponse? = null,
     val resetQueueResult: ResetStuckQueueResult? = null,
     val cadastrosExcluidos: List<CadastroExcluidoItem> = emptyList(),
@@ -513,6 +521,12 @@ class AppViewModel(
     fun selectTab(tab: MainTab) {
         _uiState.update { it.copy(activeTab = tab, errorMessage = null, noticeMessage = null) }
         when (tab) {
+            MainTab.DASHBOARD -> {
+                ensureCadastroResourcesLoaded(force = true)
+                if (_uiState.value.profile?.role in setOf("ADMINISTRADOR", "ADMIN", "GERENTE", "GESTOR", "SUPERVISOR")) {
+                    ensureAdminResourcesLoaded()
+                }
+            }
             MainTab.CADASTROS -> ensureCadastroResourcesLoaded(force = true)
             MainTab.USERS,
             MainTab.TEAMS,
@@ -2191,18 +2205,37 @@ class AppViewModel(
         }
     }
 
-    fun loadUploadQueue(statuses: List<String> = emptyList()) {
+    fun loadUploadQueue(
+        status: String = _uiState.value.uploadQueueFilter,
+        page: Int = _uiState.value.uploadQueuePage,
+        pageSize: Int = _uiState.value.uploadQueuePageSize,
+    ) {
         val session = currentSession ?: return
+        val safePage = page.coerceAtLeast(1)
+        val safeSize = pageSize.coerceIn(1, 100)
+        _uiState.update {
+            it.copy(
+                uploadQueueFilter = status,
+                uploadQueuePage = safePage,
+                uploadQueuePageSize = safeSize,
+            )
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(adminFeatureLoading = true, errorMessage = null) }
             runCatching {
                 val activeSession = ensureFreshSession(session)
-                repository.fetchErpUploadQueue(activeSession, statuses = statuses)
-            }.onSuccess { queue ->
+                repository.fetchErpUploadQueue(
+                    activeSession,
+                    status = status.takeIf { it != "todos" },
+                    page = safePage,
+                    pageSize = safeSize,
+                )
+            }.onSuccess { result ->
                 _uiState.update {
                     it.copy(
                         adminFeatureLoading = false,
-                        uploadQueue = queue,
+                        uploadQueue = result.items,
+                        uploadQueueTotal = result.total,
                     )
                 }
             }.onFailure { throwable ->
@@ -2534,24 +2567,71 @@ class AppViewModel(
     }
 
     fun loadApiLogs(
-        success: Boolean? = null,
+        status: String = "all",
         startIso: String? = null,
-        endIso: String? = null,
-        limit: Int = 100,
-        offset: Int = 0,
+        endExclusiveIso: String? = null,
+        cpf: String? = null,
+        usuario: String? = null,
+        codigoEmpresa: String? = null,
+        endpoint: String? = null,
+        page: Int = 1,
+        pageSize: Int = 100,
     ) {
         val session = currentSession ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(adminFeatureLoading = true, errorMessage = null) }
             runCatching {
                 val activeSession = ensureFreshSession(session)
-                repository.fetchApiLogs(activeSession, success, startIso, endIso, limit, offset)
-            }.onSuccess { logs ->
-                _uiState.update { it.copy(apiLogs = logs, adminFeatureLoading = false) }
+                repository.searchApiLogs(
+                    activeSession,
+                    status = status,
+                    startIso = startIso,
+                    endExclusiveIso = endExclusiveIso,
+                    cpf = cpf,
+                    usuario = usuario,
+                    codigoEmpresa = codigoEmpresa,
+                    endpoint = endpoint,
+                    page = page,
+                    pageSize = pageSize,
+                )
+            }.onSuccess { response ->
+                _uiState.update {
+                    it.copy(
+                        apiLogs = response.logs,
+                        apiLogsTotal = response.total,
+                        adminFeatureLoading = false,
+                    )
+                }
             }.onFailure { throwable ->
-                _uiState.update { it.copy(adminFeatureLoading = false, errorMessage = throwable.message) }
+                _uiState.update {
+                    it.copy(
+                        apiLogs = emptyList(),
+                        apiLogsTotal = 0,
+                        adminFeatureLoading = false,
+                        errorMessage = throwable.message,
+                    )
+                }
             }
         }
+    }
+
+    fun loadApiLogDetail(id: String) {
+        val session = currentSession ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(apiLogDetail = null, apiLogDetailLoading = true) }
+            runCatching {
+                val activeSession = ensureFreshSession(session)
+                repository.fetchApiLogDetail(activeSession, id)
+            }.onSuccess { detail ->
+                _uiState.update { it.copy(apiLogDetail = detail, apiLogDetailLoading = false) }
+            }.onFailure {
+                _uiState.update { it.copy(apiLogDetail = null, apiLogDetailLoading = false) }
+            }
+        }
+    }
+
+    fun clearApiLogDetail() {
+        _uiState.update { it.copy(apiLogDetail = null, apiLogDetailLoading = false) }
     }
 
     suspend fun createQueueFileSignedUrl(item: ErpUploadQueueItem): String {
@@ -2571,11 +2651,17 @@ class AppViewModel(
             runCatching {
                 val activeSession = ensureFreshSession(session)
                 repository.reprocessUploadQueueItem(activeSession, id)
-                repository.fetchErpUploadQueue(activeSession)
-            }.onSuccess { items ->
+                repository.fetchErpUploadQueue(
+                    activeSession,
+                    status = _uiState.value.uploadQueueFilter.takeIf { it != "todos" },
+                    page = _uiState.value.uploadQueuePage,
+                    pageSize = _uiState.value.uploadQueuePageSize,
+                )
+            }.onSuccess { result ->
                 _uiState.update {
                     it.copy(
-                        uploadQueue = items,
+                        uploadQueue = result.items,
+                        uploadQueueTotal = result.total,
                         adminFeatureLoading = false,
                         noticeMessage = "Item marcado para reprocessamento.",
                     )
@@ -3016,7 +3102,15 @@ class AppViewModel(
                 adminLoading = false,
                 adminLoaded = false,
                 auditLemmit = AuditLemmitResponse(),
+                apiLogs = emptyList(),
+                apiLogsTotal = 0,
+                apiLogDetail = null,
+                apiLogDetailLoading = false,
                 uploadQueue = emptyList(),
+                uploadQueueTotal = 0,
+                uploadQueueFilter = "todos",
+                uploadQueuePage = 1,
+                uploadQueuePageSize = 20,
                 uploadQueueOperation = null,
                 resetQueueResult = null,
                 cadastrosExcluidos = emptyList(),
@@ -3033,8 +3127,14 @@ class AppViewModel(
                 applyCriticalSessionData(critical, null)
                 registerCurrentAppVersionBestEffort(session)
                 prefetchCadastroSupport(session, critical.profile)
-                if (_uiState.value.activeTab == MainTab.CADASTROS) {
+                if (_uiState.value.activeTab in setOf(MainTab.DASHBOARD, MainTab.CADASTROS)) {
                     ensureCadastroResourcesLoaded()
+                }
+                if (
+                    _uiState.value.activeTab == MainTab.DASHBOARD &&
+                    critical.profile.role in setOf("ADMINISTRADOR", "ADMIN", "GERENTE", "GESTOR", "SUPERVISOR")
+                ) {
+                    ensureAdminResourcesLoaded()
                 }
                 if (_uiState.value.activeTab in setOf(
                         MainTab.USERS,
@@ -3119,8 +3219,14 @@ class AppViewModel(
                     )
                 }
                 prefetchCadastroSupport(session, critical.profile, force = true)
-                if (_uiState.value.activeTab == MainTab.CADASTROS || _uiState.value.cadastrosLoaded) {
+                if (_uiState.value.activeTab in setOf(MainTab.DASHBOARD, MainTab.CADASTROS) || _uiState.value.cadastrosLoaded) {
                     ensureCadastroResourcesLoaded(force = true)
+                }
+                if (
+                    _uiState.value.activeTab == MainTab.DASHBOARD &&
+                    critical.profile.role in setOf("ADMINISTRADOR", "ADMIN", "GERENTE", "GESTOR", "SUPERVISOR")
+                ) {
+                    ensureAdminResourcesLoaded(force = true)
                 }
                 if (_uiState.value.activeTab in setOf(
                         MainTab.USERS,

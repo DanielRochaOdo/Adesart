@@ -47,6 +47,7 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -146,7 +147,9 @@ fun CadastrosScreen(
     onCloseLinkHistory: () -> Unit,
     onOpenWebApp: (() -> Unit)? = null,
 ) {
+    val context = LocalContext.current
     var showInclusaoDialog by rememberSaveable { mutableStateOf(false) }
+    var exportMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var showFilters by rememberSaveable { mutableStateOf(false) }
     val defaultDataInicio = firstDayOfCurrentMonthIso()
     var tipoBusca by rememberSaveable { mutableStateOf(TipoBuscaFiltro.ASSOCIADO) }
@@ -297,6 +300,7 @@ fun CadastrosScreen(
     val isListTab = state.cadastroTab in setOf(CadastroAreaTab.INCOMPLETOS, CadastroAreaTab.COMPLETOS)
     val useSupervisorGroupedView = isListTab && profileRole == "SUPERVISOR"
     val useGerenteGroupedView = isListTab && profileRole == "GERENTE"
+    val exportCadastros = if (useSupervisorGroupedView || useGerenteGroupedView) baseCadastros else filteredCadastros
 
     LazyColumn(
         modifier = Modifier
@@ -397,6 +401,39 @@ fun CadastrosScreen(
             CadastroAreaTab.INCOMPLETOS,
             CadastroAreaTab.COMPLETOS,
             -> {
+                if (state.cadastroTab == CadastroAreaTab.INCOMPLETOS) {
+                    item {
+                        WebCard {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                VendaButton(
+                                    label = "Exportar XLSX",
+                                    onClick = {
+                                        val uri = PendingCadastrosXlsxExporter.exportToDownloads(
+                                            context = context,
+                                            cadastros = exportCadastros,
+                                            statusLabels = state.statusAdesoes.associate { it.id to it.nome },
+                                        )
+                                        exportMessage = if (uri != null) {
+                                            "Planilha salva em Downloads/VendaMais."
+                                        } else {
+                                            "Nao foi possivel gerar a planilha."
+                                        }
+                                    },
+                                    enabled = exportCadastros.isNotEmpty(),
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                exportMessage?.let {
+                                    Text(
+                                        text = it,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 if (useSupervisorGroupedView) {
                     if (state.cadastrosLoading && !state.cadastrosLoaded) {
                         item {
