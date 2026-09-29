@@ -39,9 +39,6 @@ sealed interface CadastroOverlayIntent {
         val message: String,
     ) : CadastroOverlayIntent
 
-    data class DependenteAtivo(
-        val details: List<String> = emptyList(),
-    ) : CadastroOverlayIntent
 
     data class ExcluirCadastro(
         val cadastroId: String,
@@ -70,7 +67,6 @@ sealed interface CadastroOverlayIntent {
 
 sealed interface CadastroErpError {
     data class ParceiroInvalido(val message: String) : CadastroErpError
-    data class DependenteAtivo(val details: List<String>) : CadastroErpError
 }
 
 data class CadastroModalSignal(
@@ -135,9 +131,6 @@ object CadastroModalStateMachine {
                 return CadastroOverlayIntent.ParceiroInvalido(error.message)
             }
 
-            is CadastroErpError.DependenteAtivo -> {
-                return CadastroOverlayIntent.DependenteAtivo(error.details)
-            }
 
             null -> Unit
         }
