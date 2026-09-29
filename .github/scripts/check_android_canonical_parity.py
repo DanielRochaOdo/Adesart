@@ -59,6 +59,20 @@ if dashboard_repository.exists():
 else:
     errors.append("SupabaseRepository.kt não encontrado.")
 
+dashboard_company_migration = (
+    ROOT
+    / "supabase/migrations/20260929203000_dashboard_resolve_empresa_canonica.sql"
+)
+if dashboard_company_migration.exists():
+    company_text = dashboard_company_migration.read_text(encoding="utf-8")
+    for required in ("empresa_codigo_resolvido", "empresa_nome_resolvido", "Empresa código"):
+        if required not in company_text:
+            errors.append(
+                f"Resolução canônica de empresa do Dashboard incompleta: {required} ausente."
+            )
+else:
+    errors.append("Migration canônica de resolução de empresa do Dashboard não encontrada.")
+
 if auth_service.exists():
     auth_text = auth_service.read_text(encoding="utf-8")
     if "Falha ao autenticar no Supabase" in auth_text:
