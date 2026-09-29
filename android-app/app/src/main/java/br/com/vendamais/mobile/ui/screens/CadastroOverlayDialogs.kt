@@ -170,26 +170,6 @@ fun CadastroOverlayDialogs(
             )
         }
 
-        is CadastroOverlayIntent.DependenteAtivo -> {
-            AlertDialog(
-                onDismissRequest = viewModel::dismissCadastroOverlay,
-                title = { Text("Dependente ativo") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Existem dependentes ativos no contrato.")
-                        if (overlay.details.isNotEmpty()) {
-                            overlay.details.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = viewModel::dismissCadastroOverlay) {
-                        Text("Fechar")
-                    }
-                },
-            )
-        }
-
         is CadastroOverlayIntent.ExcluirCadastro -> {
             var motivo by remember { mutableStateOf("") }
             AlertDialog(
