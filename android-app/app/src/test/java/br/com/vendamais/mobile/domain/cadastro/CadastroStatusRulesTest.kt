@@ -6,8 +6,9 @@ import org.junit.Test
 class CadastroStatusRulesTest {
 
     @Test
-    fun `isPendingCadastroStatus should accept only incompleto as pending status`() {
+    fun `isPendingCadastroStatus should accept canonical pending statuses`() {
         assertThat(isPendingCadastroStatus("incompleto")).isTrue()
+        assertThat(isPendingCadastroStatus("adesoes_pendentes")).isTrue()
     }
 
     @Test
@@ -27,6 +28,6 @@ class CadastroStatusRulesTest {
     @Test
     fun `pendingCadastroStatusQueryValue should return in filter with pending statuses`() {
         assertThat(pendingCadastroStatusQueryValue())
-            .isEqualTo("in.(incompleto)")
+            .isEqualTo("in.(incompleto,adesoes_pendentes)")
     }
 }
