@@ -29,6 +29,21 @@ data class ApiLogItem(
 )
 
 @Serializable
+data class ApiLogSearchResponse(
+    val total: Int = 0,
+    val logs: List<ApiLogItem> = emptyList(),
+)
+
+@Serializable
+data class ApiLogDetail(
+    @SerialName("request_body")
+    val requestBody: JsonElement? = null,
+    @SerialName("response_body")
+    val responseBody: JsonElement? = null,
+)
+
+
+@Serializable
 data class AuditLemmitResponse(
     val cards: AuditLemmitCards = AuditLemmitCards(),
     @SerialName("usuario_consulta")
@@ -110,6 +125,21 @@ data class ErpUploadQueueItem(
     val arquivoNome: String = "",
     val bucket: String = "cadastros-temp-files",
     val tipo: String = "dependente",
+    @SerialName("cadastros")
+    val cadastro: ErpUploadQueueCadastro? = null,
+)
+
+@Serializable
+data class ErpUploadQueueCadastro(
+    val nome: String? = null,
+    val cpf: String? = null,
+    @SerialName("empresa_nome")
+    val empresaNome: String? = null,
+)
+
+data class ErpUploadQueuePage(
+    val items: List<ErpUploadQueueItem> = emptyList(),
+    val total: Int = 0,
 )
 
 @Serializable

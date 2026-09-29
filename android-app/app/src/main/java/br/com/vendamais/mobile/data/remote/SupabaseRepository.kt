@@ -5,6 +5,8 @@ import br.com.vendamais.mobile.BuildConfig
 import br.com.vendamais.mobile.data.auth.SavedSession
 import br.com.vendamais.mobile.data.models.AdminTeam
 import br.com.vendamais.mobile.data.models.AdminUser
+import br.com.vendamais.mobile.data.models.ApiLogDetail
+import br.com.vendamais.mobile.data.models.ApiLogSearchResponse
 import br.com.vendamais.mobile.data.models.AuditLemmitResponse
 import br.com.vendamais.mobile.data.models.CadastroExcluidoItem
 import br.com.vendamais.mobile.data.models.CadastroConfig
@@ -12,6 +14,7 @@ import br.com.vendamais.mobile.data.models.CadastroDetalhe
 import br.com.vendamais.mobile.data.models.CadastroResumo
 import br.com.vendamais.mobile.data.models.CadastroStats
 import br.com.vendamais.mobile.data.models.ErpUploadQueueItem
+import br.com.vendamais.mobile.data.models.ErpUploadQueuePage
 import br.com.vendamais.mobile.data.models.MobileProfile
 import br.com.vendamais.mobile.data.models.MobileTeam
 import br.com.vendamais.mobile.data.models.ProcessUploadQueueResponse
@@ -137,7 +140,7 @@ class SupabaseRepository(
                 query = {
                     parameter(
                         "select",
-                        "id,status,tipo_cadastro,nome,cpf,empresa_nome,empresa_cnpj,empresa_codigo,status_adesao_id,vendedor_id,vendedor_nome,adesionista_nome,dependentes,created_at,updated_at"
+                        "id,status,tipo_cadastro,nome,cpf,empresa_nome,empresa_cnpj,empresa_codigo,status_adesao_id,created_by,team_id,vendedor_id,vendedor_codigo,vendedor_nome,adesionista_id,adesionista_codigo,adesionista_nome,plano_codigo,plano_nome,fluxo_publico,origem_link_id,dependentes,data_envio,created_at,updated_at"
                     )
                     parameter("order", "updated_at.desc")
                     parameter("limit", pageSize)
@@ -233,25 +236,31 @@ class SupabaseRepository(
 
     suspend fun fetchErpUploadQueue(
         session: SavedSession,
-        statuses: List<String> = emptyList(),
-        limit: Int = 500,
-    ): List<ErpUploadQueueItem> {
-        return getList(
-            path = "erp_upload_queue",
-            session = session,
-            query = {
-                parameter(
-                    "select",
-                    "id,created_at,updated_at,status,attempts,next_attempt_at,last_attempt_at,last_error,last_status_code,erp_response,cadastro_id,created_by,id_funcionario,id_dependente,arquivo_path,arquivo_nome,bucket,tipo",
-                )
-                if (statuses.isNotEmpty()) {
-                    val payload = statuses.joinToString(",") { it.trim() }
-                    parameter("status", "in.($payload)")
-                }
-                parameter("order", "created_at.desc")
-                parameter("limit", limit)
-            },
-        )
+        status: String? = null,
+        page: Int = 1,
+        pageSize: Int = 20,
+    ): ErpUploadQueuePage {
+        val safePage = page.coerceAtLeast(1)
+        val safePageSize = pageSize.coerceIn(1, 100)
+        val offset = (safePage - 1) * safePageSize
+        val response = client.get("${AppConfig.supabaseUrl}/rest/v1/erp_upload_queue") {
+            applyAuthHeaders(session)
+            header("Prefer", "count=exact")
+            parameter(
+                "select",
+                "id,created_at,updated_at,status,attempts,next_attempt_at,last_attempt_at,last_error,last_status_code,erp_response,cadastro_id,created_by,id_funcionario,id_dependente,arquivo_path,arquivo_nome,bucket,tipo,cadastros(nome,cpf,empresa_nome)",
+            )
+            status?.takeIf { it.isNotBlank() && it != "todos" }?.let { parameter("status", "eq.$it") }
+            parameter("order", "created_at.desc")
+            parameter("limit", safePageSize)
+            parameter("offset", offset)
+        }
+        val items: List<ErpUploadQueueItem> = response.body()
+        val total = response.headers["Content-Range"]
+            ?.substringAfter("/")
+            ?.toIntOrNull()
+            ?: items.size
+        return ErpUploadQueuePage(items = items, total = total)
     }
 
     suspend fun processUploadQueue(session: SavedSession): ProcessUploadQueueResponse {
@@ -505,27 +514,47 @@ class SupabaseRepository(
         }
     }
 
-    suspend fun fetchApiLogs(
+    suspend fun searchApiLogs(
         session: SavedSession,
-        success: Boolean? = null,
+        status: String = "all",
         startIso: String? = null,
-        endIso: String? = null,
-        limit: Int = 100,
-        offset: Int = 0,
-    ): List<br.com.vendamais.mobile.data.models.ApiLogItem> {
-        return getList(
+        endExclusiveIso: String? = null,
+        cpf: String? = null,
+        usuario: String? = null,
+        codigoEmpresa: String? = null,
+        endpoint: String? = null,
+        page: Int = 1,
+        pageSize: Int = 100,
+    ): ApiLogSearchResponse {
+        return client.post("${AppConfig.supabaseUrl}/rest/v1/rpc/search_api_logs") {
+            applyAuthHeaders(session)
+            contentType(ContentType.Application.Json)
+            setBody(
+                buildJsonObject {
+                    if (startIso.isNullOrBlank()) put("p_data_inicio", JsonNull) else put("p_data_inicio", startIso)
+                    if (endExclusiveIso.isNullOrBlank()) put("p_data_fim_exclusiva", JsonNull) else put("p_data_fim_exclusiva", endExclusiveIso)
+                    put("p_status", status)
+                    if (cpf.isNullOrBlank()) put("p_cpf", JsonNull) else put("p_cpf", cpf)
+                    if (usuario.isNullOrBlank()) put("p_usuario", JsonNull) else put("p_usuario", usuario)
+                    if (codigoEmpresa.isNullOrBlank()) put("p_codigo_empresa", JsonNull) else put("p_codigo_empresa", codigoEmpresa)
+                    if (endpoint.isNullOrBlank()) put("p_endpoint", JsonNull) else put("p_endpoint", endpoint)
+                    put("p_page", page.coerceAtLeast(1))
+                    put("p_page_size", pageSize.coerceIn(1, 100))
+                },
+            )
+        }.body()
+    }
+
+    suspend fun fetchApiLogDetail(session: SavedSession, id: String): ApiLogDetail? {
+        return getList<ApiLogDetail>(
             path = "api_logs",
             session = session,
             query = {
-                parameter("select", "id,user_email,endpoint,method,status_code,success,error_message,duration_ms,cost,created_at,request_body,response_body")
-                success?.let { parameter("success", "eq.$it") }
-                startIso?.takeIf { it.isNotBlank() }?.let { parameter("created_at", "gte.$it") }
-                endIso?.takeIf { it.isNotBlank() }?.let { parameter("created_at", "lte.$it") }
-                parameter("order", "created_at.desc")
-                parameter("limit", limit)
-                parameter("offset", offset)
+                parameter("id", "eq.$id")
+                parameter("select", "request_body,response_body")
+                parameter("limit", 1)
             },
-        )
+        ).firstOrNull()
     }
 
     suspend fun createStorageSignedUrl(

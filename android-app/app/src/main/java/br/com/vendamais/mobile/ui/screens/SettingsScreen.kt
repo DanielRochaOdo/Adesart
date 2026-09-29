@@ -246,46 +246,295 @@ private fun StatusDialog(item: StatusAdesao?, onDismiss: () -> Unit, maxOrder: I
 
 @Composable
 private fun ApiLogsEditor(state: AppUiState, viewModel: AppViewModel) {
-    var filter by rememberSaveable { mutableStateOf("all") }; var start by rememberSaveable { mutableStateOf("") }; var end by rememberSaveable { mutableStateOf("") }; var page by rememberSaveable { mutableStateOf(1) }; var selected by remember { mutableStateOf<ApiLogItem?>(null) }
-    val size = 100
+    var filter by rememberSaveable { mutableStateOf("all") }
+    var startDate by rememberSaveable { mutableStateOf("") }
+    var endDate by rememberSaveable { mutableStateOf("") }
+    var page by rememberSaveable { mutableStateOf(1) }
+    var selected by remember { mutableStateOf<ApiLogItem?>(null) }
+
+    // Dados sensiveis ficam apenas em memoria, como no Web.
+    var cpf by remember { mutableStateOf("") }
+    var usuario by remember { mutableStateOf("") }
+    var codigoEmpresa by remember { mutableStateOf("") }
+    var endpoint by remember { mutableStateOf("") }
+    var appliedCpf by remember { mutableStateOf("") }
+    var appliedUsuario by remember { mutableStateOf("") }
+    var appliedCodigoEmpresa by remember { mutableStateOf("") }
+    var appliedEndpoint by remember { mutableStateOf("") }
+    var validationError by remember { mutableStateOf<String?>(null) }
+
+    val pageSize = 100
+    val totalPages = ((state.apiLogsTotal + pageSize - 1) / pageSize).coerceAtLeast(1)
+
     fun load() {
-        val success = when (filter) { "success" -> true; "error" -> false; else -> null }
-        viewModel.loadApiLogs(success, start.takeIf { it.isNotBlank() }?.let { "${it}T00:00:00Z" }, end.takeIf { it.isNotBlank() }?.let { "${it}T23:59:59Z" }, size, (page - 1) * size)
+        if (startDate.isNotBlank() && endDate.isNotBlank() && startDate > endDate) {
+            validationError = "A data inicial nao pode ser posterior a data final."
+            return
+        }
+        val startIso = startDate.takeIf { it.isNotBlank() }?.let { "${it}T00:00:00Z" }
+        val endExclusiveIso = endDate.takeIf { it.isNotBlank() }?.let {
+            runCatching { LocalDate.parse(it).plusDays(1).toString() }
+                .getOrNull()
+                ?.let { next -> "${next}T00:00:00Z" }
+        }
+        viewModel.loadApiLogs(
+            status = filter,
+            startIso = startIso,
+            endExclusiveIso = endExclusiveIso,
+            cpf = appliedCpf.takeIf { it.isNotBlank() },
+            usuario = appliedUsuario.takeIf { it.isNotBlank() },
+            codigoEmpresa = appliedCodigoEmpresa.takeIf { it.isNotBlank() },
+            endpoint = appliedEndpoint.takeIf { it.isNotBlank() },
+            page = page,
+            pageSize = pageSize,
+        )
     }
-    LaunchedEffect(filter, start, end, page) { load() }
-    WebCard { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("Logs de API", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Text("Investigue chamadas, latencia e erros sem sair do aplicativo.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        SettingsChoiceField("Status", filter, listOf("all" to "Todos", "success" to "Sucesso", "error" to "Erros"), onSelected = { filter = it; page = 1 })
-        OutlinedTextField(start, { start = it; page = 1 }, label = { Text("Data Inicio (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(end, { end = it; page = 1 }, label = { Text("Data Fim (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth())
-        if (state.apiLogs.isEmpty()) {
-            VendaEmptyState(title = "Nenhum log encontrado", message = "Nao ha chamadas correspondentes aos filtros selecionados.")
-        } else {
-            state.apiLogs.forEach { log ->
-                Surface(
-                    onClick = { selected = log },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
-                    shape = MaterialTheme.shapes.medium,
-                ) {
-                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text(log.endpoint, modifier = Modifier.weight(1f), fontWeight = FontWeight.Medium)
-                            VendaStatusChip(
-                                label = if (log.success) "Sucesso" else "Falha",
-                                tone = if (log.success) VendaStatusTone.SUCCESS else VendaStatusTone.ERROR,
-                            )
+
+    LaunchedEffect(
+        filter,
+        startDate,
+        endDate,
+        page,
+        appliedCpf,
+        appliedUsuario,
+        appliedCodigoEmpresa,
+        appliedEndpoint,
+    ) {
+        validationError = null
+        load()
+    }
+
+    WebCard {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Logs de API", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Pesquise chamadas no banco antes da paginacao usando periodo, CPF, usuario, empresa e endpoint.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            SettingsChoiceField(
+                "Status",
+                filter,
+                listOf("all" to "Todos", "success" to "Sucesso", "error" to "Erros"),
+                onSelected = { filter = it; page = 1 },
+            )
+
+            OutlinedTextField(
+                startDate,
+                { startDate = it; page = 1 },
+                label = { Text("Data Inicio (YYYY-MM-DD)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                endDate,
+                { endDate = it; page = 1 },
+                label = { Text("Data Fim (YYYY-MM-DD)") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+
+            OutlinedTextField(
+                cpf,
+                { cpf = it.filter(Char::isDigit).take(11) },
+                label = { Text("CPF") },
+                placeholder = { Text("11 digitos") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                usuario,
+                { usuario = it },
+                label = { Text("Usuario") },
+                placeholder = { Text("Nome ou e-mail") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                codigoEmpresa,
+                { codigoEmpresa = it.filter(Char::isDigit) },
+                label = { Text("Codigo da empresa") },
+                placeholder = { Text("Codigo no ERP") },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+            )
+            OutlinedTextField(
+                endpoint,
+                { endpoint = it },
+                label = { Text("Endpoint") },
+                placeholder = { Text("Ex.: lemit-consulta-pessoa") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+            )
+
+            validationError?.let { message ->
+                Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                VendaButton(
+                    label = "Pesquisar",
+                    onClick = {
+                        val cpfDigits = cpf.filter(Char::isDigit)
+                        when {
+                            cpf.isNotBlank() && cpfDigits.length != 11 -> {
+                                validationError = "Informe um CPF com 11 digitos."
+                            }
+                            startDate.isNotBlank() && endDate.isNotBlank() && startDate > endDate -> {
+                                validationError = "A data inicial nao pode ser posterior a data final."
+                            }
+                            else -> {
+                                validationError = null
+                                appliedCpf = cpfDigits
+                                appliedUsuario = usuario.trim()
+                                appliedCodigoEmpresa = codigoEmpresa.trim()
+                                appliedEndpoint = endpoint.trim()
+                                page = 1
+                            }
                         }
-                        Text("${log.userEmail ?: "Anonimo"} | ${formatLogDate(log.createdAt)} | ${log.durationMs ?: 0}ms | HTTP ${log.statusCode ?: "-"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (!log.success) Text("Nao foi possivel concluir esta chamada. Toque para ver os detalhes tecnicos.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    },
+                    modifier = Modifier.weight(1f),
+                    enabled = !state.adminFeatureLoading,
+                )
+                VendaButton(
+                    label = "Limpar",
+                    onClick = {
+                        filter = "all"
+                        startDate = ""
+                        endDate = ""
+                        cpf = ""
+                        usuario = ""
+                        codigoEmpresa = ""
+                        endpoint = ""
+                        appliedCpf = ""
+                        appliedUsuario = ""
+                        appliedCodigoEmpresa = ""
+                        appliedEndpoint = ""
+                        validationError = null
+                        page = 1
+                    },
+                    modifier = Modifier.weight(1f),
+                    style = VendaButtonStyle.SECONDARY,
+                )
+            }
+
+            Text(
+                "${state.apiLogsTotal} registro(s) encontrado(s)",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            if (state.apiLogs.isEmpty()) {
+                VendaEmptyState(
+                    title = "Nenhum log encontrado",
+                    message = "Nao ha chamadas correspondentes aos filtros selecionados.",
+                )
+            } else {
+                state.apiLogs.forEach { log ->
+                    Surface(
+                        onClick = {
+                            selected = log
+                            viewModel.loadApiLogDetail(log.id)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                        shape = MaterialTheme.shapes.medium,
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(log.endpoint, modifier = Modifier.weight(1f), fontWeight = FontWeight.Medium)
+                                VendaStatusChip(
+                                    label = if (log.success) "Sucesso" else "Falha",
+                                    tone = if (log.success) VendaStatusTone.SUCCESS else VendaStatusTone.ERROR,
+                                )
+                            }
+                            Text(
+                                "${log.userEmail ?: "Anonimo"} | ${formatLogDate(log.createdAt)} | ${log.durationMs ?: 0}ms | HTTP ${log.statusCode ?: "-"}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            if (!log.success) {
+                                Text(
+                                    "Nao foi possivel concluir esta chamada. Toque para ver os detalhes tecnicos.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
                     }
                 }
             }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(
+                    onClick = { if (page > 1) page-- },
+                    enabled = page > 1 && !state.adminFeatureLoading,
+                ) { Text("Anterior") }
+                Text("Pagina $page de $totalPages")
+                TextButton(
+                    onClick = { if (page < totalPages) page++ },
+                    enabled = page < totalPages && !state.adminFeatureLoading,
+                ) { Text("Proxima") }
+            }
         }
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { TextButton(onClick = { if (page > 1) page-- }, enabled = page > 1) { Text("Anterior") }; Text("Pagina $page"); TextButton(onClick = { page++ }, enabled = state.apiLogs.size == size) { Text("Proxima") } }
-    } }
-    selected?.let { log -> AlertDialog(onDismissRequest = { selected = null }, title = { Text(log.endpoint) }, text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { Text("Metodo: ${log.method}"); Text("Status: ${log.statusCode ?: "-"}"); Text("Usuario: ${log.userEmail ?: "Anonimo"}"); Text("Duracao: ${log.durationMs ?: 0}ms"); Text("Custo: ${log.cost ?: 0.0}"); log.errorMessage?.let { Text("Erro: $it") }; Text("Request: ${log.requestBody ?: "-"}", style = MaterialTheme.typography.bodySmall); Text("Response: ${log.responseBody ?: "-"}", style = MaterialTheme.typography.bodySmall) } }, confirmButton = { TextButton(onClick = { selected = null }) { Text("Fechar") } }) }
+    }
+
+    selected?.let { log ->
+        AlertDialog(
+            onDismissRequest = {
+                selected = null
+                viewModel.clearApiLogDetail()
+            },
+            title = { Text(log.endpoint) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Metodo: ${log.method}")
+                    Text("Status: ${log.statusCode ?: "-"}")
+                    Text("Usuario: ${log.userEmail ?: "Anonimo"}")
+                    Text("Duracao: ${log.durationMs ?: 0}ms")
+                    Text("Custo: ${log.cost ?: 0.0}")
+                    log.errorMessage?.let { Text("Erro: $it") }
+                    if (state.apiLogDetailLoading) {
+                        Text("Carregando detalhes...", style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        Text(
+                            "Request: ${state.apiLogDetail?.requestBody ?: "-"}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            "Response: ${state.apiLogDetail?.responseBody ?: "-"}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        selected = null
+                        viewModel.clearApiLogDetail()
+                    },
+                ) { Text("Fechar") }
+            },
+        )
+    }
 }
 
 @Composable
