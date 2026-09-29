@@ -4,10 +4,6 @@ import java.text.Normalizer
 
 object CadastroApiErrorMapper {
     private val parceiroRegex = Regex("\\bparceiro\\b.*\\binvalido\\b", RegexOption.IGNORE_CASE)
-    private val dependenteAtivoRegex = Regex(
-        "cadastrado\\s+e\\s+ativo\\s+no\\s+contrato|dependente(?:\\(s\\))?\\s+ja\\s+cadastrado(?:\\(s\\))?",
-        RegexOption.IGNORE_CASE,
-    )
     private const val pendingCadastroConstraintName = "cadastros_cadastro_incompleto_cpf_unique_idx"
     private const val pendingCadastroCanonicalMessage =
         "ja existe um cadastro pendente para este cpf. abra o pendente e continue por ele."
@@ -20,12 +16,6 @@ object CadastroApiErrorMapper {
 
         if (parceiroRegex.containsMatchIn(normalized)) {
             return CadastroErpError.ParceiroInvalido(message.orEmpty().ifBlank { "Parceiro invalido." })
-        }
-
-        if (dependenteAtivoRegex.containsMatchIn(normalized)) {
-            return CadastroErpError.DependenteAtivo(
-                details = listOf(message.orEmpty().ifBlank { "Dependente ativo no contrato." }),
-            )
         }
 
         return null
