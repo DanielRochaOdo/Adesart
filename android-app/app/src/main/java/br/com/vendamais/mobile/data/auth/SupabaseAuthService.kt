@@ -34,9 +34,9 @@ class SupabaseAuthService(
                 setBody(LoginRequest(email = email, password = password))
             }.body<TokenResponse>()
         } catch (exception: ClientRequestException) {
-            throw exception.toSupabaseException()
+            throw exception.toSupabaseLoginException()
         } catch (exception: Throwable) {
-            throw IllegalStateException("Falha ao interpretar resposta de autenticacao do Supabase.")
+            throw IllegalStateException("Não foi possível entrar no momento. Verifique sua conexão e tente novamente.")
         }
 
         return response.toSavedSession(
@@ -79,13 +79,35 @@ class SupabaseAuthService(
         )
     }
 
+    private suspend fun ClientRequestException.toSupabaseLoginException(): IllegalStateException {
+        val errorBody = response.body<String>()
+        val parsed = runCatching {
+            json.decodeFromString(SupabaseError.serializer(), errorBody)
+        }.getOrNull()
+        val normalizedCode = parsed?.code.orEmpty().lowercase()
+        val normalizedMessage = (parsed?.message ?: parsed?.error).orEmpty().lowercase()
+
+        val invalidCredentials =
+            normalizedCode == "invalid_credentials" ||
+                normalizedMessage.contains("invalid login credentials") ||
+                normalizedMessage.contains("invalid credentials")
+
+        return if (invalidCredentials) {
+            IllegalStateException("Usuário ou senha inválidos. Por favor, tente novamente.")
+        } else {
+            IllegalStateException("Não foi possível entrar no momento. Verifique sua conexão e tente novamente.")
+        }
+    }
+
     private suspend fun ClientRequestException.toSupabaseException(): IllegalStateException {
         val errorBody = response.body<String>()
         val parsed = runCatching {
             json.decodeFromString(SupabaseError.serializer(), errorBody)
         }.getOrNull()
 
-        return IllegalStateException(parsed?.message ?: parsed?.error ?: "Falha ao autenticar no Supabase")
+        return IllegalStateException(
+            parsed?.message ?: parsed?.error ?: "Sessão expirada. Faça login novamente.",
+        )
     }
 
     private fun TokenResponse.toSavedSession(
@@ -109,7 +131,7 @@ class SupabaseAuthService(
             val fallbackMessage = if (isRefreshFlow) {
                 "Refresh token invalido ou sessao expirada. Faca login novamente."
             } else {
-                "Falha ao autenticar no Supabase."
+                "Não foi possível entrar no momento. Por favor, tente novamente."
             }
             throw IllegalStateException(backendMessage ?: fallbackMessage)
         }
@@ -133,6 +155,7 @@ class SupabaseAuthService(
 
 @Serializable
 private data class SupabaseError(
+    val code: String? = null,
     val message: String? = null,
     val error: String? = null,
 )
