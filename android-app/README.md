@@ -1,3 +1,5 @@
+> **Canônico:** este Android faz parte do repositório `Tecnologia-odonto/Adesart`. Regras de negócio, Edge Functions e migrations vêm do Web/Backend canônico da raiz. Não mantenha uma versão paralela dessas regras no Android.
+
 # Android App
 
 Aplicacao Android nativa em Kotlin + Jetpack Compose para substituir gradualmente o app web.
