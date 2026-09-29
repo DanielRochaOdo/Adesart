@@ -242,6 +242,13 @@ function empresaKey(c: DashboardCadastro): string {
     : String(c.empresa_codigo);
 }
 
+function empresaLabel(c: DashboardCadastro): string {
+  const nome = c.empresa_nome?.trim();
+  if (nome) return nome;
+  if (c.empresa_codigo != null) return `Empresa código ${c.empresa_codigo}`;
+  return 'Não informada';
+}
+
 function canalKey(c: DashboardCadastro): string {
   return c.fluxo_publico || c.origem_link_id ? 'publico' : 'interno';
 }
@@ -349,7 +356,7 @@ function exportarCSV(registros: DashboardCadastro[]) {
     new Date(c.created_at).toLocaleDateString('pt-BR'), c.tipo_cadastro,
     ESTADOS.find((s) => s.key === c.status)?.titulo || c.status,
     c.team_id || '', c.vendedor_nome || 'Não atribuído',
-    c.adesionista_nome || 'Não atribuído', c.empresa_nome || 'Não informada',
+    c.adesionista_nome || 'Não atribuído', empresaLabel(c),
     c.plano_nome || 'Não informado', canalKey(c) === 'publico' ? 'Link / QR Code' : 'Interno',
     c.tipo_cadastro === 'cadastro' ? vidas(c) : '',
   ]);
@@ -505,8 +512,8 @@ function ModalIndicador({ detalhes, onClose }: {
                     </div>
                   </td>
                   <td className="max-w-56 px-4 py-3 text-slate-600">
-                    <span className="block truncate" title={cadastro.empresa_nome || 'Não informada'}>
-                      {cadastro.empresa_nome || 'Não informada'}
+                    <span className="block truncate" title={empresaLabel(cadastro)}>
+                      {empresaLabel(cadastro)}
                     </span>
                   </td>
                   <td className="max-w-56 px-4 py-3 text-slate-600">
@@ -971,7 +978,7 @@ export function Dashboard() {
         .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
     return {
       equipes: equipes.filter((e) => gerencial ? true : e.id === profile?.team_id),
-      empresas: unicos(empresaKey, (c) => c.empresa_nome || 'Não informada'),
+      empresas: unicos(empresaKey, empresaLabel),
       vendedores: unicos(vendedorKey, (c) => c.vendedor_nome || 'Sem vendedor'),
       adesionistas: unicos(adesionistaKey, (c) => c.adesionista_nome || 'Sem adesionista'),
     };
@@ -1011,8 +1018,7 @@ export function Dashboard() {
     (c) => c.adesionista_nome || 'Sem adesionista').filter((g) => g.key !== 'sem-adesionista');
   const semVendedor = atual.cadastros.filter((c) => vendedorKey(c) === 'sem-vendedor').length;
   const semAdesionista = atual.cadastros.filter((c) => adesionistaKey(c) === 'sem-adesionista').length;
-  const porEmpresa = agrupar(atual.cadastros, empresaKey,
-    (c) => c.empresa_nome || 'Não informada');
+  const porEmpresa = agrupar(atual.cadastros, empresaKey, empresaLabel);
   const motivos = ESTADOS.filter((s) => s.key !== 'enviado')
     .map((s) => ({ ...s, total: atual.cadastros.filter((c) => c.status === s.key).length }));
 

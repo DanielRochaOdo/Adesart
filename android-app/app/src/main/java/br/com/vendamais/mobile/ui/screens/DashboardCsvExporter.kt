@@ -68,7 +68,9 @@ object DashboardCsvExporter {
                 cadastro.teamId.orEmpty(),
                 cadastro.vendedorNome.orEmpty(),
                 cadastro.adesionistaNome.orEmpty(),
-                cadastro.empresaNome.orEmpty(),
+                cadastro.empresaNome?.trim()?.takeIf { it.isNotBlank() }
+                    ?: cadastro.empresaCodigo?.let { "Empresa código $it" }
+                    ?: "Não informada",
                 cadastro.planoNome.orEmpty(),
                 if (cadastro.fluxoPublico == true || !cadastro.origemLinkId.isNullOrBlank()) "Link / QR Code" else "Interno",
                 if (cadastro.tipoCadastro == "cadastro") dashboardLives(cadastro).toString() else "",
