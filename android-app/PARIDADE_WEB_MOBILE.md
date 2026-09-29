@@ -1,97 +1,66 @@
-# Paridade Web -> Mobile (Kotlin/Compose)
+# Paridade Web / Android
 
-## Escopo
-- Repositório backend/Supabase compartilhado com o web.
-- Sem alteração de schema/regras de banco.
-- Foco em paridade funcional dos fluxos de cadastro, dependente, auditoria e integrações Edge/RPC.
+## Regra principal
 
-## Arquitetura Implementada
-- `Kotlin + Jetpack Compose + ViewModel + StateFlow`.
-- Camadas existentes mantidas por contexto:
-  - `data.remote`: clientes Supabase/Edge Functions/RPC.
-  - `domain.cadastro`: máquina de estados e mapeamento de erro ERP -> overlay.
-  - `ui`: telas, navegação por tabs e dialogs/overlays.
+O Web do repositório `Tecnologia-odonto/Adesart` é a referência funcional do produto.
 
-## Rotas/Telas
-- Implementadas/atualizadas:
-  - `Login`, `Dashboard`, `Users`, `Teams`, `Cadastro`, `Configurações`, `Profile`.
-  - `Auditoria Lemmit`, `Fila Upload ERP`, `Adesões Excluídas`.
-  - Fluxo público por token (`/adesao/:token`) via deep link.
+O Android não mantém uma segunda versão das regras de negócio. Ele deve consumir o
+mesmo backend Supabase e reproduzir o comportamento funcional definido pelo Web.
 
-## Fluxo de Modais e Prioridade
-- Implementado motor de prioridade em `CadastroModalStateMachine`:
-  1. `EmpresaNaoIdentificada`
-  2. `ObservacoesEmpresa`
-  3. `EmpresaCancelada`
-  4. `LemmitLimit`
-  5. `SelectStatus`
-  6. Erros ERP (`ParceiroInvalido` / `DependenteAtivo`)
-  7. `ExcluirCadastro`
-  8. `AlreadyExists`
-  9. `LinkQr`
-  10. `LinkAssociados`
-  11. `VisualizarArquivo`
-- Overlays globais renderizados em `CadastroOverlayDialogs`.
+## Fonte única
 
-## Regras de Negócio Replicadas
-- CPF:
-  - validação de formato/dígitos (`CadastroPayloadBuilder.validateCpf`).
-  - checagem de duplicidade local + ERP no fluxo de criação de rascunho.
-- Elegibilidade por configuração:
-  - bloqueio por empresa/situação inválida (empresa cancelada).
-- Lemmit:
-  - warning de limite atingido e exibição de `LemmitLimitModal`.
-- Save/close com status obrigatório:
-  - `CadastroEditorDialog` exige seleção de status antes de fechar.
-- Erros ERP -> modal:
-  - parceiro inválido com retry via ajuste de vendedor.
-  - dependente ativo.
-- Exclusão lógica:
-  - usa Edge Function `excluir-cadastro` com motivo (não remove físico).
-- Upload resiliente:
-  - direto + fila (`enqueue/process/reset`) mantidos no repositório e telas admin.
-- Fluxo público por token:
-  - `cadastro-link-resolve` -> `cadastro-link-check-cpf` -> `cadastro-public-submit`.
+- Web: `src/`
+- Android: `android-app/`
+- Edge Functions: `supabase/functions/`
+- Migrations: `supabase/migrations/`
+- Contratos funcionais: `contracts/business-rules/`
 
-## Integrações (Edge/RPC) Cobertas no Mobile
-- Edge Functions:
-  - `create-user`
-  - `erp-check-associado`
-  - `lemit-consulta-pessoa`
-  - `erp-endereco-cep`
-  - `erp-search-empresa`
-  - `erp-novo-usuario2`
-  - `erp-novo-dependente`
-  - `erp-upload-documento`
-  - `erp-enqueue-upload`
-  - `erp-process-upload-queue`
-  - `excluir-cadastro`
-  - `cadastro-link-resolve`
-  - `cadastro-link-check-cpf`
-  - `cadastro-public-submit`
-- RPC:
-  - `check_cpf_existente`
-  - `can_use_lemmit`
-  - `get_lemmit_limit_info`
-  - `debit_lemmit_balance`
-  - `get_cadastros_stats`
-  - `get_stats_from_cache` (fallback)
-  - `get_stats_by_vendedor`
-  - `audit_lemmit`
-  - `reset_stuck_queue_items`
+Não existe `supabase/` próprio do Android.
 
-## Testes
-- Unitários adicionados:
-  - `CadastroModalStateMachineTest`
-  - `CadastroApiErrorMapperTest`
-  - `CadastroPayloadBuilderTest`
-- Instrumentado adicionado:
-  - `MainActivityTest` (launch normal + launch com deep link).
+## O que pode ser diferente
 
-## Validação Executada
-- `:app:assembleDebug` -> OK.
-- `:app:testDebugUnitTest` -> OK.
-- `:app:connectedDebugAndroidTest` -> build dos testes OK, execução bloqueada por ausência de device/emulador conectado.
+A apresentação nativa pode ser diferente quando necessário para Android:
 
-## Observações
-- `ClientExistsModal` e `LemmitErrorModal` do legado web devem permanecer tratados como fluxo `legacy/inativo` até validação final de produto.
+- navegação;
+- componentes visuais;
+- permissões do sistema;
+- câmera/arquivos;
+- ciclo de vida do app;
+- armazenamento temporário local.
+
+Essas diferenças não podem mudar a decisão de negócio.
+
+## O que deve ser idêntico
+
+- elegibilidade de CPF;
+- continuidade de cadastro pendente;
+- regras de empresa e planos;
+- vendedor e adesionista;
+- validações de envio;
+- situação retornada pelo ERP;
+- criação/reconciliação de adesão;
+- upload/fila de documentos;
+- permissões por perfil.
+
+Quando uma decisão depende do ERP, a preferência é movê-la para o backend canônico
+e fazer Web e Android consumirem a resposta estruturada.
+
+## Regra para divergências históricas
+
+Código trazido do antigo repositório Mobile não tem precedência sobre o Web.
+Uma regra existente apenas no Mobile deve ser removida ou substituída pela regra
+canônica antes de ser considerada parte definitiva do produto.
+
+Exemplo já corrigido nesta consolidação: o Android não transforma mais uma frase de
+erro contendo "já cadastrado e ativo" em estado `DependenteAtivo` por conta própria.
+
+## CI
+
+O workflow `Verificar paridade Android` impede:
+- backend duplicado dentro de `android-app/`;
+- retorno da antiga inferência textual de dependente ativo;
+- uso de Edge Function inexistente no backend canônico;
+- divergência dos status locais de cadastro pendente.
+
+A paridade funcional deve ser ampliada com testes sempre que uma regra compartilhada
+for alterada.
