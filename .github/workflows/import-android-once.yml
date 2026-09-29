@@ -1,0 +1,54 @@
+name: Importar Android uma vez
+
+on:
+  push:
+    branches:
+      - chore/unificar-web-android-20260929
+    paths:
+      - ".github/workflows/import-android-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  import-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Adesart canônico
+        uses: actions/checkout@v4
+        with:
+          ref: chore/unificar-web-android-20260929
+          fetch-depth: 1
+
+      - name: Copiar somente o aplicativo Android
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/vendamais-mobile
+          git clone --depth 1 https://github.com/DanielRochaOdo/vendamais-mobile.git /tmp/vendamais-mobile
+          rm -rf android-app
+          cp -a /tmp/vendamais-mobile/android-app ./android-app
+
+      - name: Registrar origem canônica
+        run: |
+          cat > android-app/CANONICAL_SOURCE.md <<'EOF'
+          # Fonte canônica do Android
+
+          Este diretório faz parte do repositório canônico **Tecnologia-odonto/Adesart**.
+
+          - As regras de negócio oficiais são as regras do Web/Backend canônico deste repositório.
+          - O Android não possui cópia própria de `supabase/functions` nem de `supabase/migrations`.
+          - Qualquer regra divergente trazida do antigo `vendamais-mobile` deve ser removida/substituída pela regra canônica.
+          - O repositório `DanielRochaOdo/vendamais-mobile` passa a ser somente origem histórica para esta importação e não deve receber novas regras de produto.
+          EOF
+
+      - name: Commit da importação
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add android-app
+          if git diff --cached --quiet; then
+            echo "Nenhuma alteração para importar."
+            exit 0
+          fi
+          git commit -m "chore(android): incorporar app nativo ao repositório canônico"
+          git push origin HEAD:chore/unificar-web-android-20260929
