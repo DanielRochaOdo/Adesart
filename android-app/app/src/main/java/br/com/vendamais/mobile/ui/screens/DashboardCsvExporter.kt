@@ -6,7 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import br.com.vendamais.mobile.data.models.CadastroResumo
+import br.com.vendamais.mobile.data.models.DashboardCadastro
 import kotlinx.serialization.json.jsonArray
 import java.io.File
 import java.io.FileOutputStream
@@ -17,7 +17,7 @@ import java.time.format.DateTimeFormatter
 object DashboardCsvExporter {
     private val dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm")
 
-    fun exportToDownloads(context: Context, cadastros: List<CadastroResumo>): Uri? {
+    fun exportToDownloads(context: Context, cadastros: List<DashboardCadastro>): Uri? {
         if (cadastros.isEmpty()) return null
         val fileName = "adesart-dashboard-${java.time.LocalDate.now()}.csv"
         val bytes = buildCsv(cadastros).toByteArray(StandardCharsets.UTF_8)
@@ -47,7 +47,7 @@ object DashboardCsvExporter {
         }.getOrNull()
     }
 
-    private fun buildCsv(cadastros: List<CadastroResumo>): String {
+    private fun buildCsv(cadastros: List<DashboardCadastro>): String {
         val header = listOf(
             "Data de criacao",
             "Tipo",
@@ -68,7 +68,9 @@ object DashboardCsvExporter {
                 cadastro.teamId.orEmpty(),
                 cadastro.vendedorNome.orEmpty(),
                 cadastro.adesionistaNome.orEmpty(),
-                cadastro.empresaNome.orEmpty(),
+                cadastro.empresaNome?.trim()?.takeIf { it.isNotBlank() }
+                    ?: cadastro.empresaCodigo?.let { "Empresa código $it" }
+                    ?: "Não informada",
                 cadastro.planoNome.orEmpty(),
                 if (cadastro.fluxoPublico == true || !cadastro.origemLinkId.isNullOrBlank()) "Link / QR Code" else "Interno",
                 if (cadastro.tipoCadastro == "cadastro") dashboardLives(cadastro).toString() else "",
@@ -81,7 +83,7 @@ object DashboardCsvExporter {
         }
     }
 
-    private fun dashboardLives(cadastro: CadastroResumo): Int {
+    private fun dashboardLives(cadastro: DashboardCadastro): Int {
         val array = runCatching { cadastro.dependentes?.jsonArray }.getOrNull()
         return if (array == null) 1 else maxOf(1, array.size)
     }

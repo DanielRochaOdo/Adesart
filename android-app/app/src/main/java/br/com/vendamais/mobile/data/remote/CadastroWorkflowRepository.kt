@@ -935,7 +935,7 @@ class CadastroWorkflowRepository(
                 parameter("id", "eq.$id")
                 parameter(
                     "select",
-                    "id,status,tipo_cadastro,nome,cpf,data_nascimento,sexo_codigo,nome_mae,contatos,endereco,dependentes,empresa_id,empresa_codigo,empresa_nome,empresa_cnpj,empresa_exige_matricula,empresa_raw,planos_raw,numero_matricula,status_adesao_id,vendedor_nome,vendedor_codigo,adesionista_nome,adesionista_codigo,responsavel_financeiro_codigo,responsavel_financeiro_nome,responsavel_financeiro_cpf,contatos_responsavel_financeiro,motivo_bloqueio,erp_dados_associado,erp_response,arquivo_path,arquivo_nome,arquivo_mime_type,arquivo_tamanho,plano_codigo,created_at,updated_at"
+                    "id,status,tipo_cadastro,nome,cpf,data_nascimento,sexo_codigo,nome_mae,contatos,endereco,dependentes,empresa_id,empresa_codigo,empresa_nome,empresa_cnpj,empresa_exige_matricula,empresa_raw,planos_raw,numero_matricula,status_adesao_id,vendedor_id,vendedor_nome,vendedor_codigo,adesionista_id,adesionista_nome,adesionista_codigo,responsavel_financeiro_codigo,responsavel_financeiro_nome,responsavel_financeiro_cpf,contatos_responsavel_financeiro,motivo_bloqueio,erp_dados_associado,erp_response,arquivo_path,arquivo_nome,arquivo_mime_type,arquivo_tamanho,plano_codigo,plano_nome,created_at,updated_at"
                 )
                 parameter("limit", 1)
             },

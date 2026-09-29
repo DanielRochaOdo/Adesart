@@ -13,6 +13,7 @@ import br.com.vendamais.mobile.data.models.CadastroConfig
 import br.com.vendamais.mobile.data.models.CadastroDetalhe
 import br.com.vendamais.mobile.data.models.CadastroResumo
 import br.com.vendamais.mobile.data.models.CadastroStats
+import br.com.vendamais.mobile.data.models.DashboardCadastro
 import br.com.vendamais.mobile.data.models.ErpUploadQueueItem
 import br.com.vendamais.mobile.data.models.ErpUploadQueuePage
 import br.com.vendamais.mobile.data.models.MobileProfile
@@ -110,6 +111,23 @@ class SupabaseRepository(
             applyAuthHeaders(session)
             contentType(ContentType.Application.Json)
             setBody(mapOf("p_user_id" to session.userId))
+        }.body()
+    }
+
+    suspend fun fetchDashboardCadastros(
+        session: SavedSession,
+        startIso: String,
+        endIso: String,
+    ): List<DashboardCadastro> {
+        return client.post("${AppConfig.supabaseUrl}/rest/v1/rpc/get_dashboard_cadastros_fast_v1") {
+            applyAuthHeaders(session)
+            contentType(ContentType.Application.Json)
+            setBody(
+                buildJsonObject {
+                    put("p_inicio", startIso)
+                    put("p_fim", endIso)
+                },
+            )
         }.body()
     }
 

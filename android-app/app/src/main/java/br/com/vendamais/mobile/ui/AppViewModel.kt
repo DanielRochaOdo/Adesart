@@ -24,6 +24,7 @@ import br.com.vendamais.mobile.data.models.CadastroLinkItem
 import br.com.vendamais.mobile.data.models.CadastroLinkMetrics
 import br.com.vendamais.mobile.data.models.CadastroResumo
 import br.com.vendamais.mobile.data.models.CadastroStats
+import br.com.vendamais.mobile.data.models.DashboardCadastro
 import br.com.vendamais.mobile.data.models.CpfConsultInput
 import br.com.vendamais.mobile.data.models.ErpUploadQueueItem
 import br.com.vendamais.mobile.data.models.EmpresaResumo
@@ -183,6 +184,10 @@ data class AppUiState(
     val cadastros: List<CadastroResumo> = emptyList(),
     val cadastrosLoading: Boolean = false,
     val cadastrosLoaded: Boolean = false,
+    val dashboardCadastros: List<DashboardCadastro> = emptyList(),
+    val dashboardLoading: Boolean = false,
+    val dashboardError: String? = null,
+    val dashboardRangeKey: String? = null,
     val cadastroSupportLoading: Boolean = false,
     val cadastroSupportLoaded: Boolean = false,
     val selectedCadastro: CadastroDetalhe? = null,
@@ -475,7 +480,7 @@ class AppViewModel(
     fun login() {
         val current = _uiState.value
         if (current.configurationMissing) {
-            _uiState.update { it.copy(errorMessage = "Configure o Supabase em android-app/local.properties.") }
+            _uiState.update { it.copy(errorMessage = "O aplicativo ainda não está configurado para acesso. Entre em contato com o suporte.") }
             return
         }
         if (current.email.isBlank() || current.password.isBlank()) {
@@ -504,7 +509,7 @@ class AppViewModel(
                     _uiState.update {
                         it.copy(
                             loading = false,
-                            errorMessage = throwable.message ?: "Erro inesperado ao autenticar.",
+                            errorMessage = friendlyLoginMessage(throwable.message),
                         )
                     }
                 }
@@ -522,8 +527,12 @@ class AppViewModel(
         _uiState.update { it.copy(activeTab = tab, errorMessage = null, noticeMessage = null) }
         when (tab) {
             MainTab.DASHBOARD -> {
-                ensureCadastroResourcesLoaded(force = true)
-                if (_uiState.value.profile?.role in setOf("ADMINISTRADOR", "ADMIN", "GERENTE", "GESTOR", "SUPERVISOR")) {
+                val session = currentSession
+                val profile = _uiState.value.profile
+                if (session != null && profile != null) {
+                    prefetchCadastroSupport(session, profile)
+                }
+                if (profile?.role in setOf("ADMINISTRADOR", "ADMIN", "GERENTE", "GESTOR", "SUPERVISOR")) {
                     ensureAdminResourcesLoaded()
                 }
             }
@@ -566,6 +575,53 @@ class AppViewModel(
             viewModelScope.launch { refreshAll(session) }
         }
         checkForAppUpdate(force = true)
+    }
+
+    fun loadDashboardRange(
+        startIso: String,
+        endIso: String,
+        force: Boolean = false,
+    ) {
+        val session = currentSession ?: return
+        val rangeKey = "$startIso|$endIso"
+        val current = _uiState.value
+        if (!force && current.dashboardRangeKey == rangeKey && !current.dashboardLoading) return
+
+        _uiState.update {
+            it.copy(
+                dashboardLoading = true,
+                dashboardError = null,
+                dashboardRangeKey = rangeKey,
+            )
+        }
+
+        viewModelScope.launch {
+            runCatching {
+                val activeSession = ensureFreshSession(session)
+                withContext(Dispatchers.IO) {
+                    repository.fetchDashboardCadastros(activeSession, startIso, endIso)
+                }
+            }.onSuccess { registros ->
+                _uiState.update { state ->
+                    if (state.dashboardRangeKey != rangeKey) state
+                    else state.copy(
+                        dashboardCadastros = registros,
+                        dashboardLoading = false,
+                        dashboardError = null,
+                    )
+                }
+            }.onFailure { throwable ->
+                Log.e(logTag, "Falha ao carregar Dashboard canônico", throwable)
+                _uiState.update { state ->
+                    if (state.dashboardRangeKey != rangeKey) state
+                    else state.copy(
+                        dashboardCadastros = emptyList(),
+                        dashboardLoading = false,
+                        dashboardError = "Não foi possível carregar os indicadores. Tente atualizar novamente.",
+                    )
+                }
+            }
+        }
     }
 
     fun checkForAppUpdate(force: Boolean = false) {
@@ -1446,6 +1502,53 @@ class AppViewModel(
                     ?.contentOrNull
                     ?.trim()
                     ?.takeIf { it.isNotBlank() }
+                val vendedorIdFromPayload = payloadHint
+                    ?.get("vendedor_id")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                val vendedorCodigoFromPayload = payloadHint
+                    ?.get("vendedor_codigo")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                val vendedorNomeFromPayload = payloadHint
+                    ?.get("vendedor_nome")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                val adesionistaIdFromPayload = payloadHint
+                    ?.get("adesionista_id")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                val adesionistaCodigoFromPayload = payloadHint
+                    ?.get("adesionista_codigo")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                val adesionistaNomeFromPayload = payloadHint
+                    ?.get("adesionista_nome")
+                    ?.jsonPrimitive
+                    ?.contentOrNull
+                    ?.trim()
+                    ?.takeIf { it.isNotBlank() }
+                val titularPlanoNomeFromPayload = runCatching {
+                    dependentesFromPayload
+                        ?.jsonArray
+                        ?.firstOrNull()
+                        ?.jsonObject
+                        ?.get("planoNome")
+                        ?.jsonPrimitive
+                        ?.contentOrNull
+                        ?.trim()
+                        ?.takeIf { it.isNotBlank() }
+                }.getOrNull()
                 val arquivoPathFromPayload = payloadHint
                     ?.get("arquivo_path")
                     ?.jsonPrimitive
@@ -1596,6 +1699,22 @@ class AppViewModel(
                                 ?: cadastro.statusAdesaoId
                                     ?.takeIf { it.isNotBlank() }
                                     ?.let { put("status_adesao_id", it) }
+                            vendedorIdFromPayload?.let { put("vendedor_id", it) }
+                                ?: cadastro.vendedorId?.takeIf { it.isNotBlank() }?.let { put("vendedor_id", it) }
+                            vendedorCodigoFromPayload?.let { put("vendedor_codigo", it) }
+                                ?: cadastro.vendedorCodigo?.takeIf { it.isNotBlank() }?.let { put("vendedor_codigo", it) }
+                            vendedorNomeFromPayload?.let { put("vendedor_nome", it) }
+                                ?: cadastro.vendedorNome?.takeIf { it.isNotBlank() }?.let { put("vendedor_nome", it) }
+                            adesionistaIdFromPayload?.let { put("adesionista_id", it) }
+                                ?: cadastro.adesionistaId?.takeIf { it.isNotBlank() }?.let { put("adesionista_id", it) }
+                            adesionistaCodigoFromPayload?.let { put("adesionista_codigo", it) }
+                                ?: cadastro.adesionistaCodigo?.takeIf { it.isNotBlank() }?.let { put("adesionista_codigo", it) }
+                            adesionistaNomeFromPayload?.let { put("adesionista_nome", it) }
+                                ?: cadastro.adesionistaNome?.takeIf { it.isNotBlank() }?.let { put("adesionista_nome", it) }
+                            titularPlanoFromPayload?.takeIf { it > 0 }?.let { put("plano_codigo", it) }
+                                ?: cadastro.planoCodigo?.takeIf { it > 0 }?.let { put("plano_codigo", it) }
+                            titularPlanoNomeFromPayload?.let { put("plano_nome", it) }
+                                ?: cadastro.planoNome?.takeIf { it.isNotBlank() }?.let { put("plano_nome", it) }
                             (arquivoPathFinalForSend ?: arquivoPathFromPayload)?.let { put("arquivo_path", it) } ?: cadastro.arquivoPath
                                 ?.takeIf { it.isNotBlank() }
                                 ?.let { put("arquivo_path", it) }
@@ -3090,6 +3209,10 @@ class AppViewModel(
                 cadastros = emptyList(),
                 cadastrosLoading = false,
                 cadastrosLoaded = false,
+                dashboardCadastros = emptyList(),
+                dashboardLoading = false,
+                dashboardError = null,
+                dashboardRangeKey = null,
                 cadastroSupportLoading = false,
                 cadastroSupportLoaded = false,
                 vendedores = emptyList(),
@@ -3127,7 +3250,7 @@ class AppViewModel(
                 applyCriticalSessionData(critical, null)
                 registerCurrentAppVersionBestEffort(session)
                 prefetchCadastroSupport(session, critical.profile)
-                if (_uiState.value.activeTab in setOf(MainTab.DASHBOARD, MainTab.CADASTROS)) {
+                if (_uiState.value.activeTab == MainTab.CADASTROS) {
                     ensureCadastroResourcesLoaded()
                 }
                 if (
@@ -3219,7 +3342,7 @@ class AppViewModel(
                     )
                 }
                 prefetchCadastroSupport(session, critical.profile, force = true)
-                if (_uiState.value.activeTab in setOf(MainTab.DASHBOARD, MainTab.CADASTROS) || _uiState.value.cadastrosLoaded) {
+                if (_uiState.value.activeTab == MainTab.CADASTROS || _uiState.value.cadastrosLoaded) {
                     ensureCadastroResourcesLoaded(force = true)
                 }
                 if (
@@ -3608,15 +3731,31 @@ class AppViewModel(
         cachedCadastro: CadastroDetalhe? = null,
     ): CadastroDetalhe {
         var detalhe = cachedCadastro ?: workflowRepository.fetchCadastroDetalhe(session, cadastroId)
-        if ((detalhe.empresaId ?: detalhe.empresaCodigo) != null) return detalhe
-
         val inferredFromRaw = inferEmpresaCodigoFromRaw(detalhe.empresaRaw)
-        val empresaId = fallbackEmpresa?.id?.takeIf { it > 0 } ?: inferredFromRaw
-        val empresaCodigo = fallbackEmpresa?.codigo?.takeIf { it > 0 } ?: empresaId
+        val empresaId = detalhe.empresaId
+            ?: detalhe.empresaCodigo
+            ?: fallbackEmpresa?.id?.takeIf { it > 0 }
+            ?: inferredFromRaw
+        val empresaCodigo = detalhe.empresaCodigo
+            ?: detalhe.empresaId
+            ?: fallbackEmpresa?.codigo?.takeIf { it > 0 }
+            ?: empresaId
+        val empresaNomeAtual = detalhe.empresaNome?.trim()?.takeIf { it.isNotBlank() }
+        val empresaNomeFallback = fallbackEmpresa?.nomeFantasia?.trim()?.takeIf { it.isNotBlank() }
+            ?: fallbackEmpresa?.razaoSocial?.trim()?.takeIf { it.isNotBlank() }
+            ?: inferEmpresaNomeFromRaw(detalhe.empresaRaw)
 
         if (empresaId == null || empresaCodigo == null) {
             throw IllegalStateException("Selecione uma empresa antes de enviar.")
         }
+
+        val precisaAtualizarEmpresa =
+            detalhe.empresaId == null ||
+                detalhe.empresaCodigo == null ||
+                empresaNomeAtual == null ||
+                (detalhe.empresaCnpj.isNullOrBlank() && !fallbackEmpresa?.cnpj.isNullOrBlank())
+
+        if (!precisaAtualizarEmpresa) return detalhe
 
         detalhe = workflowRepository.updateCadastro(
             session = session,
@@ -3624,11 +3763,10 @@ class AppViewModel(
             payload = buildJsonObject {
                 put("empresa_id", empresaId)
                 put("empresa_codigo", empresaCodigo)
-                fallbackEmpresa?.nomeFantasia
+                (empresaNomeAtual ?: empresaNomeFallback)
                     ?.takeIf { it.isNotBlank() }
                     ?.let { put("empresa_nome", it) }
-                fallbackEmpresa?.cnpj
-                    ?.takeIf { it.isNotBlank() }
+                (detalhe.empresaCnpj?.takeIf { it.isNotBlank() } ?: fallbackEmpresa?.cnpj?.takeIf { it.isNotBlank() })
                     ?.let { put("empresa_cnpj", it) }
                 fallbackEmpresa?.raw?.let { put("empresa_raw", it) }
                     ?: detalhe.empresaRaw?.let { put("empresa_raw", it) }
@@ -3657,6 +3795,28 @@ class AppViewModel(
         }
         return null
     }
+
+    private fun inferEmpresaNomeFromRaw(raw: JsonElement?): String? {
+        val obj = runCatching { raw?.jsonObject }.getOrNull() ?: return null
+        val keys = listOf(
+            "nomeFantasia",
+            "NomeFantazia",
+            "NomeFantasia",
+            "razaoSocial",
+            "RazaoSocial",
+            "nome",
+        )
+        for (key in keys) {
+            obj[key]
+                ?.jsonPrimitive
+                ?.contentOrNull
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?.let { return it }
+        }
+        return null
+    }
+
 
     private fun mapCadastroFlowErrorMessage(message: String?, fallback: String): String {
         val normalized = message?.lowercase().orEmpty()
@@ -3736,6 +3896,25 @@ class AppViewModel(
             }
         }
     }
+    private fun friendlyLoginMessage(message: String?): String {
+        val normalized = message.orEmpty().lowercase(Locale.ROOT)
+        return when {
+            normalized.contains("invalid login credentials") ||
+                normalized.contains("invalid credentials") ||
+                normalized.contains("invalid_credentials") ||
+                normalized.contains("falha ao autenticar no supabase") ||
+                normalized.contains("usuário ou senha inválidos") ||
+                normalized.contains("usuario ou senha invalidos") ->
+                "Usuário ou senha inválidos. Por favor, tente novamente."
+            normalized.contains("conex") ||
+                normalized.contains("network") ||
+                normalized.contains("timeout") ->
+                "Não foi possível entrar no momento. Verifique sua conexão e tente novamente."
+            else ->
+                "Não foi possível entrar no momento. Por favor, tente novamente."
+        }
+    }
+
 }
 
 private data class CriticalSessionData(

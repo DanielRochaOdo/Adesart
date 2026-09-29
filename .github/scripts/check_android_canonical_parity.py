@@ -25,6 +25,61 @@ for path in main_kotlin.rglob("*.kt"):
     if "CadastroErpError.DependenteAtivo" in text:
         errors.append(f"Inferência local de dependente ativo em {path.relative_to(ROOT)}")
 
+dashboard_screen = (
+    ANDROID
+    / "app/src/main/java/br/com/vendamais/mobile/ui/screens/DashboardScreen.kt"
+)
+dashboard_repository = (
+    ANDROID
+    / "app/src/main/java/br/com/vendamais/mobile/data/remote/SupabaseRepository.kt"
+)
+auth_service = (
+    ANDROID
+    / "app/src/main/java/br/com/vendamais/mobile/data/auth/SupabaseAuthService.kt"
+)
+
+if dashboard_screen.exists():
+    dashboard_text = dashboard_screen.read_text(encoding="utf-8")
+    if "state.cadastros" in dashboard_text:
+        errors.append(
+            "Dashboard Android voltou a consumir a lista bruta state.cadastros; "
+            "use dashboardCadastros da RPC canônica."
+        )
+    if "state.dashboardCadastros" not in dashboard_text:
+        errors.append("Dashboard Android não consome dashboardCadastros canônico.")
+else:
+    errors.append("DashboardScreen.kt não encontrado.")
+
+if dashboard_repository.exists():
+    repository_text = dashboard_repository.read_text(encoding="utf-8")
+    if "get_dashboard_cadastros_fast_v1" not in repository_text:
+        errors.append(
+            "Android não referencia a RPC canônica get_dashboard_cadastros_fast_v1 usada pelo Web."
+        )
+else:
+    errors.append("SupabaseRepository.kt não encontrado.")
+
+dashboard_company_migration = (
+    ROOT
+    / "supabase/migrations/20260929203000_dashboard_resolve_empresa_canonica.sql"
+)
+if dashboard_company_migration.exists():
+    company_text = dashboard_company_migration.read_text(encoding="utf-8")
+    for required in ("empresa_codigo_resolvido", "empresa_nome_resolvido", "Empresa código"):
+        if required not in company_text:
+            errors.append(
+                f"Resolução canônica de empresa do Dashboard incompleta: {required} ausente."
+            )
+else:
+    errors.append("Migration canônica de resolução de empresa do Dashboard não encontrada.")
+
+if auth_service.exists():
+    auth_text = auth_service.read_text(encoding="utf-8")
+    if "Falha ao autenticar no Supabase" in auth_text:
+        errors.append(
+            "Mensagem técnica de Supabase voltou ao fluxo de login Android."
+        )
+
 status_rules = (
     ANDROID
     / "app/src/main/java/br/com/vendamais/mobile/domain/cadastro/CadastroStatusRules.kt"

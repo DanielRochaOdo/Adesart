@@ -30,6 +30,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,7 +44,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import br.com.vendamais.mobile.data.models.CadastroResumo
+import br.com.vendamais.mobile.data.models.DashboardCadastro
 import br.com.vendamais.mobile.data.models.PlanoMap
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.DashboardMetricType
@@ -72,6 +73,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.max
@@ -122,7 +124,8 @@ fun DashboardScreen(
     state: AppUiState,
     onOpenDrilldown: (String, DashboardMetricType) -> Unit,
     onCloseDrilldown: () -> Unit,
-    onRefresh: () -> Unit = {},
+    onLoadRange: (String, String) -> Unit,
+    onRefreshRange: (String, String) -> Unit,
 ) {
     val context = LocalContext.current
     var period by rememberSaveable { mutableStateOf(DashboardPeriod.MONTH) }
@@ -140,12 +143,25 @@ fun DashboardScreen(
     var exportMessage by rememberSaveable { mutableStateOf<String?>(null) }
 
     val range = dashboardRange(period, customStart, customEnd)
+    val zoneId = ZoneId.systemDefault()
+    val rangeStartIso = range?.previousStart?.atStartOfDay(zoneId)?.toInstant()?.toString()
+    val rangeEndIso = range?.endExclusive?.atStartOfDay(zoneId)?.toInstant()?.toString()
+
+    LaunchedEffect(rangeStartIso, rangeEndIso) {
+        if (rangeStartIso != null && rangeEndIso != null) {
+            onLoadRange(rangeStartIso, rangeEndIso)
+        }
+    }
+
     val currentUnfiltered = if (range == null) {
         emptyList()
     } else {
-        state.cadastros.filter { val date = it.dashboardDate(); date >= range.start && date < range.endExclusive }
+        state.dashboardCadastros.filter { val date = it.dashboardDate(); date >= range.start && date < range.endExclusive }
     }
 
+    val profileRole = state.profile?.role.orEmpty()
+    val isManagerial = profileRole in setOf("ADMINISTRADOR", "GERENTE")
+    val supervisorTeamId = state.profile?.teamId?.takeIf { profileRole == "SUPERVISOR" }
     val teamNames = state.adminTeams.associate { it.id to it.name }
     val teamOptions = currentUnfiltered
         .mapNotNull { cadastro ->
@@ -156,7 +172,7 @@ fun DashboardScreen(
         .distinctBy { it.first }
         .sortedBy { it.second.lowercase(Locale.ROOT) }
     val companyOptions = currentUnfiltered
-        .map { dashboardCompanyKey(it) to (it.empresaNome ?: "Nao informada") }
+        .map { dashboardCompanyKey(it) to dashboardCompanyLabel(it) }
         .distinctBy { it.first }
         .sortedBy { it.second.lowercase(Locale.ROOT) }
     val sellerOptions = currentUnfiltered
@@ -174,7 +190,7 @@ fun DashboardScreen(
     val filteredWindow = if (range == null) {
         emptyList()
     } else {
-        state.cadastros.filter { cadastro ->
+        state.dashboardCadastros.filter { cadastro ->
             val date = cadastro.dashboardDate()
             date >= range.previousStart &&
                 date < range.endExclusive &&
@@ -210,7 +226,7 @@ fun DashboardScreen(
         it.adesionistaNome ?: "Sem adesionista"
     }.filter { it.key != "sem-adesionista" }
     val companyGroups = dashboardGroups(currentCadastros, ::dashboardCompanyKey) {
-        it.empresaNome ?: "Nao informada"
+        dashboardCompanyLabel(it)
     }
     val planRanking = dashboardPlanRanking(currentRecords, state.planosMap)
     val statusCounts = listOf(
@@ -287,7 +303,11 @@ fun DashboardScreen(
                         VendaButton(
                             label = "Atualizar",
                             leadingIcon = Icons.Rounded.Refresh,
-                            onClick = onRefresh,
+                            onClick = {
+                                if (rangeStartIso != null && rangeEndIso != null) {
+                                    onRefreshRange(rangeStartIso, rangeEndIso)
+                                }
+                            },
                             style = VendaButtonStyle.SECONDARY,
                             modifier = Modifier.weight(1f),
                         )
@@ -316,12 +336,21 @@ fun DashboardScreen(
         item {
             WebCard(title = "Filtros") {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SelectionField(
-                        "Equipe",
-                        dashboardSelectedLabel(teamFilter, teamOptions, "Todas as equipes"),
-                        listOf("todos" to "Todas as equipes") + teamOptions,
-                        onSelected = { teamFilter = it },
-                    )
+                    if (isManagerial) {
+                        SelectionField(
+                            "Equipe",
+                            dashboardSelectedLabel(teamFilter, teamOptions, "Todas as equipes"),
+                            listOf("todos" to "Todas as equipes") + teamOptions,
+                            onSelected = { teamFilter = it },
+                        )
+                    } else {
+                        DashboardReadOnlyFilter(
+                            label = "Equipe",
+                            value = supervisorTeamId
+                                ?.let { teamNames[it] ?: "Minha equipe" }
+                                ?: "Escopo do meu perfil",
+                        )
+                    }
                     SelectionField(
                         "Empresa",
                         dashboardSelectedLabel(companyFilter, companyOptions, "Todas as empresas"),
@@ -373,12 +402,22 @@ fun DashboardScreen(
             }
         }
 
-        if (state.cadastrosLoading && !state.cadastrosLoaded) {
+        if (state.dashboardLoading) {
             item {
                 VendaLoadingState(
                     title = "Carregando indicadores",
-                    message = "Buscando os registros necessarios para o Dashboard.",
+                    message = "Consultando a mesma fonte canônica utilizada pelo Web.",
                 )
+            }
+        } else if (state.dashboardError != null) {
+            item {
+                WebCard(title = "Não foi possível carregar os dados") {
+                    Text(
+                        text = state.dashboardError,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         } else if (range != null && currentRecords.isEmpty()) {
             item {
@@ -473,6 +512,29 @@ fun DashboardScreen(
     // Mantidos na assinatura por compatibilidade com o shell atual. O novo Dashboard
     // usa detalhamentos locais respeitando periodo e filtros, como o Web.
     remember(onOpenDrilldown, onCloseDrilldown) { Unit }
+}
+
+@Composable
+private fun DashboardReadOnlyFilter(label: String, value: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+        ) {
+            Text(
+                text = value,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 13.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
 }
 
 @Composable
@@ -680,12 +742,12 @@ private fun dashboardRange(period: DashboardPeriod, customStart: String, customE
     )
 }
 
-private fun CadastroResumo.dashboardDate(): LocalDate {
+private fun DashboardCadastro.dashboardDate(): LocalDate {
     return runCatching { OffsetDateTime.parse(createdAt).toLocalDate() }
         .getOrElse { LocalDate.MIN }
 }
 
-private fun calculateDashboard(records: List<CadastroResumo>): DashboardNumbers {
+private fun calculateDashboard(records: List<DashboardCadastro>): DashboardNumbers {
     val cadastros = records.filter { it.tipoCadastro == "cadastro" }
     val titulares = cadastros.size
     val dependentes = cadastros.sumOf { (dashboardLives(it) - 1).coerceAtLeast(0) }
@@ -704,15 +766,15 @@ private fun calculateDashboard(records: List<CadastroResumo>): DashboardNumbers 
     )
 }
 
-private fun dashboardLives(cadastro: CadastroResumo): Int {
+private fun dashboardLives(cadastro: DashboardCadastro): Int {
     val count = runCatching { cadastro.dependentes?.jsonArray?.size }.getOrNull()
     return max(1, count ?: 1)
 }
 
 private fun dashboardGroups(
-    records: List<CadastroResumo>,
-    key: (CadastroResumo) -> String,
-    name: (CadastroResumo) -> String,
+    records: List<DashboardCadastro>,
+    key: (DashboardCadastro) -> String,
+    name: (DashboardCadastro) -> String,
 ): List<DashboardGroup> {
     return records.groupBy(key).map { (groupKey, items) ->
         DashboardGroup(
@@ -726,7 +788,7 @@ private fun dashboardGroups(
 }
 
 private fun dashboardPlanRanking(
-    records: List<CadastroResumo>,
+    records: List<DashboardCadastro>,
     planos: List<PlanoMap>,
 ): List<Pair<String, Int>> {
     val names = planos.associate { it.planoId to it.nomeExibicao }
@@ -753,26 +815,31 @@ private fun dashboardPlanCode(element: JsonElement): Int? {
     return null
 }
 
-private fun dashboardSellerKey(cadastro: CadastroResumo): String =
+private fun dashboardSellerKey(cadastro: DashboardCadastro): String =
     cadastro.vendedorCodigo?.takeIf { it.isNotBlank() }
         ?: cadastro.vendedorId?.takeIf { it.isNotBlank() }
         ?: "sem-vendedor"
 
-private fun dashboardAdesionistaKey(cadastro: CadastroResumo): String =
+private fun dashboardAdesionistaKey(cadastro: DashboardCadastro): String =
     cadastro.adesionistaId?.takeIf { it.isNotBlank() }
         ?: cadastro.adesionistaCodigo?.takeIf { it.isNotBlank() }
         ?: "sem-adesionista"
 
-private fun dashboardCompanyKey(cadastro: CadastroResumo): String =
+private fun dashboardCompanyKey(cadastro: DashboardCadastro): String =
     cadastro.empresaCodigo?.toString()
         ?: cadastro.empresaNome?.takeIf { it.isNotBlank() }
         ?: "nao-informada"
 
-private fun dashboardChannelKey(cadastro: CadastroResumo): String =
+private fun dashboardCompanyLabel(cadastro: DashboardCadastro): String =
+    cadastro.empresaNome?.trim()?.takeIf { it.isNotBlank() }
+        ?: cadastro.empresaCodigo?.let { "Empresa código $it" }
+        ?: "Não informada"
+
+private fun dashboardChannelKey(cadastro: DashboardCadastro): String =
     if (cadastro.fluxoPublico == true || !cadastro.origemLinkId.isNullOrBlank()) "publico" else "interno"
 
 private fun dashboardMatchesFilters(
-    cadastro: CadastroResumo,
+    cadastro: DashboardCadastro,
     team: String,
     company: String,
     seller: String,
