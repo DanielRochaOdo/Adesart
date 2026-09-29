@@ -8,7 +8,7 @@ object CadastroApiErrorMapper {
     private const val pendingCadastroCanonicalMessage =
         "ja existe um cadastro pendente para este cpf. abra o pendente e continue por ele."
     private const val erpTechnicalFailureMessage =
-        "O ERP retornou uma falha tecnica ao finalizar o cadastro. Verifique se o cadastro ja foi criado no ERP antes de reenviar."
+        "Nao foi possivel concluir esta operacao no momento. Verifique se o cadastro ja foi atualizado antes de tentar novamente. Se o problema continuar, entre em contato com o suporte."
 
     fun mapErpError(message: String?): CadastroErpError? {
         val normalized = normalize(message)
@@ -52,6 +52,8 @@ object CadastroApiErrorMapper {
         if (normalized.isBlank()) return false
 
         return normalized.contains("incorrect syntax near") ||
+            normalized.contains("the select list for the insert statement contains more items than the insert list") ||
+            normalized.contains("the number of select values must match the number of insert columns") ||
             (
                 normalized.contains("\"codigo\":504") &&
                     normalized.contains("\"dados\":null")
