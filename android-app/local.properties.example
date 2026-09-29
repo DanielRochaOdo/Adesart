@@ -1,0 +1,11 @@
+sdk.dir=C\:\\Users\\YOUR_USER\\AppData\\Local\\Android\\Sdk
+supabaseUrl=https\://your-project.supabase.co
+supabaseAnonKey=your_supabase_anon_key_here
+publicAppUrl=https\://vendamais.odontoart.com
+
+
+# Required for every production release. Keep the same long-lived keystore for all versions.
+releaseStoreFile=keystore/vendamais-release.jks
+releaseStorePassword=CHANGE_ME
+releaseKeyAlias=vendamais
+releaseKeyPassword=CHANGE_ME

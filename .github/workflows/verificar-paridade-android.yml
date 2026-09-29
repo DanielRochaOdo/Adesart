@@ -1,0 +1,46 @@
+name: Verificar paridade Android
+
+on:
+  pull_request:
+    paths:
+      - "android-app/**"
+      - "src/**"
+      - "supabase/**"
+      - "contracts/business-rules/**"
+      - ".github/scripts/check_android_canonical_parity.py"
+      - ".github/workflows/verificar-paridade-android.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "android-app/**"
+      - "src/**"
+      - "supabase/**"
+      - "contracts/business-rules/**"
+
+jobs:
+  parity:
+    name: Contrato Web Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validar fonte canônica
+        run: python .github/scripts/check_android_canonical_parity.py
+
+  android-unit:
+    name: Testes Android
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+      - name: Preparar Gradle
+        run: chmod +x gradlew
+      - name: Executar testes unitários
+        run: ./gradlew testStandardDebugUnitTest testDirectDebugUnitTest --no-daemon

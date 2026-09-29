@@ -947,3 +947,8 @@ Propriedade de **Adesão+**. Todos os direitos reservados.
 
 **Versão:** 2.0
 **Última atualização:** Janeiro 2026
+
+
+## Web e Android no mesmo repositório
+
+O Adesart possui duas interfaces oficiais no mesmo repositório: o cliente Web em `src/` e o cliente Android nativo em `android-app/`. O backend Supabase, migrations e Edge Functions de `supabase/` são únicos e canônicos para ambos. Consulte `docs/ARQUITETURA_CANONICA_WEB_ANDROID.md` para as regras de paridade.
