@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import br.com.vendamais.mobile.data.models.CadastroResumo
+import kotlinx.serialization.json.jsonArray
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.charset.StandardCharsets
