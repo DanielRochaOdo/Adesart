@@ -172,7 +172,7 @@ fun DashboardScreen(
         .distinctBy { it.first }
         .sortedBy { it.second.lowercase(Locale.ROOT) }
     val companyOptions = currentUnfiltered
-        .map { dashboardCompanyKey(it) to (it.empresaNome ?: "Nao informada") }
+        .map { dashboardCompanyKey(it) to dashboardCompanyLabel(it) }
         .distinctBy { it.first }
         .sortedBy { it.second.lowercase(Locale.ROOT) }
     val sellerOptions = currentUnfiltered
@@ -226,7 +226,7 @@ fun DashboardScreen(
         it.adesionistaNome ?: "Sem adesionista"
     }.filter { it.key != "sem-adesionista" }
     val companyGroups = dashboardGroups(currentCadastros, ::dashboardCompanyKey) {
-        it.empresaNome ?: "Nao informada"
+        dashboardCompanyLabel(it)
     }
     val planRanking = dashboardPlanRanking(currentRecords, state.planosMap)
     val statusCounts = listOf(
@@ -829,6 +829,11 @@ private fun dashboardCompanyKey(cadastro: DashboardCadastro): String =
     cadastro.empresaCodigo?.toString()
         ?: cadastro.empresaNome?.takeIf { it.isNotBlank() }
         ?: "nao-informada"
+
+private fun dashboardCompanyLabel(cadastro: DashboardCadastro): String =
+    cadastro.empresaNome?.trim()?.takeIf { it.isNotBlank() }
+        ?: cadastro.empresaCodigo?.let { "Empresa código $it" }
+        ?: "Não informada"
 
 private fun dashboardChannelKey(cadastro: DashboardCadastro): String =
     if (cadastro.fluxoPublico == true || !cadastro.origemLinkId.isNullOrBlank()) "publico" else "interno"
