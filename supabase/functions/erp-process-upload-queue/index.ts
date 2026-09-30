@@ -153,7 +153,12 @@ Deno.serve(async (req: Request) => {
   const source = String(requestBody.source || authorization.source || "worker");
 
   try {
-    await supabase.rpc("reset_stuck_queue_items_v2", { stuck_threshold_minutes: 10 }).catch(() => undefined);
+    const { error: resetError } = await supabase.rpc("reset_stuck_queue_items_v2", {
+      stuck_threshold_minutes: 10,
+    });
+    if (resetError) {
+      console.warn("[erp-process-upload-queue] Falha ao recuperar itens travados:", resetError.message);
+    }
 
     const { data: items, error } = await supabase.rpc("claim_erp_upload_queue_v3", {
       p_limit: limit,
