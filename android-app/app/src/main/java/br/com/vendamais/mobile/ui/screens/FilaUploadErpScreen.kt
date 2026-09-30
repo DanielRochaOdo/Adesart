@@ -297,7 +297,21 @@ fun FilaUploadErpScreen(
                             )
                         }
 
-                        item.cadastro?.let { cadastro ->
+                        val resolvedNome = item.cadastro?.nome
+                            ?.takeIf { it.isNotBlank() }
+                            ?: item.clienteNome?.takeIf { it.isNotBlank() }
+                        val resolvedCpf = item.cadastro?.cpf
+                            ?.takeIf { it.isNotBlank() }
+                            ?: item.clienteCpf?.takeIf { it.isNotBlank() }
+                        val resolvedEmpresa = item.cadastro?.empresaNome
+                            ?.takeIf { it.isNotBlank() }
+                            ?: item.empresaNome?.takeIf { it.isNotBlank() }
+
+                        if (
+                            !resolvedNome.isNullOrBlank() ||
+                            !resolvedCpf.isNullOrBlank() ||
+                            !resolvedEmpresa.isNullOrBlank()
+                        ) {
                             Surface(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(12.dp),
@@ -308,18 +322,18 @@ fun FilaUploadErpScreen(
                                     verticalArrangement = Arrangement.spacedBy(3.dp),
                                 ) {
                                     Text(
-                                        text = cadastro.nome?.takeIf { it.isNotBlank() } ?: "Associado nao informado",
+                                        text = resolvedNome ?: "Associado nao informado",
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.SemiBold,
                                     )
-                                    cadastro.cpf?.takeIf { it.isNotBlank() }?.let { cpf ->
+                                    resolvedCpf?.let { cpf ->
                                         Text(
                                             text = "CPF: ${formatQueueCpf(cpf)}",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
-                                    cadastro.empresaNome?.takeIf { it.isNotBlank() }?.let { empresa ->
+                                    resolvedEmpresa?.let { empresa ->
                                         Text(
                                             text = "Empresa: $empresa",
                                             style = MaterialTheme.typography.bodySmall,
@@ -328,12 +342,14 @@ fun FilaUploadErpScreen(
                                     }
                                 }
                             }
-                        } ?: item.cadastroId?.takeIf { it.isNotBlank() }?.let { cadastroId ->
-                            Text(
-                                text = "Cadastro ${cadastroId.take(8)}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                        } else {
+                            item.cadastroId?.takeIf { it.isNotBlank() }?.let { cadastroId ->
+                                Text(
+                                    text = "Cadastro ${cadastroId.take(8)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
 
                         item.lastError?.takeIf { it.isNotBlank() }?.let { error ->
