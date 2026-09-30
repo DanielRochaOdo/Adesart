@@ -56,6 +56,14 @@ if dashboard_repository.exists():
         errors.append(
             "Android não referencia a RPC canônica get_dashboard_cadastros_fast_v1 usada pelo Web."
         )
+    if "fetchDashboardCadastrosFallback" not in repository_text:
+        errors.append(
+            "Dashboard Android voltou a depender exclusivamente da RPC; mantenha o fallback paginado usado pelo Web."
+        )
+    if 'path = "cadastros"' not in repository_text or '"created_at", "gte.$startIso"' not in repository_text:
+        errors.append(
+            "Fallback Android do Dashboard não preserva a leitura paginada por intervalo."
+        )
 else:
     errors.append("SupabaseRepository.kt não encontrado.")
 
