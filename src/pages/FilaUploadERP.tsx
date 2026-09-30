@@ -8,6 +8,20 @@ import { Button } from '../components/Button';
 import { Select } from '../components/Select';
 import { usePersistentState } from '../hooks/usePersistentState';
 
+interface QueueHealth {
+  total: number;
+  queued: number;
+  processing: number;
+  retry_wait: number;
+  success: number;
+  failed: number;
+  claimable: number;
+  stuck: number;
+  oldest_pending_at: string | null;
+  last_success_at: string | null;
+  last_failure_at: string | null;
+}
+
 interface QueueItem {
   id: string;
   created_at: string;
@@ -50,6 +64,8 @@ export function FilaUploadERP() {
   const [processingQueue, setProcessingQueue] = useState(false);
   const [resettingStuck, setResettingStuck] = useState(false);
   const [processingCount, setProcessingCount] = useState(0);
+  const [queueHealth, setQueueHealth] = useState<QueueHealth | null>(null);
+  const [reprocessingFailed, setReprocessingFailed] = useState(false);
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
   useEffect(() => {
@@ -111,6 +127,12 @@ export function FilaUploadERP() {
 
       const processingItems = mappedData.filter(item => item.status === 'processing').length;
       setProcessingCount(processingItems);
+
+      const { data: healthData, error: healthError } = await supabase.rpc('get_erp_upload_queue_health_v1');
+      if (!healthError && healthData) {
+        setQueueHealth(healthData as QueueHealth);
+        setProcessingCount(Number((healthData as QueueHealth).processing || 0));
+      }
     } catch (error) {
       console.error('Erro ao carregar fila:', error);
     } finally {
@@ -181,18 +203,8 @@ export function FilaUploadERP() {
       const result = await response.json();
 
       if (response.ok || response.status === 202) {
-        if (result.queued_count === 0) {
-          alert('Nenhum item na fila para processar no momento.');
-        } else {
-          const estimatedMinutes = Math.ceil(result.estimated_time_seconds / 60);
-          alert(
-            `Processamento iniciado em background!\n\n` +
-            `${result.queued_count} item(ns) sendo processado(s)\n` +
-            `Tempo estimado: ~${estimatedMinutes} minuto(s)\n\n` +
-            `A tela será atualizada automaticamente conforme os uploads são concluídos.`
-          );
-        }
-        fetchQueueItems();
+        alert(result.message || 'Fila processada.');
+        await fetchQueueItems();
       } else {
         alert(`Erro ao iniciar processamento: ${result.error || result.details || 'Erro desconhecido'}`);
       }
@@ -210,26 +222,47 @@ export function FilaUploadERP() {
     }
 
     try {
-      const { error } = await supabase
-        .from('erp_upload_queue')
-        .update({
-          status: 'queued',
-          attempts: 0,
-          next_attempt_at: new Date().toISOString(),
-          last_error: null,
-        })
-        .eq('id', itemId);
+      const { data, error } = await supabase.rpc('requeue_erp_upload_v1', {
+        p_id: itemId,
+        p_scope: 'item',
+      });
 
       if (error) {
-        alert('Erro ao reprocessar item');
+        alert(`Erro ao reprocessar item: ${error.message}`);
         return;
       }
 
-      alert('Item marcado para reprocessamento');
-      fetchQueueItems();
+      alert(`${Number((data as any)?.requeued || 0)} item marcado para reprocessamento.`);
+      await fetchQueueItems();
     } catch (error) {
       console.error('Erro ao reprocessar:', error);
       alert('Erro ao reprocessar item');
+    }
+  };
+
+  const handleReprocessFailed = async () => {
+    if (!window.confirm('Deseja reprocessar todos os itens com falha definitiva?')) return;
+
+    setReprocessingFailed(true);
+    try {
+      const { data, error } = await supabase.rpc('requeue_erp_upload_v1', {
+        p_id: null,
+        p_scope: 'failed',
+      });
+
+      if (error) {
+        alert(`Erro ao reprocessar falhas: ${error.message}`);
+        return;
+      }
+
+      const count = Number((data as any)?.requeued || 0);
+      alert(`${count} item(ns) devolvido(s) para a fila.`);
+      await fetchQueueItems();
+    } catch (error) {
+      console.error('Erro ao reprocessar falhas:', error);
+      alert('Erro ao reprocessar falhas.');
+    } finally {
+      setReprocessingFailed(false);
     }
   };
 
@@ -240,28 +273,24 @@ export function FilaUploadERP() {
 
     setResettingStuck(true);
     try {
-      const { data, error } = await supabase.rpc('reset_stuck_queue_items', {
-        stuck_threshold_minutes: 15
+      const { data, error } = await supabase.rpc('reset_stuck_queue_items_v2', {
+        stuck_threshold_minutes: 10
       });
 
       if (error) {
-        console.error('Erro ao resetar itens travados:', error);
-        alert('Erro ao resetar itens travados');
+        console.error('Erro ao liberar itens travados:', error);
+        alert(`Erro ao liberar itens travados: ${error.message}`);
         return;
       }
 
-      if (data && data.length > 0) {
-        const resetCount = data[0].reset_count;
-        if (resetCount > 0) {
-          alert(`${resetCount} item(ns) travado(s) foram resetados com sucesso!`);
-        } else {
-          alert('Nenhum item travado encontrado (15+ minutos em processamento)');
-        }
-      } else {
-        alert('Nenhum item travado encontrado');
-      }
+      const resetCount = Number((data as any)?.reset_count || 0);
+      alert(
+        resetCount > 0
+          ? `${resetCount} item(ns) travado(s) foram liberados para nova tentativa.`
+          : 'Nenhum item travado encontrado.'
+      );
 
-      fetchQueueItems();
+      await fetchQueueItems();
     } catch (error) {
       console.error('Erro ao resetar itens:', error);
       alert('Erro ao resetar itens travados');
@@ -338,7 +367,25 @@ export function FilaUploadERP() {
             <h1 className="text-3xl font-bold text-slate-800">Fila de Upload ERP</h1>
             <p className="text-slate-600 mt-2">Gerenciamento de uploads de documentos para o ERP</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap justify-end">
+            <Button
+              onClick={handleReprocessFailed}
+              disabled={reprocessingFailed || !queueHealth?.failed}
+              variant="secondary"
+              className="flex items-center gap-2"
+            >
+              {reprocessingFailed ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Reprocessando...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4" />
+                  Reprocessar Falhas
+                </>
+              )}
+            </Button>
             <Button
               onClick={handleResetStuckItems}
               disabled={resettingStuck}
@@ -376,6 +423,25 @@ export function FilaUploadERP() {
             </Button>
           </div>
         </div>
+
+        {queueHealth && (
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+            {[
+              ['Aguardando', queueHealth.queued],
+              ['Processando', queueHealth.processing],
+              ['Nova tentativa', queueHealth.retry_wait],
+              ['Falhas', queueHealth.failed],
+              ['Prontos agora', queueHealth.claimable],
+              ['Travados', queueHealth.stuck],
+              ['Concluídos', queueHealth.success],
+            ].map(([label, value]) => (
+              <div key={String(label)} className="bg-white rounded-xl border border-slate-200 p-3">
+                <p className="text-xs text-slate-500">{label}</p>
+                <p className="text-xl font-bold text-slate-800 mt-1">{Number(value)}</p>
+              </div>
+            ))}
+          </div>
+        )}
 
         {processingCount > 0 && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
