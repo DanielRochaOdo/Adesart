@@ -1,6 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, createServiceClient, jsonResponse } from "../_shared/public-flow.ts";
 
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
+
 class UploadQueueError extends Error {
   statusCode: number | null;
   code: string;
@@ -32,13 +34,13 @@ const authorize = async (req: Request, supabase: any) => {
 
   const internalToken = (req.headers.get("X-Queue-Worker-Token") || "").trim();
   if (internalToken) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("erp_upload_queue_worker_secret")
       .select("token")
       .eq("singleton", true)
       .maybeSingle();
 
-    if (data?.token && data.token === internalToken) {
+    if (!error && data?.token && data.token === internalToken) {
       return { ok: true, source: "cron", userId: null };
     }
   }
@@ -62,8 +64,44 @@ const authorize = async (req: Request, supabase: any) => {
   return { ok: true, source: "manual", userId: user.id };
 };
 
+const extractErpAcceptance = (result: any) => {
+  const rawCode =
+    result?.codigo ??
+    result?.dados?.codigo ??
+    result?.data?.codigo ??
+    result?.data?.dados?.codigo;
+
+  const erpCode = rawCode === null || rawCode === undefined || rawCode === ""
+    ? null
+    : Number(rawCode);
+
+  const erpMessage = String(
+    result?.message ??
+    result?.mensagem ??
+    result?.dados?.mensagem ??
+    result?.data?.mensagem ??
+    "",
+  ).trim();
+
+  const hasErrors = Array.isArray(result?.erros)
+    ? result.erros.length > 0
+    : Boolean(result?.erros);
+
+  return {
+    erpCode,
+    erpMessage,
+    accepted:
+      erpCode === 1 &&
+      result?.success !== false &&
+      !hasErrors,
+  };
+};
+
 const uploadItem = async (supabase: any, item: any) => {
-  const { data, error } = await supabase.storage.from(item.bucket).download(item.arquivo_path);
+  const { data, error } = await supabase.storage
+    .from(item.bucket)
+    .download(item.arquivo_path);
+
   if (error || !data) {
     throw new UploadQueueError(
       `Arquivo nao encontrado no Storage: ${error?.message || item.arquivo_path}`,
@@ -73,14 +111,32 @@ const uploadItem = async (supabase: any, item: any) => {
   }
 
   const bytes = new Uint8Array(await data.arrayBuffer());
+
   if (bytes.length === 0) {
     throw new UploadQueueError("Arquivo vazio no Storage", "EMPTY_FILE", 422);
   }
 
+  if (bytes.length > MAX_FILE_BYTES) {
+    throw new UploadQueueError(
+      `Arquivo excede o limite de 5 MB aceito pelo ERP (${bytes.length} bytes)`,
+      "FILE_TOO_LARGE",
+      413,
+    );
+  }
+
   const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
-  let ERP_ENDPOINT = Deno.env.get("ERP_ENDPOINT") || Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
-  if (!ERP_TOKEN) throw new UploadQueueError("ERP_TOKEN not configured", "ERP_CONFIG", 500);
-  if (!/^https?:\/\//i.test(ERP_ENDPOINT)) ERP_ENDPOINT = `https://${ERP_ENDPOINT}`;
+  let ERP_ENDPOINT =
+    Deno.env.get("ERP_ENDPOINT") ||
+    Deno.env.get("ERP_BASE_URL") ||
+    "https://odontoart.s4e.com.br";
+
+  if (!ERP_TOKEN) {
+    throw new UploadQueueError("ERP_TOKEN not configured", "ERP_CONFIG", 500);
+  }
+
+  if (!/^https?:\/\//i.test(ERP_ENDPOINT)) {
+    ERP_ENDPOINT = `https://${ERP_ENDPOINT}`;
+  }
   ERP_ENDPOINT = ERP_ENDPOINT.replace(/\/+$/, "");
 
   let response: Response;
@@ -113,18 +169,43 @@ const uploadItem = async (supabase: any, item: any) => {
   try {
     result = responseText ? JSON.parse(responseText) : {};
   } catch {
-    result = { raw: responseText.slice(0, 1000) };
+    throw new UploadQueueError(
+      `ERP retornou conteudo invalido: ${responseText.slice(0, 300)}`,
+      "ERP_INVALID_RESPONSE",
+      response.status,
+    );
   }
 
   if (!response.ok) {
     throw new UploadQueueError(
-      String(result?.message || result?.mensagem || `ERP respondeu HTTP ${response.status}`),
+      String(
+        result?.message ||
+        result?.mensagem ||
+        `ERP respondeu HTTP ${response.status}`,
+      ),
       "ERP_HTTP",
       response.status,
     );
   }
 
-  return { result, fileSize: bytes.length };
+  const acceptance = extractErpAcceptance(result);
+  if (!acceptance.accepted) {
+    throw new UploadQueueError(
+      acceptance.erpMessage ||
+        (acceptance.erpCode !== null
+          ? `ERP rejeitou o arquivo com codigo ${acceptance.erpCode}`
+          : "ERP nao confirmou o aceite do arquivo"),
+      "ERP_REJECTED",
+      response.status,
+    );
+  }
+
+  return {
+    result,
+    fileSize: bytes.length,
+    erpCode: acceptance.erpCode,
+    erpMessage: acceptance.erpMessage,
+  };
 };
 
 const retryDelayMs = (attempt: number) => {
@@ -133,13 +214,45 @@ const retryDelayMs = (attempt: number) => {
   return minutes[index] * 60_000;
 };
 
+const isRetryableError = (error: unknown) => {
+  if (!(error instanceof UploadQueueError)) return true;
+
+  if (error.code === "ERP_NETWORK") return true;
+
+  if (error.code === "ERP_HTTP") {
+    const status = Number(error.statusCode || 0);
+    return status === 408 || status === 425 || status === 429 || status >= 500;
+  }
+
+  if (
+    [
+      "FILE_NOT_FOUND",
+      "EMPTY_FILE",
+      "FILE_TOO_LARGE",
+      "ERP_CONFIG",
+      "ERP_INVALID_RESPONSE",
+      "ERP_REJECTED",
+    ].includes(error.code)
+  ) {
+    return false;
+  }
+
+  return true;
+};
+
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
-  if (req.method !== "POST") return jsonResponse({ error: "Metodo nao permitido" }, 405);
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 200, headers: corsHeaders });
+  }
+  if (req.method !== "POST") {
+    return jsonResponse({ error: "Metodo nao permitido" }, 405);
+  }
 
   const supabase = createServiceClient();
   const authorization = await authorize(req, supabase);
-  if (!authorization.ok) return jsonResponse({ error: "Nao autorizado" }, 401);
+  if (!authorization.ok) {
+    return jsonResponse({ error: "Nao autorizado" }, 401);
+  }
 
   let requestBody: Record<string, unknown> = {};
   try {
@@ -149,20 +262,31 @@ Deno.serve(async (req: Request) => {
   }
 
   const requestedLimit = Number(requestBody.limit || 20);
-  const limit = Math.max(1, Math.min(Number.isFinite(requestedLimit) ? requestedLimit : 20, 50));
-  const source = String(requestBody.source || authorization.source || "worker");
+  const limit = Math.max(
+    1,
+    Math.min(Number.isFinite(requestedLimit) ? requestedLimit : 20, 50),
+  );
+  const source = String(
+    requestBody.source || authorization.source || "worker",
+  );
 
   try {
-    const { error: resetError } = await supabase.rpc("reset_stuck_queue_items_v2", {
-      stuck_threshold_minutes: 10,
-    });
+    const { error: resetError } = await supabase.rpc(
+      "reset_stuck_queue_items_v3",
+      { stuck_threshold_minutes: 10 },
+    );
+
     if (resetError) {
-      console.warn("[erp-process-upload-queue] Falha ao recuperar itens travados:", resetError.message);
+      console.warn(
+        "[erp-process-upload-queue] Falha ao recuperar itens travados:",
+        resetError.message,
+      );
     }
 
-    const { data: items, error } = await supabase.rpc("claim_erp_upload_queue_v3", {
-      p_limit: limit,
-    });
+    const { data: items, error } = await supabase.rpc(
+      "claim_erp_upload_queue_v4",
+      { p_limit: limit },
+    );
     if (error) throw error;
 
     const claimed = Array.isArray(items) ? items : [];
@@ -170,18 +294,32 @@ Deno.serve(async (req: Request) => {
 
     const processOne = async (item: any) => {
       const attempts = Number(item.attempts || 0) + 1;
+      const processingToken = String(item.processing_token || "").trim();
+
+      if (!processingToken) {
+        results.push({
+          id: item.id,
+          status: "worker_error",
+          error_code: "MISSING_PROCESSING_TOKEN",
+        });
+        return;
+      }
 
       try {
         const uploaded = await uploadItem(supabase, item);
+        const now = new Date().toISOString();
 
-        const { error: updateError } = await supabase
+        const { data: completed, error: updateError } = await supabase
           .from("erp_upload_queue")
           .update({
             status: "success",
             attempts,
-            last_attempt_at: new Date().toISOString(),
-            finished_at: new Date().toISOString(),
+            last_attempt_at: now,
+            next_attempt_at: null,
+            finished_at: now,
             claimed_at: null,
+            processing_token: null,
+            processing_started_at: null,
             erp_response: uploaded.result,
             last_status_code: 200,
             last_error: null,
@@ -189,9 +327,27 @@ Deno.serve(async (req: Request) => {
             file_size_bytes: uploaded.fileSize,
             worker_source: source,
           })
-          .eq("id", item.id);
+          .eq("id", item.id)
+          .eq("processing_token", processingToken)
+          .select("id")
+          .maybeSingle();
 
-        if (updateError) throw updateError;
+        if (updateError) {
+          throw new UploadQueueError(
+            `Falha ao registrar sucesso na fila: ${updateError.message}`,
+            "QUEUE_STATE_UPDATE",
+            500,
+          );
+        }
+
+        if (!completed?.id) {
+          results.push({
+            id: item.id,
+            status: "claim_lost",
+            error_code: "CLAIM_LOST",
+          });
+          return;
+        }
 
         const { error: removeError } = await supabase.storage
           .from(item.bucket)
@@ -200,35 +356,79 @@ Deno.serve(async (req: Request) => {
         results.push({
           id: item.id,
           status: "success",
+          erp_code: uploaded.erpCode,
+          erp_message: uploaded.erpMessage,
           cleanup_warning: removeError?.message || null,
         });
       } catch (itemError) {
-        const finalFailure = attempts >= 5;
-        const message = itemError instanceof Error ? itemError.message : String(itemError);
-        const statusCode = itemError instanceof UploadQueueError ? itemError.statusCode : null;
-        const errorCode = itemError instanceof UploadQueueError ? itemError.code : "WORKER_ERROR";
+        const retryable = isRetryableError(itemError);
+        const finalFailure = !retryable || attempts >= 5;
+        const message =
+          itemError instanceof Error ? itemError.message : String(itemError);
+        const statusCode =
+          itemError instanceof UploadQueueError
+            ? itemError.statusCode
+            : null;
+        const errorCode =
+          itemError instanceof UploadQueueError
+            ? itemError.code
+            : "WORKER_ERROR";
 
-        await supabase
+        const now = new Date().toISOString();
+        const nextAttemptAt = finalFailure
+          ? null
+          : new Date(Date.now() + retryDelayMs(attempts)).toISOString();
+
+        const { data: failedRow, error: failureUpdateError } = await supabase
           .from("erp_upload_queue")
           .update({
             status: finalFailure ? "failed" : "retry_wait",
             attempts,
-            last_attempt_at: new Date().toISOString(),
-            next_attempt_at: finalFailure
-              ? null
-              : new Date(Date.now() + retryDelayMs(attempts)).toISOString(),
-            finished_at: finalFailure ? new Date().toISOString() : null,
+            last_attempt_at: now,
+            next_attempt_at: nextAttemptAt,
+            finished_at: finalFailure ? now : null,
             claimed_at: null,
+            processing_token: null,
+            processing_started_at: null,
             last_error: message.slice(0, 1000),
             last_error_code: errorCode,
             last_status_code: statusCode,
             worker_source: source,
           })
-          .eq("id", item.id);
+          .eq("id", item.id)
+          .eq("processing_token", processingToken)
+          .select("id")
+          .maybeSingle();
+
+        if (failureUpdateError) {
+          console.error(
+            "[erp-process-upload-queue] Falha ao persistir erro do item",
+            item.id,
+            failureUpdateError,
+          );
+          results.push({
+            id: item.id,
+            status: "queue_update_failed",
+            error_code: errorCode,
+            details: failureUpdateError.message,
+          });
+          return;
+        }
+
+        if (!failedRow?.id) {
+          results.push({
+            id: item.id,
+            status: "claim_lost",
+            error_code: "CLAIM_LOST",
+          });
+          return;
+        }
 
         results.push({
           id: item.id,
           status: finalFailure ? "failed" : "retry_wait",
+          retryable,
+          attempts,
           error_code: errorCode,
           status_code: statusCode,
         });
@@ -237,30 +437,52 @@ Deno.serve(async (req: Request) => {
 
     const concurrency = 3;
     for (let index = 0; index < claimed.length; index += concurrency) {
-      await Promise.all(claimed.slice(index, index + concurrency).map(processOne));
+      await Promise.all(
+        claimed.slice(index, index + concurrency).map(processOne),
+      );
     }
 
-    const successCount = results.filter((item) => item.status === "success").length;
-    const retryCount = results.filter((item) => item.status === "retry_wait").length;
-    const failedCount = results.filter((item) => item.status === "failed").length;
+    const successCount = results.filter(
+      (item) => item.status === "success",
+    ).length;
+    const retryCount = results.filter(
+      (item) => item.status === "retry_wait",
+    ).length;
+    const failedCount = results.filter(
+      (item) => item.status === "failed",
+    ).length;
+    const claimLostCount = results.filter(
+      (item) => item.status === "claim_lost",
+    ).length;
+    const workerErrorCount = results.filter(
+      (item) =>
+        item.status === "worker_error" ||
+        item.status === "queue_update_failed",
+    ).length;
 
     return jsonResponse({
-      ok: true,
-      message: claimed.length === 0
-        ? "Nenhum documento elegivel para processamento."
-        : `${claimed.length} documento(s) processado(s): ${successCount} sucesso, ${retryCount} nova tentativa, ${failedCount} falha definitiva.`,
+      ok: workerErrorCount === 0,
+      message:
+        claimed.length === 0
+          ? "Nenhum documento elegivel para processamento."
+          : `${claimed.length} documento(s) processado(s): ${successCount} sucesso, ${retryCount} nova tentativa, ${failedCount} falha definitiva, ${claimLostCount} claim expirado.`,
       processed: claimed.length,
       success: successCount,
       retry_wait: retryCount,
       failed: failedCount,
+      claim_lost: claimLostCount,
+      worker_errors: workerErrorCount,
       source,
       results,
     });
   } catch (error) {
     console.error("[erp-process-upload-queue]", error);
-    return jsonResponse({
-      error: "Erro ao processar fila ERP",
-      details: error instanceof Error ? error.message : String(error),
-    }, 500);
+    return jsonResponse(
+      {
+        error: "Erro ao processar fila ERP",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      500,
+    );
   }
 });
