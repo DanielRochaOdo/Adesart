@@ -153,6 +153,9 @@ const enqueueAttachment = async (
     idDependente: number | null;
     arquivoPath: string | null;
     arquivoNome: string | null;
+    clienteNome: string | null;
+    clienteCpf: string | null;
+    empresaNome: string | null;
   },
 ) => {
   const {
@@ -162,6 +165,9 @@ const enqueueAttachment = async (
     idDependente,
     arquivoPath,
     arquivoNome,
+    clienteNome,
+    clienteCpf,
+    empresaNome,
   } = params;
 
   if (!arquivoPath) {
@@ -231,6 +237,9 @@ const enqueueAttachment = async (
         last_status_code: null,
         file_size_bytes: fileSize,
         worker_source: "cadastro-finalize",
+        cliente_nome: clienteNome,
+        cliente_cpf: clienteCpf,
+        empresa_nome: empresaNome,
       })
       .eq("id", existingQueue.id)
       .select("id")
@@ -259,6 +268,9 @@ const enqueueAttachment = async (
       next_attempt_at: new Date().toISOString(),
       file_size_bytes: fileSize,
       worker_source: "cadastro-finalize",
+      cliente_nome: clienteNome,
+      cliente_cpf: clienteCpf,
+      empresa_nome: empresaNome,
     })
     .select("id")
     .single();
@@ -486,6 +498,9 @@ Deno.serve(async (req: Request) => {
             idDependente,
             arquivoPath,
             arquivoNome,
+            clienteNome: textValue(synced?.nome, nomePayload),
+            clienteCpf: textValue(existing?.cpf, responsavel?.cpf),
+            empresaNome: textValue(synced?.empresa_nome, empresaNome),
           });
         }
       } else {
