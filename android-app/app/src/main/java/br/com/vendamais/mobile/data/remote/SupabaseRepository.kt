@@ -16,6 +16,8 @@ import br.com.vendamais.mobile.data.models.CadastroStats
 import br.com.vendamais.mobile.data.models.DashboardCadastro
 import br.com.vendamais.mobile.data.models.DashboardLegacyVendedor
 import br.com.vendamais.mobile.data.models.ErpUploadQueueItem
+import br.com.vendamais.mobile.data.models.RequeueUploadQueueResult
+import br.com.vendamais.mobile.data.models.ErpUploadQueueHealth
 import br.com.vendamais.mobile.data.models.ErpUploadQueuePage
 import br.com.vendamais.mobile.data.models.MobileProfile
 import br.com.vendamais.mobile.data.models.MobileTeam
@@ -371,7 +373,7 @@ class SupabaseRepository(
             header("Prefer", "count=exact")
             parameter(
                 "select",
-                "id,created_at,updated_at,status,attempts,next_attempt_at,last_attempt_at,last_error,last_status_code,erp_response,cadastro_id,created_by,id_funcionario,id_dependente,arquivo_path,arquivo_nome,bucket,tipo,cadastros(nome,cpf,empresa_nome)",
+                "id,created_at,updated_at,status,attempts,next_attempt_at,last_attempt_at,last_error,last_error_code,last_status_code,claimed_at,finished_at,manual_reprocess_count,worker_source,file_size_bytes,cliente_nome,cliente_cpf,empresa_nome,erp_response,cadastro_id,created_by,id_funcionario,id_dependente,arquivo_path,arquivo_nome,bucket,tipo,cadastros(nome,cpf,empresa_nome)",
             )
             status?.takeIf { it.isNotBlank() && it != "todos" }?.let { parameter("status", "eq.$it") }
             parameter("order", "created_at.desc")
@@ -386,9 +388,9 @@ class SupabaseRepository(
         return ErpUploadQueuePage(items = items, total = total)
     }
 
-    suspend fun processUploadQueue(session: SavedSession): ProcessUploadQueueResponse {
+    suspend fun fetchUploadQueueHealth(session: SavedSession): ErpUploadQueueHealth {
         return client.safePost(
-            url = "${AppConfig.supabaseUrl}/functions/v1/erp-process-upload-queue",
+            url = "${AppConfig.supabaseUrl}/rest/v1/rpc/get_erp_upload_queue_health_v1",
             json = json,
             body = buildJsonObject { },
         ) {
@@ -396,9 +398,22 @@ class SupabaseRepository(
         }
     }
 
-    suspend fun resetStuckQueue(session: SavedSession, minutes: Int = 15): ResetStuckQueueResult {
-        val response: List<ResetStuckQueueResult> = client.safePost(
-            url = "${AppConfig.supabaseUrl}/rest/v1/rpc/reset_stuck_queue_items",
+    suspend fun processUploadQueue(session: SavedSession): ProcessUploadQueueResponse {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/erp-process-upload-queue",
+            json = json,
+            body = buildJsonObject {
+                put("source", "manual-android")
+                put("limit", 20)
+            },
+        ) {
+            applyAuthHeaders(session)
+        }
+    }
+
+    suspend fun resetStuckQueue(session: SavedSession, minutes: Int = 10): ResetStuckQueueResult {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/rest/v1/rpc/reset_stuck_queue_items_v2",
             json = json,
             body = buildJsonObject {
                 put("stuck_threshold_minutes", minutes)
@@ -406,7 +421,23 @@ class SupabaseRepository(
         ) {
             applyAuthHeaders(session)
         }
-        return response.firstOrNull() ?: ResetStuckQueueResult()
+    }
+
+    suspend fun requeueUploadQueue(
+        session: SavedSession,
+        id: String? = null,
+        scope: String = "item",
+    ): RequeueUploadQueueResult {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/rest/v1/rpc/requeue_erp_upload_v1",
+            json = json,
+            body = buildJsonObject {
+                if (id.isNullOrBlank()) put("p_id", JsonNull) else put("p_id", id)
+                put("p_scope", scope)
+            },
+        ) {
+            applyAuthHeaders(session)
+        }
     }
 
     suspend fun fetchCadastrosExcluidos(session: SavedSession, limit: Int = 100): List<CadastroExcluidoItem> {
@@ -715,21 +746,12 @@ class SupabaseRepository(
         }
     }
 
-    suspend fun reprocessUploadQueueItem(session: SavedSession, id: String): ErpUploadQueueItem {
-        val payload = buildJsonObject {
-            put("status", "queued")
-            put("attempts", 0)
-            put("next_attempt_at", java.time.OffsetDateTime.now(java.time.ZoneOffset.UTC).toString())
-            put("last_error", JsonNull)
-        }
-        return client.safePatch<List<ErpUploadQueueItem>>(
-            url = "${AppConfig.supabaseUrl}/rest/v1/erp_upload_queue?id=eq.$id",
-            json = json,
-            body = payload,
-        ) {
-            applyAuthHeaders(session)
-            header("Prefer", "return=representation")
-        }.firstOrNull() ?: throw IllegalStateException("Falha ao reprocessar item da fila.")
+    suspend fun reprocessUploadQueueItem(session: SavedSession, id: String): RequeueUploadQueueResult {
+        return requeueUploadQueue(session = session, id = id, scope = "item")
+    }
+
+    suspend fun reprocessFailedUploadQueue(session: SavedSession): RequeueUploadQueueResult {
+        return requeueUploadQueue(session = session, id = null, scope = "failed")
     }
 
     private suspend inline fun <reified T> getList(

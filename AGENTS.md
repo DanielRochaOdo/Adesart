@@ -30,6 +30,18 @@ As fontes canônicas de backend são:
 
 Não criar backend, migrations ou Edge Functions exclusivos dentro de `android-app/`.
 
+### Conclusão de adesão e documentos ERP
+
+A conclusão de uma adesão é uma transação de backend. Após o ERP confirmar o cadastro:
+
+1. `erp-novo-usuario2` é a autoridade para persistir `status=enviado` e os metadados comerciais;
+2. Web e Android não devem reaplicar PATCH parcial de conclusão;
+3. nome, empresa, vendedor, adesionista e plano devem estar persistidos antes de o cliente considerar o fluxo concluído;
+4. documento/anexo deve ser enfileirado por contrato canônico e não enviado por lógica paralela específica de cliente;
+5. a fila `erp_upload_queue` deve ser operada pelas RPCs/worker canônicos, com retry, lease, erro observável e reprocessamento administrativo.
+
+É proibido voltar a implementar conclusão, fila ou reprocessamento com regras independentes no Web ou Android.
+
 ## Alterações visuais específicas
 
 Alterações exclusivamente visuais ou específicas de uma plataforma podem permanecer apenas nela, desde que seja verificado se existe impacto funcional ou de paridade na outra plataforma.

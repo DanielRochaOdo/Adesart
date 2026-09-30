@@ -88,6 +88,68 @@ if auth_service.exists():
             "Mensagem técnica de Supabase voltou ao fluxo de login Android."
         )
 
+cadastro_workflow = (
+    ANDROID
+    / "app/src/main/java/br/com/vendamais/mobile/data/remote/CadastroWorkflowRepository.kt"
+)
+if cadastro_workflow.exists():
+    workflow_text = cadastro_workflow.read_text(encoding="utf-8")
+    if "syncCadastroAfterSendSafely(session, cadastroId, payload, response, true)" in workflow_text:
+        errors.append(
+            "Android voltou a finalizar cadastro localmente após sucesso do ERP; "
+            "erp-novo-usuario2 deve ser a autoridade canônica."
+        )
+
+web_queue = ROOT / "src/pages/FilaUploadERP.tsx"
+if web_queue.exists():
+    web_queue_text = web_queue.read_text(encoding="utf-8")
+    for required in (
+        "get_erp_upload_queue_health_v1",
+        "requeue_erp_upload_v1",
+        "reset_stuck_queue_items_v2",
+    ):
+        if required not in web_queue_text:
+            errors.append(f"Fila ERP Web não usa operação canônica: {required}")
+
+if dashboard_repository.exists():
+    repository_text = dashboard_repository.read_text(encoding="utf-8")
+    for required in (
+        "get_erp_upload_queue_health_v1",
+        "requeue_erp_upload_v1",
+        "reset_stuck_queue_items_v2",
+    ):
+        if required not in repository_text:
+            errors.append(f"Fila ERP Android não usa operação canônica: {required}")
+
+erp_finalize = ROOT / "supabase/functions/erp-novo-usuario2/index.ts"
+if erp_finalize.exists():
+    finalize_text = erp_finalize.read_text(encoding="utf-8")
+    for required in (
+        "canonicalSync",
+        "attachmentQueue",
+        "empresa_nome",
+        "vendedor_codigo",
+        "erp_upload_queue",
+    ):
+        if required not in finalize_text:
+            errors.append(f"Finalização canônica ERP incompleta: {required} ausente.")
+else:
+    errors.append("Edge Function erp-novo-usuario2 não encontrada.")
+
+queue_worker = ROOT / "supabase/functions/erp-process-upload-queue/index.ts"
+if queue_worker.exists():
+    worker_text = queue_worker.read_text(encoding="utf-8")
+    for required in (
+        "claim_erp_upload_queue_v3",
+        "X-Queue-Worker-Token",
+        "manual",
+        "last_error_code",
+    ):
+        if required not in worker_text:
+            errors.append(f"Worker canônico da fila ERP incompleto: {required} ausente.")
+else:
+    errors.append("Edge Function erp-process-upload-queue não encontrada.")
+
 status_rules = (
     ANDROID
     / "app/src/main/java/br/com/vendamais/mobile/domain/cadastro/CadastroStatusRules.kt"

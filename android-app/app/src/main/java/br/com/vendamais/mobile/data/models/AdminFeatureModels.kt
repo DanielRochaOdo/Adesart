@@ -109,6 +109,24 @@ data class ErpUploadQueueItem(
     val lastError: String? = null,
     @SerialName("last_status_code")
     val lastStatusCode: Int? = null,
+    @SerialName("last_error_code")
+    val lastErrorCode: String? = null,
+    @SerialName("claimed_at")
+    val claimedAt: String? = null,
+    @SerialName("finished_at")
+    val finishedAt: String? = null,
+    @SerialName("manual_reprocess_count")
+    val manualReprocessCount: Int = 0,
+    @SerialName("worker_source")
+    val workerSource: String? = null,
+    @SerialName("file_size_bytes")
+    val fileSizeBytes: Long? = null,
+    @SerialName("cliente_nome")
+    val clienteNome: String? = null,
+    @SerialName("cliente_cpf")
+    val clienteCpf: String? = null,
+    @SerialName("empresa_nome")
+    val empresaNome: String? = null,
     @SerialName("erp_response")
     val erpResponse: JsonElement? = null,
     @SerialName("cadastro_id")
@@ -144,12 +162,40 @@ data class ErpUploadQueuePage(
 
 @Serializable
 data class ProcessUploadQueueResponse(
+    val ok: Boolean = false,
     val message: String? = null,
-    @SerialName("queued_count")
-    val queuedCount: Int? = null,
-    @SerialName("estimated_time_seconds")
-    val estimatedTimeSeconds: Int? = null,
-    val note: String? = null,
+    val processed: Int = 0,
+    val success: Int = 0,
+    @SerialName("retry_wait")
+    val retryWait: Int = 0,
+    val failed: Int = 0,
+    val source: String? = null,
+    val results: JsonElement? = null,
+)
+
+@Serializable
+data class ErpUploadQueueHealth(
+    val total: Int = 0,
+    val queued: Int = 0,
+    val processing: Int = 0,
+    @SerialName("retry_wait")
+    val retryWait: Int = 0,
+    val success: Int = 0,
+    val failed: Int = 0,
+    val claimable: Int = 0,
+    val stuck: Int = 0,
+    @SerialName("oldest_pending_at")
+    val oldestPendingAt: String? = null,
+    @SerialName("last_success_at")
+    val lastSuccessAt: String? = null,
+    @SerialName("last_failure_at")
+    val lastFailureAt: String? = null,
+)
+
+@Serializable
+data class RequeueUploadQueueResult(
+    val requeued: Int = 0,
+    val scope: String = "",
 )
 
 @Serializable

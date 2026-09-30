@@ -1512,7 +1512,6 @@ class CadastroWorkflowRepository(
         }
 
         if (response is JsonObject && response["error"] != null) {
-            syncCadastroAfterSendSafely(session, cadastroId, payload, response, false)
             val mensagem = response["error"]?.jsonPrimitive?.content
                 ?: "Erro ao enviar cadastro para o ERP."
             throw IllegalStateException(mensagem)
@@ -1520,11 +1519,12 @@ class CadastroWorkflowRepository(
 
         val dados = response.jsonObject["data"]?.jsonObject?.get("dados")
         if (dados == null || dados is JsonPrimitive && dados.content == "null") {
-            syncCadastroAfterSendSafely(session, cadastroId, payload, response, false)
             throw IllegalStateException("ERP nao retornou dados validos para o cadastro.")
         }
 
-        syncCadastroAfterSendSafely(session, cadastroId, payload, response, true)
+        // A Edge Function erp-novo-usuario2 e a autoridade da conclusao:
+        // ela persiste status/metadados e cria a fila do anexo antes de responder.
+        // O Android nao deve reaplicar um PATCH parcial depois do sucesso.
         return response
     }
 

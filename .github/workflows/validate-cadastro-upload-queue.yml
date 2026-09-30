@@ -1,0 +1,55 @@
+name: Validate Cadastro Upload Queue
+
+on:
+  pull_request:
+    paths:
+      - 'src/hooks/useCadastros.ts'
+      - 'src/pages/FilaUploadERP.tsx'
+      - 'android-app/**'
+      - 'supabase/functions/erp-novo-usuario2/**'
+      - 'supabase/functions/erp-enqueue-upload/**'
+      - 'supabase/functions/erp-process-upload-queue/**'
+      - 'supabase/migrations/*upload_queue*'
+      - 'supabase/migrations/*cadastro_metadata*'
+      - '.github/scripts/check_android_canonical_parity.py'
+      - '.github/workflows/validate-cadastro-upload-queue.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      # O typecheck global da main possui divida tecnica preexistente fora deste escopo.
+      # O build valida sintaxe/bundling das alteracoes Web deste fluxo.
+      - run: npm run build
+
+  edge-functions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: |
+          deno check --node-modules-dir=auto \
+            supabase/functions/erp-novo-usuario2/index.ts \
+            supabase/functions/erp-enqueue-upload/index.ts \
+            supabase/functions/erp-process-upload-queue/index.ts
+
+  parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: python .github/scripts/check_android_canonical_parity.py
