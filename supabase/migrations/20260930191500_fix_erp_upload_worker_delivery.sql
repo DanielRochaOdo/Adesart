@@ -216,9 +216,9 @@ RETURNS jsonb
 LANGUAGE sql
 SECURITY DEFINER
 SET search_path = public
-AS $
+AS $sql$
   SELECT public.reset_stuck_queue_items_v3(stuck_threshold_minutes);
-$;
+$sql$;
 
 REVOKE ALL ON FUNCTION public.reset_stuck_queue_items_v2(integer)
 FROM PUBLIC, anon;
@@ -231,7 +231,7 @@ RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
-AS $
+AS $plpgsql$
 DECLARE
   v_role text;
   v_result jsonb;
@@ -282,7 +282,7 @@ BEGIN
 
   RETURN coalesce(v_result, '{}'::jsonb);
 END;
-$;
+$plpgsql$;
 
 REVOKE ALL ON FUNCTION public.get_erp_upload_queue_health_v1()
 FROM PUBLIC, anon;
