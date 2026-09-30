@@ -77,14 +77,21 @@ Deno.serve(async (req: Request) => {
     const fileSize = Number(metadata.size || metadata.contentLength || 0) || null;
 
     let createdBy = user.id;
+    let clienteNome: string | null = null;
+    let clienteCpf: string | null = null;
+    let empresaNome: string | null = null;
+
     if (body.cadastroId) {
       const { data: cadastro } = await supabaseClient
         .from("cadastros")
-        .select("id,created_by")
+        .select("id,created_by,nome,cpf,empresa_nome")
         .eq("id", body.cadastroId)
         .maybeSingle();
 
       if (cadastro?.created_by) createdBy = cadastro.created_by;
+      clienteNome = cadastro?.nome?.trim() || null;
+      clienteCpf = cadastro?.cpf?.trim() || null;
+      empresaNome = cadastro?.empresa_nome?.trim() || null;
     }
 
     const { data: existing } = await supabaseClient
@@ -121,6 +128,9 @@ Deno.serve(async (req: Request) => {
           last_status_code: null,
           file_size_bytes: fileSize,
           worker_source: "enqueue",
+          cliente_nome: clienteNome,
+          cliente_cpf: clienteCpf,
+          empresa_nome: empresaNome,
         })
         .eq("id", existing.id)
         .select()
@@ -153,6 +163,9 @@ Deno.serve(async (req: Request) => {
       next_attempt_at: new Date().toISOString(),
       file_size_bytes: fileSize,
       worker_source: "enqueue",
+      cliente_nome: clienteNome,
+      cliente_cpf: clienteCpf,
+      empresa_nome: empresaNome,
     };
 
     const { data: queueData, error: queueError } = await supabaseClient
