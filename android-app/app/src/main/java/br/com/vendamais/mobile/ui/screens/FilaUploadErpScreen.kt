@@ -51,6 +51,7 @@ import br.com.vendamais.mobile.ui.theme.Slate100
 import br.com.vendamais.mobile.ui.theme.Slate500
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 @Composable
 fun FilaUploadErpScreen(
@@ -90,31 +91,59 @@ fun FilaUploadErpScreen(
         }
 
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                QueueMetric(
-                    label = "Resultados",
-                    value = state.uploadQueueTotal,
-                    container = Amber100,
-                    content = Amber500,
-                    modifier = Modifier.weight(1f),
-                )
-                QueueMetric(
-                    label = "Pagina",
-                    value = currentPage,
-                    container = Blue100,
-                    content = Blue500,
-                    modifier = Modifier.weight(1f),
-                )
-                QueueMetric(
-                    label = "Exibidos",
-                    value = state.uploadQueue.size,
-                    container = EmeraldSoft,
-                    content = Emerald,
-                    modifier = Modifier.weight(1f),
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    QueueMetric(
+                        label = "Aguardando",
+                        value = state.uploadQueueHealth.queued,
+                        container = Amber100,
+                        content = Amber500,
+                        modifier = Modifier.weight(1f),
+                    )
+                    QueueMetric(
+                        label = "Processando",
+                        value = state.uploadQueueHealth.processing,
+                        container = Blue100,
+                        content = Blue500,
+                        modifier = Modifier.weight(1f),
+                    )
+                    QueueMetric(
+                        label = "Falhas",
+                        value = state.uploadQueueHealth.failed,
+                        container = Red100,
+                        content = Red500,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    QueueMetric(
+                        label = "Prontos",
+                        value = state.uploadQueueHealth.claimable,
+                        container = EmeraldSoft,
+                        content = Emerald,
+                        modifier = Modifier.weight(1f),
+                    )
+                    QueueMetric(
+                        label = "Travados",
+                        value = state.uploadQueueHealth.stuck,
+                        container = Red100,
+                        content = Red500,
+                        modifier = Modifier.weight(1f),
+                    )
+                    QueueMetric(
+                        label = "Concluidos",
+                        value = state.uploadQueueHealth.success,
+                        container = Slate100,
+                        content = Slate500,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
 
@@ -162,12 +191,22 @@ fun FilaUploadErpScreen(
                             modifier = Modifier.weight(1f),
                         )
                     }
-                    TextButton(
-                        onClick = { viewModel.resetStuckQueue() },
-                        enabled = !state.adminFeatureLoading,
-                        modifier = Modifier.align(Alignment.End),
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text("Liberar itens travados")
+                        TextButton(
+                            onClick = { viewModel.reprocessFailedUploadQueue() },
+                            enabled = !state.adminFeatureLoading && state.uploadQueueHealth.failed > 0,
+                        ) {
+                            Text("Reprocessar falhas")
+                        }
+                        TextButton(
+                            onClick = { viewModel.resetStuckQueue() },
+                            enabled = !state.adminFeatureLoading && state.uploadQueueHealth.stuck > 0,
+                        ) {
+                            Text("Liberar travados")
+                        }
                     }
 
                     state.uploadQueueOperation?.message?.takeIf { it.isNotBlank() }?.let { message ->
@@ -298,7 +337,25 @@ fun FilaUploadErpScreen(
                         }
 
                         item.lastError?.takeIf { it.isNotBlank() }?.let { error ->
-                            OperationalNotice(message = "Nao foi possivel sincronizar o documento. Detalhes tecnicos: $error", isError = true)
+                            val code = item.lastErrorCode?.takeIf { it.isNotBlank() }
+                            val http = item.lastStatusCode?.let { "HTTP $it" }
+                            val technical = listOfNotNull(code, http).joinToString(" · ")
+                            OperationalNotice(
+                                message = buildString {
+                                    append("Nao foi possivel sincronizar o documento.")
+                                    if (technical.isNotBlank()) append(" [$technical]")
+                                    append(" $error")
+                                },
+                                isError = true,
+                            )
+                        }
+
+                        item.fileSizeBytes?.takeIf { it > 0 }?.let { bytes ->
+                            Text(
+                                text = "Tamanho: ${formatQueueFileSize(bytes)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
 
                         Row(
@@ -460,6 +517,14 @@ private fun formatQueueDateTime(value: String): String {
         java.time.OffsetDateTime.parse(value)
             .format(java.time.format.DateTimeFormatter.ofPattern("dd/MM HH:mm"))
     }.getOrDefault(value)
+}
+
+private fun formatQueueFileSize(bytes: Long): String {
+    if (bytes < 1024) return "$bytes B"
+    val kb = bytes / 1024.0
+    if (kb < 1024) return String.format(Locale.getDefault(), "%.1f KB", kb)
+    val mb = kb / 1024.0
+    return String.format(Locale.getDefault(), "%.1f MB", mb)
 }
 
 private fun formatQueueCpf(value: String): String {
