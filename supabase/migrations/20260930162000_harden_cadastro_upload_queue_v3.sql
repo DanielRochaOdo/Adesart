@@ -15,7 +15,10 @@ ALTER TABLE public.erp_upload_queue
   ADD COLUMN IF NOT EXISTS manual_reprocess_count integer NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS worker_source text,
   ADD COLUMN IF NOT EXISTS file_size_bytes bigint,
-  ADD COLUMN IF NOT EXISTS last_error_code text;
+  ADD COLUMN IF NOT EXISTS last_error_code text,
+  ADD COLUMN IF NOT EXISTS cliente_nome text,
+  ADD COLUMN IF NOT EXISTS cliente_cpf text,
+  ADD COLUMN IF NOT EXISTS empresa_nome text;
 
 CREATE INDEX IF NOT EXISTS idx_erp_upload_queue_processing_claimed_at
   ON public.erp_upload_queue(status, claimed_at)
@@ -23,6 +26,19 @@ CREATE INDEX IF NOT EXISTS idx_erp_upload_queue_processing_claimed_at
 
 CREATE INDEX IF NOT EXISTS idx_erp_upload_queue_cadastro_status
   ON public.erp_upload_queue(cadastro_id, status);
+
+UPDATE public.erp_upload_queue q
+SET
+  cliente_nome = COALESCE(NULLIF(BTRIM(q.cliente_nome), ''), NULLIF(BTRIM(c.nome), '')),
+  cliente_cpf = COALESCE(NULLIF(BTRIM(q.cliente_cpf), ''), NULLIF(BTRIM(c.cpf), '')),
+  empresa_nome = COALESCE(NULLIF(BTRIM(q.empresa_nome), ''), NULLIF(BTRIM(c.empresa_nome), ''))
+FROM public.cadastros c
+WHERE q.cadastro_id = c.id
+  AND (
+    NULLIF(BTRIM(q.cliente_nome), '') IS NULL
+    OR NULLIF(BTRIM(q.cliente_cpf), '') IS NULL
+    OR NULLIF(BTRIM(q.empresa_nome), '') IS NULL
+  );
 
 CREATE TABLE IF NOT EXISTS public.erp_upload_queue_worker_secret (
   singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton = true),
