@@ -135,7 +135,7 @@ object ErpFileCompressor {
                 renderer.openPage(index).use { page ->
                     val width = (page.width * scale).toInt().coerceAtLeast(320)
                     val height = (page.height * scale).toInt().coerceAtLeast(320)
-                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.RGB_565)
+                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
 
                     try {
                         bitmap.eraseColor(Color.WHITE)
