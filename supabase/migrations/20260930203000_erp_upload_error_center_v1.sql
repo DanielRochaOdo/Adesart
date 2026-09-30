@@ -142,6 +142,10 @@ AS $sql$
       THEN 'ERP_INVALID_RESPONSE'
     WHEN p_error_code = 'ERP_CONFIG'
       THEN 'ERP_CONFIG'
+    WHEN p_error_code = 'PRIMARY_DEPENDENT_NOT_FOUND'
+      THEN 'PRIMARY_DEPENDENT_NOT_FOUND'
+    WHEN p_error_code = 'ERP_FUNCIONARIO_ID_NOT_FOUND'
+      THEN 'ERP_FUNCIONARIO_ID_NOT_FOUND'
     WHEN p_error_code IN ('QUEUE_STATE_UPDATE', 'CLAIM_LOST', 'WORKER_ERROR', 'MISSING_PROCESSING_TOKEN')
       THEN 'QUEUE_INTERNAL'
     ELSE 'LEGACY_UNCLASSIFIED'
@@ -422,6 +426,8 @@ BEGIN
       count(*) FILTER (WHERE error_category = 'ERP_SERVER_ERROR')::integer AS erp_server_error,
       count(*) FILTER (WHERE error_category = 'ERP_INVALID_RESPONSE')::integer AS erp_invalid_response,
       count(*) FILTER (WHERE error_category = 'QUEUE_INTERNAL')::integer AS queue_internal,
+      count(*) FILTER (WHERE error_category = 'PRIMARY_DEPENDENT_NOT_FOUND')::integer AS primary_dependent_not_found,
+      count(*) FILTER (WHERE error_category = 'ERP_FUNCIONARIO_ID_NOT_FOUND')::integer AS erp_funcionario_id_not_found,
       count(*) FILTER (WHERE error_category = 'LEGACY_UNCLASSIFIED')::integer AS legacy_unclassified
     FROM base
   ),
@@ -445,6 +451,8 @@ BEGIN
       'erp_server_error', t.erp_server_error,
       'erp_invalid_response', t.erp_invalid_response,
       'queue_internal', t.queue_internal,
+      'primary_dependent_not_found', t.primary_dependent_not_found,
+      'erp_funcionario_id_not_found', t.erp_funcionario_id_not_found,
       'legacy_unclassified', t.legacy_unclassified
     ),
     'pagination', jsonb_build_object(
