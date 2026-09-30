@@ -208,6 +208,87 @@ FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.reset_stuck_queue_items_v3(integer)
 TO authenticated, service_role;
 
+-- Compatibilidade com Web/Android ja publicados.
+CREATE OR REPLACE FUNCTION public.reset_stuck_queue_items_v2(
+  stuck_threshold_minutes integer DEFAULT 10
+)
+RETURNS jsonb
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+AS $
+  SELECT public.reset_stuck_queue_items_v3(stuck_threshold_minutes);
+$;
+
+REVOKE ALL ON FUNCTION public.reset_stuck_queue_items_v2(integer)
+FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.reset_stuck_queue_items_v2(integer)
+TO authenticated, service_role;
+
+-- Health existente passa a usar o lease forte e expor arquivos ausentes.
+CREATE OR REPLACE FUNCTION public.get_erp_upload_queue_health_v1()
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $
+DECLARE
+  v_role text;
+  v_result jsonb;
+BEGIN
+  SELECT role INTO v_role
+  FROM public.profiles
+  WHERE id = auth.uid();
+
+  IF coalesce(auth.role(), '') <> 'service_role'
+     AND coalesce(v_role, '') <> 'ADMINISTRADOR' THEN
+    RAISE EXCEPTION 'Acesso negado';
+  END IF;
+
+  SELECT jsonb_build_object(
+    'total', count(*),
+    'queued', count(*) FILTER (WHERE q.status = 'queued'),
+    'processing', count(*) FILTER (WHERE q.status = 'processing'),
+    'retry_wait', count(*) FILTER (WHERE q.status = 'retry_wait'),
+    'success', count(*) FILTER (WHERE q.status = 'success'),
+    'failed', count(*) FILTER (WHERE q.status = 'failed'),
+    'claimable', count(*) FILTER (
+      WHERE q.status IN ('queued', 'retry_wait')
+        AND q.attempts < 5
+        AND coalesce(q.next_attempt_at, now()) <= now()
+    ),
+    'stuck', count(*) FILTER (
+      WHERE q.status = 'processing'
+        AND coalesce(q.processing_started_at, q.claimed_at, q.last_attempt_at, q.updated_at, q.created_at)
+            < now() - interval '10 minutes'
+    ),
+    'missing_file_pending', count(*) FILTER (
+      WHERE q.status IN ('queued', 'processing', 'retry_wait')
+        AND NOT EXISTS (
+          SELECT 1
+          FROM storage.objects o
+          WHERE o.bucket_id = q.bucket
+            AND o.name = q.arquivo_path
+        )
+    ),
+    'oldest_pending_at', min(q.created_at) FILTER (
+      WHERE q.status IN ('queued', 'processing', 'retry_wait')
+    ),
+    'last_success_at', max(q.finished_at) FILTER (WHERE q.status = 'success'),
+    'last_failure_at', max(q.last_attempt_at) FILTER (WHERE q.status = 'failed')
+  )
+  INTO v_result
+  FROM public.erp_upload_queue q;
+
+  RETURN coalesce(v_result, '{}'::jsonb);
+END;
+$;
+
+REVOKE ALL ON FUNCTION public.get_erp_upload_queue_health_v1()
+FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.get_erp_upload_queue_health_v1()
+TO authenticated, service_role;
+
 -- Mantem o nome usado por Web/Android, agora limpando tambem o lease forte.
 CREATE OR REPLACE FUNCTION public.requeue_erp_upload_v1(
   p_id uuid DEFAULT NULL,
