@@ -666,22 +666,6 @@ export function useCadastros() {
     return Array.isArray(dados?.dependente) ? dados.dependente : [];
   };
 
-  const formatDependentesForSync = (dependentesPayload: any[]) => (
-    dependentesPayload.map((dep: any) => ({
-      cpf: normalizeCpf(dep?.cpf),
-      nome: dep?.nome,
-      dataNascimento: dep?.dataNascimento,
-      sexo: dep?.sexo,
-      sexoDescricao: dep?.sexoDescricao,
-      tipo: dep?.tipo,
-      plano: dep?.plano,
-      planoValor: dep?.planoValor,
-      nomeMae: dep?.nomeMae,
-      carenciaAtendimento: dep?.carenciaAtendimento,
-      funcionarioCadastro: dep?.funcionarioCadastro,
-    }))
-  );
-
   const syncCadastroEnviado = async (id: string, _payload: Record<string, unknown>, _result: any) => {
     // erp-novo-usuario2 e a autoridade da conclusao. O Web apenas recarrega
     // o estado canonico persistido pelo backend para nao sobrescrever
