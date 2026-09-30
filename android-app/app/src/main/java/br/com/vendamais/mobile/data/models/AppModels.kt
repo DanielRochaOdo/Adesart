@@ -139,6 +139,18 @@ data class DashboardCadastro(
 )
 
 @Serializable
+data class DashboardLegacyVendedor(
+    @SerialName("cadastro_id")
+    val cadastroId: String,
+    @SerialName("vendedor_id")
+    val vendedorId: String? = null,
+    @SerialName("vendedor_codigo")
+    val vendedorCodigo: String? = null,
+    @SerialName("vendedor_nome")
+    val vendedorNome: String? = null,
+)
+
+@Serializable
 data class CadastroResumo(
     val id: String,
     val status: String,
