@@ -585,6 +585,7 @@ class AppViewModel(
         val session = currentSession ?: return
         val rangeKey = "$startIso|$endIso"
         val current = _uiState.value
+        val profile = current.profile ?: return
         if (!force && current.dashboardRangeKey == rangeKey && !current.dashboardLoading) return
 
         _uiState.update {
@@ -599,7 +600,12 @@ class AppViewModel(
             runCatching {
                 val activeSession = ensureFreshSession(session)
                 withContext(Dispatchers.IO) {
-                    repository.fetchDashboardCadastros(activeSession, startIso, endIso)
+                    repository.fetchDashboardCadastros(
+                        session = activeSession,
+                        profile = profile,
+                        startIso = startIso,
+                        endIso = endIso,
+                    )
                 }
             }.onSuccess { registros ->
                 _uiState.update { state ->
