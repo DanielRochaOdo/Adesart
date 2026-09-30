@@ -186,12 +186,151 @@ data class ErpUploadQueueHealth(
     val stuck: Int = 0,
     @SerialName("missing_file_pending")
     val missingFilePending: Int = 0,
+    @SerialName("active_failures")
+    val activeFailures: Int = 0,
+    @SerialName("historical_failures")
+    val historicalFailures: Int = 0,
+    @SerialName("resolved_failures")
+    val resolvedFailures: Int = 0,
+    @SerialName("active_missing_file_failures")
+    val activeMissingFileFailures: Int = 0,
     @SerialName("oldest_pending_at")
     val oldestPendingAt: String? = null,
     @SerialName("last_success_at")
     val lastSuccessAt: String? = null,
     @SerialName("last_failure_at")
     val lastFailureAt: String? = null,
+)
+
+@Serializable
+data class ErpUploadErrorSummary(
+    val total: Int = 0,
+    @SerialName("file_not_found")
+    val fileNotFound: Int = 0,
+    @SerialName("file_too_large")
+    val fileTooLarge: Int = 0,
+    @SerialName("empty_file")
+    val emptyFile: Int = 0,
+    @SerialName("erp_file_locked")
+    val erpFileLocked: Int = 0,
+    @SerialName("erp_rejected")
+    val erpRejected: Int = 0,
+    @SerialName("erp_network")
+    val erpNetwork: Int = 0,
+    @SerialName("erp_rate_limit")
+    val erpRateLimit: Int = 0,
+    @SerialName("erp_server_error")
+    val erpServerError: Int = 0,
+    @SerialName("erp_invalid_response")
+    val erpInvalidResponse: Int = 0,
+    @SerialName("queue_internal")
+    val queueInternal: Int = 0,
+    @SerialName("primary_dependent_not_found")
+    val primaryDependentNotFound: Int = 0,
+    @SerialName("erp_funcionario_id_not_found")
+    val erpFuncionarioIdNotFound: Int = 0,
+    @SerialName("legacy_unclassified")
+    val legacyUnclassified: Int = 0,
+)
+
+@Serializable
+data class ErpUploadErrorPagination(
+    val page: Int = 1,
+    @SerialName("page_size")
+    val pageSize: Int = 50,
+    val total: Int = 0,
+    @SerialName("total_pages")
+    val totalPages: Int = 1,
+)
+
+@Serializable
+data class ErpUploadErrorItem(
+    val id: String,
+    @SerialName("cadastro_id")
+    val cadastroId: String? = null,
+    @SerialName("created_at")
+    val createdAt: String = "",
+    @SerialName("finished_at")
+    val finishedAt: String? = null,
+    @SerialName("last_attempt_at")
+    val lastAttemptAt: String? = null,
+    val status: String = "failed",
+    val attempts: Int = 0,
+    @SerialName("cliente_nome")
+    val clienteNome: String? = null,
+    @SerialName("cliente_cpf")
+    val clienteCpf: String? = null,
+    @SerialName("empresa_nome")
+    val empresaNome: String? = null,
+    @SerialName("arquivo_nome")
+    val arquivoNome: String = "",
+    @SerialName("arquivo_path")
+    val arquivoPath: String = "",
+    val bucket: String = "cadastros-temp-files",
+    @SerialName("file_size_bytes")
+    val fileSizeBytes: Long? = null,
+    @SerialName("last_error_code")
+    val lastErrorCode: String? = null,
+    @SerialName("last_status_code")
+    val lastStatusCode: Int? = null,
+    @SerialName("last_error")
+    val lastError: String? = null,
+    @SerialName("worker_source")
+    val workerSource: String? = null,
+    @SerialName("id_funcionario")
+    val idFuncionario: Int = 0,
+    @SerialName("id_dependente")
+    val idDependente: Int = 0,
+    @SerialName("target_dependente_cpf")
+    val targetDependenteCpf: String? = null,
+    @SerialName("target_dependente_nome")
+    val targetDependenteNome: String? = null,
+    @SerialName("error_category")
+    val errorCategory: String = "LEGACY_UNCLASSIFIED",
+    @SerialName("file_exists")
+    val fileExists: Boolean = false,
+    @SerialName("is_legacy_failure")
+    val isLegacyFailure: Boolean = false,
+    @SerialName("error_resolution")
+    val errorResolution: String? = null,
+    @SerialName("resolved_at")
+    val resolvedAt: String? = null,
+    @SerialName("resolved_by_queue_id")
+    val resolvedByQueueId: String? = null,
+    @SerialName("replacement_count")
+    val replacementCount: Int = 0,
+    @SerialName("last_reconciled_at")
+    val lastReconciledAt: String? = null,
+    @SerialName("can_upload_replacement")
+    val canUploadReplacement: Boolean = false,
+    @SerialName("can_compress")
+    val canCompress: Boolean = false,
+    @SerialName("can_reconcile")
+    val canReconcile: Boolean = false,
+    @SerialName("can_reprocess")
+    val canReprocess: Boolean = false,
+)
+
+@Serializable
+data class ErpUploadErrorSearchResponse(
+    val summary: ErpUploadErrorSummary = ErpUploadErrorSummary(),
+    val pagination: ErpUploadErrorPagination = ErpUploadErrorPagination(),
+    val items: List<ErpUploadErrorItem> = emptyList(),
+)
+
+@Serializable
+data class ReconcileErpUploadErrorsResult(
+    val checked: Int = 0,
+    val reconciled: Int = 0,
+)
+
+@Serializable
+data class RepairErpUploadQueueResult(
+    val ok: Boolean = false,
+    val id: String? = null,
+    val status: String? = null,
+    @SerialName("file_size_bytes")
+    val fileSizeBytes: Long? = null,
 )
 
 @Serializable
