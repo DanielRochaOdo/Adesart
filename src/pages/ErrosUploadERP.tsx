@@ -301,8 +301,9 @@ export function ErrosUploadERP() {
     setBusyId(item.id);
 
     try {
+      const preparedFile = await compressFileForErp(file);
       const uploaded = await uploadToStorage(
-        file,
+        preparedFile,
         profile.id,
         item.bucket || 'cadastros-temp-files',
         `erp-repair/${item.id}`,
