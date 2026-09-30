@@ -490,6 +490,29 @@ class SupabaseRepository(
         }
     }
 
+    suspend fun downloadStorageObject(
+        session: SavedSession,
+        bucket: String,
+        objectPath: String,
+    ): ByteArray {
+        val safeBucket = java.net.URLEncoder.encode(bucket, Charsets.UTF_8.name()).replace("+", "%20")
+        val safePath = objectPath
+            .split('/')
+            .filter { it.isNotBlank() }
+            .joinToString("/") { segment ->
+                java.net.URLEncoder.encode(segment, Charsets.UTF_8.name()).replace("+", "%20")
+            }
+        if (safePath.isBlank()) throw IllegalStateException("Caminho do arquivo nao informado.")
+
+        val response = client.get("${AppConfig.supabaseUrl}/storage/v1/object/$safeBucket/$safePath") {
+            applyAuthHeaders(session)
+        }
+        if (!response.status.isSuccess()) {
+            throw IllegalStateException("Arquivo nao disponivel no Storage (HTTP ${response.status.value}).")
+        }
+        return response.body()
+    }
+
     suspend fun uploadStorageObject(
         session: SavedSession,
         bucket: String,
