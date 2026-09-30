@@ -140,15 +140,47 @@ queue_worker = ROOT / "supabase/functions/erp-process-upload-queue/index.ts"
 if queue_worker.exists():
     worker_text = queue_worker.read_text(encoding="utf-8")
     for required in (
-        "claim_erp_upload_queue_v3",
+        "claim_erp_upload_queue_v4",
         "X-Queue-Worker-Token",
-        "manual",
+        "processing_token",
+        "ERP_REJECTED",
+        "FILE_NOT_FOUND",
+        "FILE_TOO_LARGE",
+        "erpCode === 1",
         "last_error_code",
     ):
         if required not in worker_text:
             errors.append(f"Worker canônico da fila ERP incompleto: {required} ausente.")
 else:
     errors.append("Edge Function erp-process-upload-queue não encontrada.")
+
+supabase_config = ROOT / "supabase/config.toml"
+if not supabase_config.exists():
+    errors.append("supabase/config.toml ausente; worker do cron voltaria a exigir JWT no gateway.")
+else:
+    config_text = supabase_config.read_text(encoding="utf-8")
+    if "[functions.erp-process-upload-queue]" not in config_text or "verify_jwt = false" not in config_text:
+        errors.append(
+            "erp-process-upload-queue precisa de verify_jwt=false para aceitar X-Queue-Worker-Token do pg_cron."
+        )
+
+queue_delivery_migration = (
+    ROOT / "supabase/migrations/20260930191500_fix_erp_upload_worker_delivery.sql"
+)
+if not queue_delivery_migration.exists():
+    errors.append("Migration definitiva da fila ERP não encontrada.")
+else:
+    migration_text = queue_delivery_migration.read_text(encoding="utf-8")
+    for required in (
+        "ALTER COLUMN next_attempt_at DROP NOT NULL",
+        "processing_token",
+        "processing_started_at",
+        "claim_erp_upload_queue_v4",
+        "process_erp_upload_queue_v4",
+        "timeout_milliseconds := 600000",
+    ):
+        if required not in migration_text:
+            errors.append(f"Migration definitiva da fila ERP incompleta: {required} ausente.")
 
 status_rules = (
     ANDROID

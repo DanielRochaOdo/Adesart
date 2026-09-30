@@ -1,0 +1,8 @@
+project_id = "plonbokgcxwsdqfyjkwl"
+
+# Este worker recebe chamadas do pg_cron autenticadas por X-Queue-Worker-Token.
+# A verificacao JWT do gateway precisa ficar desativada para que a requisicao
+# alcance o handler. O proprio handler continua exigindo token interno,
+# service role ou JWT de ADMINISTRADOR.
+[functions.erp-process-upload-queue]
+verify_jwt = false

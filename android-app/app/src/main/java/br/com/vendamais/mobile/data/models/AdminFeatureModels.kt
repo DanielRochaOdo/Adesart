@@ -184,6 +184,8 @@ data class ErpUploadQueueHealth(
     val failed: Int = 0,
     val claimable: Int = 0,
     val stuck: Int = 0,
+    @SerialName("missing_file_pending")
+    val missingFilePending: Int = 0,
     @SerialName("oldest_pending_at")
     val oldestPendingAt: String? = null,
     @SerialName("last_success_at")

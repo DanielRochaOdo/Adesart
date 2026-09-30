@@ -17,6 +17,7 @@ interface QueueHealth {
   failed: number;
   claimable: number;
   stuck: number;
+  missing_file_pending: number;
   oldest_pending_at: string | null;
   last_success_at: string | null;
   last_failure_at: string | null;
@@ -430,7 +431,7 @@ export function FilaUploadERP() {
         </div>
 
         {queueHealth && (
-          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
             {[
               ['Aguardando', queueHealth.queued],
               ['Processando', queueHealth.processing],
@@ -438,6 +439,7 @@ export function FilaUploadERP() {
               ['Falhas', queueHealth.failed],
               ['Prontos agora', queueHealth.claimable],
               ['Travados', queueHealth.stuck],
+              ['Sem arquivo', queueHealth.missing_file_pending],
               ['Concluídos', queueHealth.success],
             ].map(([label, value]) => (
               <div key={String(label)} className="bg-white rounded-xl border border-slate-200 p-3">
