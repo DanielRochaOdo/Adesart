@@ -148,17 +148,6 @@ BEGIN
 END;
 $$;
 
-DROP TRIGGER IF EXISTS hydrate_sent_cadastro_metadata_v1_trigger
-ON public.cadastros;
-
-CREATE TRIGGER hydrate_sent_cadastro_metadata_v1_trigger
-BEFORE INSERT OR UPDATE OF status, payload_erp, nome, empresa_id, empresa_codigo,
-  empresa_nome, vendedor_id, vendedor_codigo, vendedor_nome,
-  adesionista_id, adesionista_codigo, adesionista_nome, plano_codigo
-ON public.cadastros
-FOR EACH ROW
-EXECUTE FUNCTION public.hydrate_sent_cadastro_metadata_v1();
-
 -- Repara nome/código de empresa/códigos comerciais dos registros históricos.
 UPDATE public.cadastros c
 SET
@@ -253,6 +242,17 @@ WHERE c.status = 'enviado'
     c.vendedor_id IS NULL
     OR NULLIF(BTRIM(c.vendedor_nome), '') IS NULL
   );
+
+DROP TRIGGER IF EXISTS hydrate_sent_cadastro_metadata_v1_trigger
+ON public.cadastros;
+
+CREATE TRIGGER hydrate_sent_cadastro_metadata_v1_trigger
+BEFORE INSERT OR UPDATE OF status, payload_erp, nome, empresa_id, empresa_codigo,
+  empresa_nome, vendedor_id, vendedor_codigo, vendedor_nome,
+  adesionista_id, adesionista_codigo, adesionista_nome, plano_codigo
+ON public.cadastros
+FOR EACH ROW
+EXECUTE FUNCTION public.hydrate_sent_cadastro_metadata_v1();
 
 COMMENT ON FUNCTION public.hydrate_sent_cadastro_metadata_v1()
 IS 'Defesa canônica: adesão enviada preserva nome, empresa, vendedor, adesionista e plano independentemente do cliente.';
