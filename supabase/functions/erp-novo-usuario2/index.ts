@@ -300,10 +300,48 @@ const enqueueAttachment = async (
     .download(normalizedPath);
 
   if (storageError || !storageFile) {
+    const { data: failureRow, error: failureError } = await supabase
+      .from("erp_upload_queue")
+      .insert({
+        cadastro_id: cadastroId,
+        created_by: createdBy,
+        id_funcionario: idFuncionario || 0,
+        id_dependente: idDependente || 0,
+        arquivo_path: normalizedPath,
+        arquivo_nome: arquivoNome || normalizedPath.split("/").pop() || "documento.pdf",
+        bucket,
+        tipo: "titular",
+        status: "failed",
+        attempts: 0,
+        next_attempt_at: null,
+        finished_at: new Date().toISOString(),
+        last_error: `Arquivo nao encontrado no Storage durante finalizacao: ${storageError?.message || normalizedPath}`,
+        last_error_code: "FILE_NOT_FOUND",
+        last_status_code: 404,
+        worker_source: "cadastro-finalize",
+        cliente_nome: clienteNome,
+        cliente_cpf: clienteCpf,
+        empresa_nome: empresaNome,
+        target_dependente_cpf: targetDependenteCpf,
+        target_dependente_nome: targetDependenteNome,
+      })
+      .select("id")
+      .single();
+
+    if (failureError) {
+      return {
+        queued: false,
+        reason: "FILE_NOT_FOUND",
+        arquivoPath: normalizedPath,
+        details: failureError.message,
+      };
+    }
+
     return {
       queued: false,
       reason: "FILE_NOT_FOUND",
       arquivoPath: normalizedPath,
+      queue_id: failureRow.id,
     };
   }
 
