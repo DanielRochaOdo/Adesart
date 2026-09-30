@@ -57,15 +57,11 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Parametros obrigatorios invalidos para enfileirar documento" }, 400);
     }
 
-    const { data: storageObject } = await supabaseClient
-      .schema("storage")
-      .from("objects")
-      .select("id,metadata")
-      .eq("bucket_id", bucket)
-      .eq("name", arquivoPath)
-      .maybeSingle();
+    const { data: storageFile, error: storageError } = await supabaseClient.storage
+      .from(bucket)
+      .download(arquivoPath);
 
-    if (!storageObject) {
+    if (storageError || !storageFile) {
       return jsonResponse({
         error: "Arquivo nao encontrado no Storage",
         code: "FILE_NOT_FOUND",
@@ -73,8 +69,7 @@ Deno.serve(async (req: Request) => {
       }, 404);
     }
 
-    const metadata = (storageObject.metadata || {}) as Record<string, unknown>;
-    const fileSize = Number(metadata.size || metadata.contentLength || 0) || null;
+    const fileSize = storageFile.size || null;
 
     let createdBy = user.id;
     let clienteNome: string | null = null;
