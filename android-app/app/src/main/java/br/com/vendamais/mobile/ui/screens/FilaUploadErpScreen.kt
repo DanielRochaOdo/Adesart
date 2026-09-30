@@ -137,6 +137,18 @@ fun FilaUploadErpScreen(
                         modifier = Modifier.weight(1f),
                     )
                     QueueMetric(
+                        label = "Sem arquivo",
+                        value = state.uploadQueueHealth.missingFilePending,
+                        container = Red100,
+                        content = Red500,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    QueueMetric(
                         label = "Concluidos",
                         value = state.uploadQueueHealth.success,
                         container = Slate100,
