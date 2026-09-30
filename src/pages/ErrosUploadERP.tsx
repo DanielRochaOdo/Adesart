@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -199,7 +199,9 @@ export function ErrosUploadERP() {
         p_empresa: empresa || null,
         p_data_inicio: dataInicio ? `${dataInicio}T00:00:00-03:00` : null,
         p_data_fim_exclusiva: dataFim
-          ? new Date(`${dataFim}T00:00:00-03:00`).toISOString()
+          ? new Date(
+              new Date(`${dataFim}T00:00:00-03:00`).getTime() + 24 * 60 * 60 * 1000,
+            ).toISOString()
           : null,
         p_page: requestedPage,
         p_page_size: 50,
@@ -331,7 +333,7 @@ export function ErrosUploadERP() {
   };
 
   const handleReplacementSelected = async (
-    event: React.ChangeEvent<HTMLInputElement>,
+    event: ChangeEvent<HTMLInputElement>,
   ) => {
     const file = event.target.files?.[0];
     const item = replacementItem;
@@ -514,13 +516,21 @@ export function ErrosUploadERP() {
             <Select
               value={scope}
               onChange={(e) => updateScope(e.target.value)}
-              options={SCOPE_OPTIONS}
-            />
+              aria-label="Escopo dos erros"
+            >
+              {SCOPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </Select>
             <Select
               value={category}
               onChange={(e) => updateCategory(e.target.value)}
-              options={CATEGORY_OPTIONS}
-            />
+              aria-label="Causa do erro"
+            >
+              {CATEGORY_OPTIONS.map((option) => (
+                <option key={option.value || 'all'} value={option.value}>{option.label}</option>
+              ))}
+            </Select>
             <input
               value={cpf}
               onChange={(e) => setCpf(e.target.value)}
