@@ -28,6 +28,8 @@ import br.com.vendamais.mobile.data.models.DashboardCadastro
 import br.com.vendamais.mobile.data.models.CpfConsultInput
 import br.com.vendamais.mobile.data.models.ErpUploadQueueItem
 import br.com.vendamais.mobile.data.models.ErpUploadQueueHealth
+import br.com.vendamais.mobile.data.models.ErpUploadErrorItem
+import br.com.vendamais.mobile.data.models.ErpUploadErrorSearchResponse
 import br.com.vendamais.mobile.data.models.EmpresaResumo
 import br.com.vendamais.mobile.data.models.EmpresaSearchType
 import br.com.vendamais.mobile.data.models.MobileProfile
@@ -68,6 +70,7 @@ import br.com.vendamais.mobile.data.remote.InclusaoBuscaTipo
 import br.com.vendamais.mobile.data.remote.ResponsavelFinanceiroResumo
 import br.com.vendamais.mobile.data.remote.SupabaseRepository
 import br.com.vendamais.mobile.data.remote.UploadedTempFile
+import br.com.vendamais.mobile.util.ErpFileCompressor
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -220,6 +223,11 @@ data class AppUiState(
     val uploadQueuePageSize: Int = 20,
     val uploadQueueOperation: ProcessUploadQueueResponse? = null,
     val resetQueueResult: ResetStuckQueueResult? = null,
+    val uploadErrors: ErpUploadErrorSearchResponse = ErpUploadErrorSearchResponse(),
+    val uploadErrorsScope: String = "current",
+    val uploadErrorsCategory: String = "",
+    val uploadErrorsPage: Int = 1,
+    val uploadErrorsLoading: Boolean = false,
     val cadastrosExcluidos: List<CadastroExcluidoItem> = emptyList(),
     val adminFeatureLoading: Boolean = false,
     val publicToken: String? = null,
