@@ -12,7 +12,8 @@ export interface UploadProgress {
   status: 'uploading' | 'completed' | 'error';
 }
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
+export const ERP_MAX_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_FILE_SIZE = ERP_MAX_FILE_SIZE;
 const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
 
 function sanitizeFileName(fileName: string): string {
@@ -39,7 +40,7 @@ export async function uploadToStorage(
   }
 
   if (file.size > MAX_FILE_SIZE) {
-    throw new Error('Arquivo muito grande. Tamanho máximo: 10MB');
+    throw new Error('Arquivo muito grande. Tamanho máximo: 5MB');
   }
 
   const sanitizedName = sanitizeFileName(file.name);
@@ -100,7 +101,7 @@ export function validateFile(file: File): { valid: boolean; error?: string } {
   }
 
   if (file.size > MAX_FILE_SIZE) {
-    return { valid: false, error: 'Arquivo muito grande. Tamanho máximo: 10MB' };
+    return { valid: false, error: 'Arquivo muito grande. Tamanho máximo: 5MB' };
   }
 
   return { valid: true };
