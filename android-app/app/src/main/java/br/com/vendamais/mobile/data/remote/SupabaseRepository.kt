@@ -14,6 +14,7 @@ import br.com.vendamais.mobile.data.models.CadastroDetalhe
 import br.com.vendamais.mobile.data.models.CadastroResumo
 import br.com.vendamais.mobile.data.models.CadastroStats
 import br.com.vendamais.mobile.data.models.DashboardCadastro
+import br.com.vendamais.mobile.data.models.DashboardLegacyVendedor
 import br.com.vendamais.mobile.data.models.ErpUploadQueueItem
 import br.com.vendamais.mobile.data.models.ErpUploadQueuePage
 import br.com.vendamais.mobile.data.models.MobileProfile
@@ -116,19 +117,123 @@ class SupabaseRepository(
 
     suspend fun fetchDashboardCadastros(
         session: SavedSession,
+        profile: MobileProfile,
         startIso: String,
         endIso: String,
     ): List<DashboardCadastro> {
-        return client.post("${AppConfig.supabaseUrl}/rest/v1/rpc/get_dashboard_cadastros_fast_v1") {
-            applyAuthHeaders(session)
-            contentType(ContentType.Application.Json)
-            setBody(
-                buildJsonObject {
-                    put("p_inicio", startIso)
-                    put("p_fim", endIso)
+        return runCatching {
+            client.post("${AppConfig.supabaseUrl}/rest/v1/rpc/get_dashboard_cadastros_fast_v1") {
+                applyAuthHeaders(session)
+                contentType(ContentType.Application.Json)
+                setBody(
+                    buildJsonObject {
+                        put("p_inicio", startIso)
+                        put("p_fim", endIso)
+                    },
+                )
+            }.body<List<DashboardCadastro>>()
+        }.getOrElse {
+            fetchDashboardCadastrosFallback(
+                session = session,
+                profile = profile,
+                startIso = startIso,
+                endIso = endIso,
+            )
+        }
+    }
+
+    private suspend fun fetchDashboardCadastrosFallback(
+        session: SavedSession,
+        profile: MobileProfile,
+        startIso: String,
+        endIso: String,
+    ): List<DashboardCadastro> {
+        val allItems = mutableListOf<DashboardCadastro>()
+        val pageSize = 1000
+        val maxItems = 50_000
+        var offset = 0
+
+        while (offset < maxItems) {
+            val chunk = getList<DashboardCadastro>(
+                path = "cadastros",
+                session = session,
+                query = {
+                    parameter(
+                        "select",
+                        "id,status,tipo_cadastro,created_by,team_id,vendedor_id,vendedor_codigo,vendedor_nome,adesionista_id,adesionista_codigo,adesionista_nome,empresa_codigo,empresa_nome,plano_codigo,plano_nome,dependentes,fluxo_publico,origem_link_id,created_at",
+                    )
+                    parameter("created_at", "gte.$startIso")
+                    parameter("created_at", "lt.$endIso")
+                    parameter("order", "created_at.asc,id.asc")
+                    parameter("limit", pageSize)
+                    parameter("offset", offset)
+
+                    when (profile.role) {
+                        "SUPERVISOR" -> profile.teamId
+                            ?.takeIf { it.isNotBlank() }
+                            ?.let { parameter("team_id", "eq.$it") }
+
+                        "ADESIONISTA" -> {
+                            val codigo = profile.externalId
+                                ?.takeIf { it.matches(Regex("^[A-Za-z0-9_-]+$")) }
+
+                            if (codigo != null) {
+                                parameter(
+                                    "or",
+                                    "(adesionista_id.eq.${profile.id},adesionista_codigo.eq.$codigo)",
+                                )
+                            } else {
+                                parameter("adesionista_id", "eq.${profile.id}")
+                            }
+                        }
+                    }
                 },
             )
-        }.body()
+
+            allItems += chunk
+            if (chunk.size < pageSize) break
+            offset += pageSize
+        }
+
+        if (allItems.size >= maxItems) {
+            throw IllegalStateException(
+                "O intervalo contém registros demais para o modo alternativo. Reduza o período e tente novamente.",
+            )
+        }
+
+        if (allItems.isEmpty()) return allItems
+
+        val legacyByCadastro = mutableMapOf<String, DashboardLegacyVendedor>()
+        allItems.map { it.id }.chunked(200).forEach { ids ->
+            val joinedIds = ids.joinToString(",")
+            val rows = runCatching {
+                getList<DashboardLegacyVendedor>(
+                    path = "cadastro_vendedor_legacy_resolution",
+                    session = session,
+                    query = {
+                        parameter("select", "cadastro_id,vendedor_id,vendedor_codigo,vendedor_nome")
+                        parameter("cadastro_id", "in.($joinedIds)")
+                    },
+                )
+            }.getOrDefault(emptyList())
+
+            rows.forEach { row ->
+                legacyByCadastro[row.cadastroId] = row
+            }
+        }
+
+        return allItems.map { cadastro ->
+            val legacy = legacyByCadastro[cadastro.id]
+            if (legacy == null) {
+                cadastro
+            } else {
+                cadastro.copy(
+                    vendedorId = cadastro.vendedorId ?: legacy.vendedorId,
+                    vendedorCodigo = cadastro.vendedorCodigo ?: legacy.vendedorCodigo,
+                    vendedorNome = cadastro.vendedorNome ?: legacy.vendedorNome,
+                )
+            }
+        }
     }
 
     suspend fun registerCurrentAppVersion(session: SavedSession) {
