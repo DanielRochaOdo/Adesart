@@ -32,6 +32,11 @@ interface QueueItem {
   last_attempt_at: string | null;
   last_error: string | null;
   last_status_code: number | null;
+  last_error_code?: string | null;
+  file_size_bytes?: number | null;
+  cliente_nome?: string | null;
+  cliente_cpf?: string | null;
+  empresa_nome?: string | null;
   cadastro_id: string;
   id_funcionario: number;
   id_dependente: number;
@@ -116,9 +121,9 @@ export function FilaUploadERP() {
       const mappedData = (data || []).map(item => ({
         ...item,
         cadastro: item.cadastros || {
-          nome: `Dependente ID: ${item.id_dependente}`,
-          cpf: '-',
-          empresa_nome: '-'
+          nome: item.cliente_nome || `Dependente ID: ${item.id_dependente}`,
+          cpf: item.cliente_cpf || '-',
+          empresa_nome: item.empresa_nome || '-'
         }
       })) as QueueItem[];
 
