@@ -27,6 +27,7 @@ import br.com.vendamais.mobile.data.models.CadastroStats
 import br.com.vendamais.mobile.data.models.DashboardCadastro
 import br.com.vendamais.mobile.data.models.CpfConsultInput
 import br.com.vendamais.mobile.data.models.ErpUploadQueueItem
+import br.com.vendamais.mobile.data.models.ErpUploadQueueHealth
 import br.com.vendamais.mobile.data.models.EmpresaResumo
 import br.com.vendamais.mobile.data.models.EmpresaSearchType
 import br.com.vendamais.mobile.data.models.MobileProfile
@@ -213,6 +214,7 @@ data class AppUiState(
     val apiLogDetailLoading: Boolean = false,
     val uploadQueue: List<ErpUploadQueueItem> = emptyList(),
     val uploadQueueTotal: Int = 0,
+    val uploadQueueHealth: ErpUploadQueueHealth = ErpUploadQueueHealth(),
     val uploadQueueFilter: String = "todos",
     val uploadQueuePage: Int = 1,
     val uploadQueuePageSize: Int = 20,
@@ -2349,18 +2351,27 @@ class AppViewModel(
             _uiState.update { it.copy(adminFeatureLoading = true, errorMessage = null) }
             runCatching {
                 val activeSession = ensureFreshSession(session)
-                repository.fetchErpUploadQueue(
-                    activeSession,
-                    status = status.takeIf { it != "todos" },
-                    page = safePage,
-                    pageSize = safeSize,
-                )
-            }.onSuccess { result ->
+                coroutineScope {
+                    val pageDeferred = async(Dispatchers.IO) {
+                        repository.fetchErpUploadQueue(
+                            activeSession,
+                            status = status.takeIf { it != "todos" },
+                            page = safePage,
+                            pageSize = safeSize,
+                        )
+                    }
+                    val healthDeferred = async(Dispatchers.IO) {
+                        repository.fetchUploadQueueHealth(activeSession)
+                    }
+                    pageDeferred.await() to healthDeferred.await()
+                }
+            }.onSuccess { (result, health) ->
                 _uiState.update {
                     it.copy(
                         adminFeatureLoading = false,
                         uploadQueue = result.items,
                         uploadQueueTotal = result.total,
+                        uploadQueueHealth = health,
                     )
                 }
             }.onFailure { throwable ->
@@ -2403,7 +2414,7 @@ class AppViewModel(
         }
     }
 
-    fun resetStuckQueue(minutes: Int = 15) {
+    fun resetStuckQueue(minutes: Int = 10) {
         val session = currentSession ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(adminFeatureLoading = true, errorMessage = null) }
@@ -2767,6 +2778,33 @@ class AppViewModel(
             bucket = item.bucket,
             objectPath = item.arquivoPath,
         )
+    }
+
+    fun reprocessFailedUploadQueue() {
+        val session = currentSession ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(adminFeatureLoading = true, errorMessage = null) }
+            runCatching {
+                val activeSession = ensureFreshSession(session)
+                repository.reprocessFailedUploadQueue(activeSession)
+            }.onSuccess { result ->
+                _uiState.update {
+                    it.copy(
+                        adminFeatureLoading = false,
+                        noticeMessage = "${result.requeued} item(ns) com falha voltaram para a fila.",
+                    )
+                }
+                loadUploadQueue()
+            }.onFailure { throwable ->
+                Log.e(logTag, "Falha ao reprocessar itens com erro", throwable)
+                _uiState.update {
+                    it.copy(
+                        adminFeatureLoading = false,
+                        errorMessage = throwable.message ?: "Falha ao reprocessar itens com erro.",
+                    )
+                }
+            }
+        }
     }
 
     fun reprocessUploadQueueItem(id: String) {
