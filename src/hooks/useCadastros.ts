@@ -682,64 +682,27 @@ export function useCadastros() {
     }))
   );
 
-  const syncCadastroEnviado = async (id: string, payload: Record<string, unknown>, result: any) => {
-    const dependentesFormatados = formatDependentesForSync(extractDependentesPayload(payload));
-
-    const syncPayloadBase = {
-      status: 'enviado',
-      payload_erp: payload,
-      erp_response: result,
-      dependentes: dependentesFormatados,
-    };
-
-    let { data: syncedCadastro, error: syncError } = await supabase
+  const syncCadastroEnviado = async (id: string, _payload: Record<string, unknown>, _result: any) => {
+    // erp-novo-usuario2 e a autoridade da conclusao. O Web apenas recarrega
+    // o estado canonico persistido pelo backend para nao sobrescrever
+    // nome/empresa/vendedor/adesionista com um PATCH parcial do cliente.
+    const { data: syncedCadastro, error: syncError } = await supabase
       .from('cadastros')
-      .update({
-        ...syncPayloadBase,
-        data_envio: new Date().toISOString(),
-      })
-      .eq('id', id);
-
-    // Compatibilidade com ambientes onde a coluna ainda nao existe
-    if (syncError?.message?.includes('data_envio')) {
-      console.warn('[useCadastros] Coluna data_envio nao encontrada, sincronizando sem data_envio');
-      const retry = await supabase
-        .from('cadastros')
-        .update(syncPayloadBase)
-        .eq('id', id)
-        .select()
-        .single();
-
-      syncedCadastro = retry.data;
-      syncError = retry.error;
-    } else {
-      const selectRetry = await supabase
-        .from('cadastros')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (!syncError) {
-        syncedCadastro = selectRetry.data;
-        if (selectRetry.error) {
-          syncError = selectRetry.error;
-        }
-      }
-    }
+      .select('*')
+      .eq('id', id)
+      .single();
 
     if (syncError) {
-      throw new Error(
-        `Cadastro enviado ao ERP, mas falhou ao sincronizar no Adesart: ${syncError.message}`
+      console.warn(
+        '[useCadastros] ERP confirmou o cadastro, mas a leitura do estado canonico falhou:',
+        syncError
       );
+      return;
     }
 
-    if (!syncedCadastro) {
-      throw new Error(
-        `Cadastro enviado ao ERP, mas nao foi possivel sincronizar o estado local do cadastro ${id}.`
-      );
+    if (syncedCadastro) {
+      upsertCadastroState(syncedCadastro as Cadastro);
     }
-
-    upsertCadastroState(syncedCadastro as Cadastro);
   };
 
   const reconcileCadastroAfterAbort = async (
