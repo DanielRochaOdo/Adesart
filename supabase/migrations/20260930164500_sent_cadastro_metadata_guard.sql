@@ -243,6 +243,19 @@ WHERE c.status = 'enviado'
     OR NULLIF(BTRIM(c.vendedor_nome), '') IS NULL
   );
 
+UPDATE public.erp_upload_queue q
+SET
+  cliente_nome = COALESCE(NULLIF(BTRIM(q.cliente_nome), ''), NULLIF(BTRIM(c.nome), '')),
+  cliente_cpf = COALESCE(NULLIF(BTRIM(q.cliente_cpf), ''), NULLIF(BTRIM(c.cpf), '')),
+  empresa_nome = COALESCE(NULLIF(BTRIM(q.empresa_nome), ''), NULLIF(BTRIM(c.empresa_nome), ''))
+FROM public.cadastros c
+WHERE q.cadastro_id = c.id
+  AND (
+    NULLIF(BTRIM(q.cliente_nome), '') IS NULL
+    OR NULLIF(BTRIM(q.cliente_cpf), '') IS NULL
+    OR NULLIF(BTRIM(q.empresa_nome), '') IS NULL
+  );
+
 DROP TRIGGER IF EXISTS hydrate_sent_cadastro_metadata_v1_trigger
 ON public.cadastros;
 
