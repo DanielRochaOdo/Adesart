@@ -121,6 +121,12 @@ data class ErpUploadQueueItem(
     val workerSource: String? = null,
     @SerialName("file_size_bytes")
     val fileSizeBytes: Long? = null,
+    @SerialName("cliente_nome")
+    val clienteNome: String? = null,
+    @SerialName("cliente_cpf")
+    val clienteCpf: String? = null,
+    @SerialName("empresa_nome")
+    val empresaNome: String? = null,
     @SerialName("erp_response")
     val erpResponse: JsonElement? = null,
     @SerialName("cadastro_id")
