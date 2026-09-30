@@ -514,7 +514,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    await supabase.from("api_logs").insert({
+    const { error: logError } = await supabase.from("api_logs").insert({
       user_id: auth.user.id,
       user_email: auth.user.email,
       endpoint: "erp-novo-usuario2",
@@ -536,7 +536,10 @@ Deno.serve(async (req: Request) => {
       success: ok,
       error_message: ok ? null : responseBody.error,
       duration_ms: Date.now() - startedAt,
-    }).catch(() => undefined);
+    });
+    if (logError) {
+      console.warn("[erp-novo-usuario2] Falha ao registrar api_logs:", logError.message);
+    }
 
     if (ok) {
       return jsonResponse({
