@@ -4196,6 +4196,7 @@ class AppViewModel(
                         workflowRepository = workflowRepository,
                         draftUxStateCache = draftUxStateCache,
                         appUpdateRepository = appUpdateRepository,
+                        appContextForCompression = appContext,
                     ) as T
                 }
             }
