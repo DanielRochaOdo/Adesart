@@ -49,39 +49,44 @@ function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob>
   });
 }
 
-async function loadBitmap(file: Blob): Promise<ImageBitmap> {
+async function loadImageSource(file: Blob): Promise<{
+  source: CanvasImageSource;
+  width: number;
+  height: number;
+  cleanup: () => void;
+}> {
   if ('createImageBitmap' in window) {
-    return createImageBitmap(file);
+    const bitmap = await createImageBitmap(file);
+    return {
+      source: bitmap,
+      width: bitmap.width,
+      height: bitmap.height,
+      cleanup: () => bitmap.close(),
+    };
   }
 
   const url = URL.createObjectURL(file);
-  try {
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const element = new Image();
-      element.onload = () => resolve(element);
-      element.onerror = () => reject(new Error('Não foi possível abrir a imagem para compressão.'));
-      element.src = url;
-    });
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const element = new Image();
+    element.onload = () => resolve(element);
+    element.onerror = () => reject(new Error('Não foi possível abrir a imagem para compressão.'));
+    element.src = url;
+  });
 
-    const canvas = document.createElement('canvas');
-    canvas.width = image.naturalWidth;
-    canvas.height = image.naturalHeight;
-    const context = canvas.getContext('2d');
-    if (!context) throw new Error('Navegador sem suporte à compressão da imagem.');
-    context.drawImage(image, 0, 0);
-
-    return createImageBitmap(canvas);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  return {
+    source: image,
+    width: image.naturalWidth,
+    height: image.naturalHeight,
+    cleanup: () => URL.revokeObjectURL(url),
+  };
 }
 
 async function compressImage(file: File): Promise<File> {
-  const bitmap = await loadBitmap(file);
+  const image = await loadImageSource(file);
   try {
     for (const attempt of IMAGE_ATTEMPTS) {
-      const width = Math.max(1, Math.round(bitmap.width * attempt.scale));
-      const height = Math.max(1, Math.round(bitmap.height * attempt.scale));
+      const width = Math.max(1, Math.round(image.width * attempt.scale));
+      const height = Math.max(1, Math.round(image.height * attempt.scale));
       const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
@@ -90,7 +95,7 @@ async function compressImage(file: File): Promise<File> {
       if (!context) throw new Error('Navegador sem suporte à compressão da imagem.');
       context.fillStyle = '#ffffff';
       context.fillRect(0, 0, width, height);
-      context.drawImage(bitmap, 0, 0, width, height);
+      context.drawImage(image.source, 0, 0, width, height);
 
       const blob = await canvasToJpeg(canvas, attempt.quality);
       if (blob.size <= TARGET_BYTES) {
@@ -102,7 +107,7 @@ async function compressImage(file: File): Promise<File> {
       }
     }
   } finally {
-    bitmap.close?.();
+    image.cleanup();
   }
 
   throw new Error(
