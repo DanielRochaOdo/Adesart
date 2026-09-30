@@ -50,6 +50,10 @@ CREATE TABLE IF NOT EXISTS public.erp_upload_queue_worker_secret (
 ALTER TABLE public.erp_upload_queue_worker_secret ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.erp_upload_queue_worker_secret FROM PUBLIC, anon, authenticated;
 
+-- Enfileiramento passa obrigatoriamente pelas Edge Functions canônicas.
+DROP POLICY IF EXISTS "Usuários autenticados podem enfileirar uploads"
+  ON public.erp_upload_queue;
+
 INSERT INTO public.erp_upload_queue_worker_secret(singleton, token)
 VALUES (
   true,
@@ -334,7 +338,11 @@ BEGIN
   FOR v_jobid IN
     SELECT jobid
     FROM cron.job
-    WHERE jobname IN ('process-erp-upload-queue', 'process-erp-upload-queue-v3')
+    WHERE jobname IN (
+      'process-erp-upload-queue',
+      'process-erp-upload-queue-v3',
+      'reset-stuck-queue-items'
+    )
   LOOP
     PERFORM cron.unschedule(v_jobid);
   END LOOP;
