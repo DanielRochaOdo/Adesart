@@ -495,7 +495,7 @@ BEGIN
           'replacement_count', i.replacement_count,
           'last_reconciled_at', i.last_reconciled_at,
           'can_upload_replacement', i.error_category IN (
-            'FILE_NOT_FOUND', 'LEGACY_UNCLASSIFIED', 'ERP_REJECTED', 'ERP_FILE_LOCKED', 'EMPTY_FILE'
+            'FILE_NOT_FOUND', 'LEGACY_UNCLASSIFIED', 'EMPTY_FILE'
           ),
           'can_compress', i.error_category = 'FILE_TOO_LARGE' AND i.file_exists,
           'can_reconcile', i.status = 'failed' AND i.resolved_at IS NULL,
