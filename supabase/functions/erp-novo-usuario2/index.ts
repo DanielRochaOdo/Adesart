@@ -185,15 +185,11 @@ const enqueueAttachment = async (
   const bucket = "cadastros-temp-files";
   const normalizedPath = arquivoPath.replace(/^\/+/, "");
 
-  const { data: storageObject } = await supabase
-    .schema("storage")
-    .from("objects")
-    .select("id,metadata")
-    .eq("bucket_id", bucket)
-    .eq("name", normalizedPath)
-    .maybeSingle();
+  const { data: storageFile, error: storageError } = await supabase.storage
+    .from(bucket)
+    .download(normalizedPath);
 
-  if (!storageObject) {
+  if (storageError || !storageFile) {
     return {
       queued: false,
       reason: "FILE_NOT_FOUND",
@@ -201,8 +197,7 @@ const enqueueAttachment = async (
     };
   }
 
-  const metadata = (storageObject.metadata || {}) as Record<string, unknown>;
-  const fileSize = Number(metadata.size || metadata.contentLength || 0) || null;
+  const fileSize = storageFile.size || null;
 
   const { data: existingQueue } = await supabase
     .from("erp_upload_queue")
