@@ -7,8 +7,13 @@ ANDROID = ROOT / "android-app"
 
 errors: list[str] = []
 
-erp_upload_migration = ROOT / "supabase/migrations/20260930191500_fix_erp_upload_worker_delivery.sql"
-if erp_upload_migration.exists():
+erp_upload_migrations = [
+    ROOT / "supabase/migrations/20260930191500_fix_erp_upload_worker_delivery.sql",
+    ROOT / "supabase/migrations/20260930203000_erp_upload_error_center_v1.sql",
+]
+for erp_upload_migration in erp_upload_migrations:
+    if not erp_upload_migration.exists():
+        continue
     migration_text = erp_upload_migration.read_text(encoding="utf-8")
     malformed_lines = [
         line.strip()
@@ -17,7 +22,8 @@ if erp_upload_migration.exists():
     ]
     if malformed_lines:
         errors.append(
-            "Migration ERP contém delimitador dollar-quote inválido (AS $ / $;)."
+            f"Migration ERP {erp_upload_migration.name} contém delimitador "
+            "dollar-quote inválido (AS $ / $;)."
         )
 
 if not ANDROID.is_dir():
