@@ -112,7 +112,7 @@ BEGIN
   FROM public.profiles
   WHERE id = auth.uid();
 
-  IF current_user <> 'service_role' AND coalesce(v_role, '') <> 'ADMINISTRADOR' THEN
+  IF coalesce(auth.role(), '') <> 'service_role' AND coalesce(v_role, '') <> 'ADMINISTRADOR' THEN
     RAISE EXCEPTION 'Acesso negado';
   END IF;
 
@@ -157,7 +157,7 @@ BEGIN
   FROM public.profiles
   WHERE id = auth.uid();
 
-  IF current_user <> 'service_role' AND coalesce(v_role, '') <> 'ADMINISTRADOR' THEN
+  IF coalesce(auth.role(), '') <> 'service_role' AND coalesce(v_role, '') <> 'ADMINISTRADOR' THEN
     RAISE EXCEPTION 'Acesso negado';
   END IF;
 
