@@ -59,6 +59,8 @@ interface UploadErrorItem {
   cliente_nome: string | null;
   cliente_cpf: string | null;
   empresa_nome: string | null;
+  vendedor_nome: string | null;
+  adesionista_nome: string | null;
   arquivo_nome: string;
   arquivo_path: string;
   bucket: string;
@@ -581,12 +583,14 @@ export function ErrosUploadERP() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-[1450px] w-full text-left text-sm">
+              <table className="min-w-[1750px] w-full text-left text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Data</th>
                     <th className="px-4 py-3">Cliente</th>
                     <th className="px-4 py-3">Empresa</th>
+                    <th className="px-4 py-3">Vendedor</th>
+                    <th className="px-4 py-3">Adesionista</th>
                     <th className="px-4 py-3">Arquivo</th>
                     <th className="px-4 py-3">Dependente destino</th>
                     <th className="px-4 py-3">Causa</th>
@@ -616,6 +620,16 @@ export function ErrosUploadERP() {
                       </td>
                       <td className="max-w-56 px-4 py-4 text-slate-600">
                         {item.empresa_nome || '-'}
+                      </td>
+                      <td className="max-w-56 px-4 py-4 text-slate-600">
+                        <div className="truncate" title={item.vendedor_nome || undefined}>
+                          {item.vendedor_nome || '—'}
+                        </div>
+                      </td>
+                      <td className="max-w-56 px-4 py-4 text-slate-600">
+                        <div className="truncate" title={item.adesionista_nome || undefined}>
+                          {item.adesionista_nome || '—'}
+                        </div>
                       </td>
                       <td className="max-w-72 px-4 py-4">
                         <div className="break-all font-medium text-slate-700">
