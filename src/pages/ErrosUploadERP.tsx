@@ -437,7 +437,7 @@ export function ErrosUploadERP() {
     return (
       <Layout>
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-8 text-center text-amber-800">
-          Acesso restrito para Administrador e Cadastro.
+          Acesso permitido para Administrador, Cadastro e Gerente.
         </div>
       </Layout>
     );
