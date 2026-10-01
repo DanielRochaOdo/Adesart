@@ -975,7 +975,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
             )}
 
             <div className="border-t border-slate-200 bg-slate-50 px-5 py-3 text-xs leading-5 text-slate-500">
-              Visitas são contabilizadas uma vez por link e por sessão do navegador ou aplicativo desde {historySummary?.visitsStartedAt ? formatDateTime(historySummary.visitsStartedAt) : 'a atualização da métrica'}. Retornar à tela inicial ou atualizar a página não aumenta a contagem. O histórico anterior ({historySummary?.legacyClickCount ?? 0} aberturas, sem deduplicação) foi preservado separadamente e não é somado às novas visitas. Os registros detalhados antigos ainda podem conter acessos repetidos.
+              Visitas são contabilizadas uma vez por link e por sessão do navegador ou aplicativo desde {historySummary?.visitsStartedAt ? formatDateTime(historySummary.visitsStartedAt) : 'a atualização da métrica'}. Retornar à tela inicial ou atualizar a página não aumenta a contagem. O histórico anterior ({historySummary?.legacyClickCount ?? 0} aberturas, sem deduplicação) permanece preservado separadamente e não é somado nem exibido como visita por sessão.
             </div>
           </div>
         </div>
