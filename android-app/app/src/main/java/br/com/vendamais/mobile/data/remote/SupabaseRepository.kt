@@ -612,6 +612,33 @@ class SupabaseRepository(
         }
     }
 
+    suspend fun resetUserPassword(session: SavedSession, id: String, newPassword: String) {
+        val requestBody = buildJsonObject {
+            put("user_id", id)
+            put("new_password", newPassword)
+        }
+        val response: JsonObject = client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/reset-user-password",
+            json = json,
+            body = requestBody,
+        ) {
+            applyAuthHeaders(session)
+        }
+        val success = response["success"]
+            ?.let { it as? JsonPrimitive }
+            ?.content
+            ?.toBooleanStrictOrNull()
+            ?: false
+        if (!success) {
+            val message = response["error"]
+                ?.let { it as? JsonPrimitive }
+                ?.content
+                ?.takeIf { it.isNotBlank() }
+                ?: "Falha ao redefinir senha."
+            throw IllegalStateException(message)
+        }
+    }
+
     suspend fun updateUser(session: SavedSession, id: String, payload: JsonObject): AdminUser {
         val requestBody = buildJsonObject {
             put("user_id", id)

@@ -6,7 +6,7 @@ import { Input } from '../components/Input';
 import { Select } from '../components/Select';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Profile, Team } from '../lib/supabase';
-import { Plus, X, Edit, UserCheck, UserX, Download, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, X, Edit, UserCheck, UserX, Download, ArrowLeft, ArrowRight, KeyRound, FilterX, SlidersHorizontal } from 'lucide-react';
 import { EditUserModal } from '../components/users/EditUserModal';
 import { usePersistentState } from '../hooks/usePersistentState';
 
@@ -46,6 +46,18 @@ export function Users() {
     profile?.id ? `ui:users:${profile.id}:selected-team` : null,
     ''
   );
+  const { value: selectedRole, setValue: setSelectedRole } = usePersistentState<string>(
+    profile?.id ? `ui:users:${profile.id}:selected-role` : null,
+    ''
+  );
+  const { value: selectedStatus, setValue: setSelectedStatus } = usePersistentState<'all' | 'active' | 'inactive'>(
+    profile?.id ? `ui:users:${profile.id}:selected-status` : null,
+    'all'
+  );
+  const { value: selectedAppUsage, setValue: setSelectedAppUsage } = usePersistentState<'all' | 'identified' | 'not_identified'>(
+    profile?.id ? `ui:users:${profile.id}:selected-app-usage` : null,
+    'all'
+  );
   const { value: showCreateModal, setValue: setShowCreateModal } = usePersistentState<boolean>(
     profile?.id ? `ui:users:${profile.id}:show-create-modal` : null,
     false
@@ -53,6 +65,12 @@ export function Users() {
   const [createLoading, setCreateLoading] = useState(false);
   const [error, setError] = useState('');
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
+  const [resetPasswordUser, setResetPasswordUser] = useState<Profile | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [passwordResetLoading, setPasswordResetLoading] = useState(false);
+  const [passwordResetError, setPasswordResetError] = useState('');
+  const [passwordResetNotice, setPasswordResetNotice] = useState('');
   const { value: userColumnOrder, setValue: setUserColumnOrder } = usePersistentState<UserColumnKey[]>(
     profile?.id ? `ui:users:${profile.id}:column-order` : null,
     defaultUserColumns.map((column) => column.key)
@@ -82,6 +100,9 @@ export function Users() {
   const isCadastroRole = profile?.role === 'CADASTRO';
   const canEditExternalId = !isCadastroRole;
   const canEditLemmitLimit = !isCadastroRole;
+  const canResetPasswordFor = (targetUser: Profile) =>
+    profile?.role === 'ADMINISTRADOR' ||
+    (profile?.role === 'CADASTRO' && targetUser.role !== 'ADMINISTRADOR');
 
   useEffect(() => {
     fetchUsers();
@@ -189,6 +210,72 @@ export function Users() {
     }
   };
 
+  const openPasswordReset = (user: Profile) => {
+    setResetPasswordUser(user);
+    setNewPassword('');
+    setConfirmNewPassword('');
+    setPasswordResetError('');
+    setPasswordResetNotice('');
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPasswordUser) return;
+
+    setPasswordResetError('');
+    setPasswordResetNotice('');
+
+    if (newPassword.length < 6) {
+      setPasswordResetError('A nova senha deve ter no mínimo 6 caracteres.');
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setPasswordResetError('A confirmação da senha não confere.');
+      return;
+    }
+
+    setPasswordResetLoading(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão expirada. Entre novamente no sistema.');
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-user-password`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            user_id: resetPasswordUser.id,
+            new_password: newPassword,
+          }),
+        },
+      );
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Não foi possível redefinir a senha.');
+      }
+
+      const resetName = resetPasswordUser.name;
+      setResetPasswordUser(null);
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setPasswordResetNotice(`Senha de ${resetName} redefinida com sucesso.`);
+    } catch (err) {
+      setPasswordResetError(
+        err instanceof Error ? err.message : 'Não foi possível redefinir a senha.',
+      );
+    } finally {
+      setPasswordResetLoading(false);
+    }
+  };
+
   const roleLabels: Record<Profile['role'], string> = {
     ADMINISTRADOR: 'Administrador',
     GERENTE: 'Gerente',
@@ -261,10 +348,48 @@ export function Users() {
   const requiresTeamAndExternal = ['CADASTRO', 'SUPERVISOR', 'VENDEDOR', 'ADESIONISTA'].includes(formData.role);
   const normalizedSearchTerm = searchTerm.trim().toLowerCase();
   const filteredUsers = users.filter((user) => {
-    const matchesName = user.name.toLowerCase().includes(normalizedSearchTerm);
+    const searchableValues = [
+      user.name,
+      user.email,
+      user.external_id || '',
+      user.team_name || '',
+      roleLabels[user.role],
+    ].map((value) => value.toLowerCase());
+
+    const matchesSearch =
+      !normalizedSearchTerm ||
+      searchableValues.some((value) => value.includes(normalizedSearchTerm));
     const matchesTeam = !selectedTeamId || user.team_id === selectedTeamId;
-    return matchesName && matchesTeam;
+    const matchesRole = !selectedRole || user.role === selectedRole;
+    const matchesStatus =
+      selectedStatus === 'all' ||
+      (selectedStatus === 'active' && user.is_active) ||
+      (selectedStatus === 'inactive' && !user.is_active);
+    const hasIdentifiedMobileApp =
+      Boolean(user.last_app_seen_at) &&
+      user.last_app_platform?.toLowerCase() === 'android';
+    const matchesAppUsage =
+      selectedAppUsage === 'all' ||
+      (selectedAppUsage === 'identified' && hasIdentifiedMobileApp) ||
+      (selectedAppUsage === 'not_identified' && !hasIdentifiedMobileApp);
+
+    return matchesSearch && matchesTeam && matchesRole && matchesStatus && matchesAppUsage;
   });
+  const hasActiveFilters =
+    Boolean(searchTerm.trim()) ||
+    Boolean(selectedTeamId) ||
+    Boolean(selectedRole) ||
+    selectedStatus !== 'all' ||
+    selectedAppUsage !== 'all';
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setSelectedTeamId('');
+    setSelectedRole('');
+    setSelectedStatus('all');
+    setSelectedAppUsage('all');
+  };
+
   const userColumns = userColumnOrder
     .map((key) => defaultUserColumns.find((column) => column.key === key))
     .filter((column): column is (typeof defaultUserColumns)[number] => Boolean(column));
@@ -439,63 +564,138 @@ export function Users() {
         </div>
 
         <Card>
-          <div className="mb-4">
-            <Input
-              label="Pesquisar por nome"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Digite o nome do usuário"
-            />
-          </div>
+          {passwordResetNotice && (
+            <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+              {passwordResetNotice}
+            </div>
+          )}
 
-          <div className="mb-4">
-            <Select
-              label="Filtrar por equipe"
-              value={selectedTeamId}
-              onChange={(e) => setSelectedTeamId(e.target.value)}
-            >
-              <option value="">Todas as equipes</option>
-              {teams.map((team) => (
-                <option key={team.id} value={team.id}>
-                  {team.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-
-          <div className="mb-6 border border-slate-200 rounded-lg p-4 bg-slate-50">
-            <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-slate-800">Ordem das colunas</h2>
-                <p className="text-xs text-slate-500">A exportação usa essa mesma ordem.</p>
+                <h2 className="text-sm font-semibold text-slate-800">Filtros</h2>
+                <p className="text-xs text-slate-500">
+                  Combine os campos abaixo para localizar usuários com mais precisão.
+                </p>
+              </div>
+              <span className="text-xs font-medium text-slate-500">
+                {filteredUsers.length} de {users.length} usuário(s)
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+              <div className="xl:col-span-2">
+                <Input
+                  label="Buscar usuário"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Nome, email, ID externo, equipe ou função"
+                />
+              </div>
+
+              <Select
+                label="Função"
+                value={selectedRole}
+                onChange={(e) => setSelectedRole(e.target.value)}
+              >
+                <option value="">Todas as funções</option>
+                {Object.entries(roleLabels).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </Select>
+
+              <Select
+                label="Equipe"
+                value={selectedTeamId}
+                onChange={(e) => setSelectedTeamId(e.target.value)}
+              >
+                <option value="">Todas as equipes</option>
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
+              </Select>
+
+              <Select
+                label="Status"
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value as 'all' | 'active' | 'inactive')}
+              >
+                <option value="all">Todos os status</option>
+                <option value="active">Ativos</option>
+                <option value="inactive">Inativos</option>
+              </Select>
+
+              <Select
+                label="App mobile"
+                value={selectedAppUsage}
+                onChange={(e) =>
+                  setSelectedAppUsage(
+                    e.target.value as 'all' | 'identified' | 'not_identified',
+                  )
+                }
+              >
+                <option value="all">Todos</option>
+                <option value="identified">Identificado</option>
+                <option value="not_identified">Não identificado</option>
+              </Select>
+            </div>
+
+            {hasActiveFilters && (
+              <div className="mt-4 flex justify-end">
+                <Button type="button" variant="secondary" onClick={clearFilters}>
+                  <FilterX className="mr-2 h-4 w-4" />
+                  Limpar filtros
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <details className="mb-6 rounded-lg border border-slate-200 bg-white">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <SlidersHorizontal className="h-4 w-4" />
+              Personalizar tabela
+              <span className="ml-1 text-xs font-normal text-slate-500">
+                ordem das colunas e exportação
+              </span>
+            </summary>
+            <div className="border-t border-slate-200 bg-slate-50 p-4">
+              <p className="mb-3 text-xs text-slate-500">
+                Use as setas para mover as colunas para a esquerda ou para a direita. A exportação segue a mesma ordem.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {userColumns.map((column, index) => (
+                  <div
+                    key={column.key}
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1"
+                  >
+                    <span className="text-xs font-medium text-slate-700">{column.label}</span>
+                    <button
+                      type="button"
+                      onClick={() => moveColumn(index, -1)}
+                      disabled={index === 0}
+                      className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-30"
+                      aria-label={`Mover ${column.label} para a esquerda`}
+                    >
+                      <ArrowLeft className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveColumn(index, 1)}
+                      disabled={index === userColumns.length - 1}
+                      className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-30"
+                      aria-label={`Mover ${column.label} para a direita`}
+                    >
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {userColumns.map((column, index) => (
-                <div key={column.key} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1">
-                  <span className="text-xs font-medium text-slate-700">{column.label}</span>
-                  <button
-                    type="button"
-                    onClick={() => moveColumn(index, -1)}
-                    disabled={index === 0}
-                    className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-30"
-                    aria-label={`Mover ${column.label} para cima`}
-                  >
-                    <ArrowUp className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => moveColumn(index, 1)}
-                    disabled={index === userColumns.length - 1}
-                    className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-30"
-                    aria-label={`Mover ${column.label} para baixo`}
-                  >
-                    <ArrowDown className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
+          </details>
 
           {loading ? (
             <div className="text-center py-12">
@@ -528,12 +728,26 @@ export function Users() {
                           </td>
                         ))}
                         <td className="py-3 px-4 text-center">
-                          <button
-                            onClick={() => setEditingUser(user)}
-                            className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors inline-flex items-center justify-center"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              onClick={() => setEditingUser(user)}
+                              className="inline-flex items-center justify-center rounded-lg p-2 text-slate-600 transition-colors hover:bg-slate-100"
+                              title="Editar usuário"
+                              aria-label={`Editar ${user.name}`}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            {canResetPasswordFor(user) && (
+                              <button
+                                onClick={() => openPasswordReset(user)}
+                                className="inline-flex items-center justify-center rounded-lg p-2 text-amber-600 transition-colors hover:bg-amber-50"
+                                title="Redefinir senha"
+                                aria-label={`Redefinir senha de ${user.name}`}
+                              >
+                                <KeyRound className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -557,10 +771,22 @@ export function Users() {
                         )}
                         <button
                           onClick={() => setEditingUser(user)}
-                          className="p-1 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                          className="rounded-lg p-1 text-slate-600 transition-colors hover:bg-slate-100"
+                          title="Editar usuário"
+                          aria-label={`Editar ${user.name}`}
                         >
-                          <Edit className="w-4 h-4" />
+                          <Edit className="h-4 w-4" />
                         </button>
+                        {canResetPasswordFor(user) && (
+                          <button
+                            onClick={() => openPasswordReset(user)}
+                            className="rounded-lg p-1 text-amber-600 transition-colors hover:bg-amber-50"
+                            title="Redefinir senha"
+                            aria-label={`Redefinir senha de ${user.name}`}
+                          >
+                            <KeyRound className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className="space-y-2">
@@ -701,6 +927,80 @@ export function Users() {
           canEditLemmitLimit={canEditLemmitLimit}
         />
       )}
+
+      {resetPasswordUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black bg-opacity-50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 p-5">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">Redefinir senha</h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  {resetPasswordUser.name} · {resetPasswordUser.email}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setResetPasswordUser(null)}
+                disabled={passwordResetLoading}
+                className="text-slate-400 transition-colors hover:text-slate-600 disabled:opacity-50"
+                aria-label="Fechar"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleResetPassword} className="space-y-4 p-5">
+              <Input
+                label="Nova senha"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                minLength={6}
+                required
+                autoComplete="new-password"
+              />
+              <Input
+                label="Confirmar nova senha"
+                type="password"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                minLength={6}
+                required
+                autoComplete="new-password"
+              />
+              <p className="text-xs text-slate-500">
+                A senha deve possuir pelo menos 6 caracteres.
+              </p>
+
+              {passwordResetError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  {passwordResetError}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setResetPasswordUser(null)}
+                  disabled={passwordResetLoading}
+                  className="w-full sm:flex-1"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={passwordResetLoading}
+                  className="w-full sm:flex-1"
+                >
+                  {passwordResetLoading ? 'Redefinindo...' : 'Redefinir senha'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </Layout>
   );
 }
