@@ -155,7 +155,7 @@ class CadastroWorkflowRepository(
                 parameter("role", "eq.$role")
                 parameter("is_active", "eq.true")
                 parameter("external_id", "not.is.null")
-                parameter("select", "id,name,email,external_id")
+                parameter("select", "id,name,email,external_id,team_id")
                 parameter("order", "name.asc")
             },
         )
@@ -168,7 +168,7 @@ class CadastroWorkflowRepository(
             query = {
                 parameter(
                     "select",
-                    "id,empresa_codigo,empresa_nome,empresa_cnpj,vendedor_nome,vendedor_codigo,adesionista_id,adesionista_nome,adesionista_codigo,link_url,is_active,click_count,last_clicked_at,used_at,used_cpf,created_at,updated_at"
+                    "id,empresa_codigo,empresa_nome,empresa_cnpj,vendedor_nome,vendedor_codigo,adesionista_id,adesionista_nome,adesionista_codigo,link_url,is_active,click_count,unique_visit_count,unique_visits_started_at,last_unique_visit_at,last_clicked_at,used_at,used_cpf,created_at,updated_at"
                 )
                 parameter("is_active", "eq.true")
                 parameter("order", "empresa_nome.asc,updated_at.desc")
@@ -253,16 +253,36 @@ class CadastroWorkflowRepository(
         session: SavedSession,
         profile: MobileProfile,
         empresa: EmpresaResumo,
+        vendedor: TeamMemberOption? = null,
         adesionista: TeamMemberOption? = null,
     ): CadastroLinkItem {
         val rawToken = CadastroLinkCrypto.generateCadastroLinkToken()
         val tokenHash = CadastroLinkCrypto.hashCadastroLinkToken(rawToken)
         val linkUrl = buildPublicAdesaoUrl(rawToken)
-        val vendedorCodigo = profile.externalId?.trim().orEmpty().ifBlank { "0" }
+
+        val gerente = profile.role == "GERENTE"
+        val vendedorEfetivo = if (gerente) {
+            vendedor ?: throw IllegalStateException("Selecione um vendedor antes de gerar o link.")
+        } else {
+            null
+        }
+        val vendedorId = vendedorEfetivo?.id ?: profile.id
+        val vendedorCodigo = vendedorEfetivo?.externalId?.trim().orEmpty()
+            .ifBlank { profile.externalId?.trim().orEmpty().ifBlank { "0" } }
+        val vendedorNome = vendedorEfetivo?.name?.takeIf { it.isNotBlank() }
+            ?: profile.name.ifBlank { profile.email }
+        val vendedorTeamId = vendedorEfetivo?.teamId ?: profile.teamId
+
+        if (gerente && vendedorEfetivo?.externalId.isNullOrBlank()) {
+            throw IllegalStateException("O vendedor selecionado nao possui ID Externo.")
+        }
+        if (gerente && vendedorEfetivo?.teamId.isNullOrBlank()) {
+            throw IllegalStateException("O vendedor selecionado nao possui equipe.")
+        }
 
         val payload = buildJsonObject {
             put("created_by", profile.id)
-            profile.teamId?.let { put("team_id", it) }
+            vendedorTeamId?.let { put("team_id", it) }
             put("token_hash", tokenHash)
             put("link_url", linkUrl)
             put("empresa_codigo", empresa.id)
@@ -271,9 +291,9 @@ class CadastroWorkflowRepository(
             put("empresa_raw", empresa.raw ?: JsonObject(emptyMap()))
             put("empresa_exige_matricula", empresa.exigeMatricula ?: 0)
             put("planos_raw", empresa.precoPlano ?: buildJsonArray {})
-            put("vendedor_id", profile.id)
+            put("vendedor_id", vendedorId)
             put("vendedor_codigo", vendedorCodigo)
-            put("vendedor_nome", profile.name.ifBlank { profile.email })
+            put("vendedor_nome", vendedorNome)
             // Código e nome do adesionista são verificados e preenchidos pelo banco.
             adesionista?.id?.let { put("adesionista_id", it) }
         }
