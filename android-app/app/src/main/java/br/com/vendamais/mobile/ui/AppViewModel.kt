@@ -3856,6 +3856,7 @@ class AppViewModel(
                         current.copy(
                             cadastroSupportLoading = false,
                             cadastroSupportLoaded = true,
+                            adminTeams = if (support.teams.isNotEmpty()) support.teams else current.adminTeams,
                             vendedores = support.vendedores,
                             adesionistas = support.adesionistas,
                             planosMap = support.planos,
@@ -3940,6 +3941,9 @@ class AppViewModel(
 
         return coroutineScope {
             val configDeferred = async { workflowRepository.fetchCadastroConfig(activeSession) }
+            val teamsDeferred = async {
+                if (profile.role == "GERENTE") repository.fetchTeamsAdmin(activeSession) else emptyList()
+            }
             val vendedoresDeferred = async {
                 if (profile.role != "VENDEDOR") {
                     workflowRepository.fetchProfilesByRole(activeSession, "VENDEDOR")
@@ -3962,6 +3966,7 @@ class AppViewModel(
             val linkData = linkDataDeferred.await()
             CadastroSupportData(
                 config = configDeferred.await(),
+                teams = teamsDeferred.await(),
                 vendedores = vendedoresDeferred.await(),
                 adesionistas = adesionistasDeferred.await(),
                 links = linkData.links,
@@ -4277,6 +4282,7 @@ private data class LinkWorkspaceData(
 
 private data class CadastroSupportData(
     val config: CadastroConfig?,
+    val teams: List<AdminTeam>,
     val vendedores: List<TeamMemberOption>,
     val adesionistas: List<TeamMemberOption>,
     val links: List<CadastroLinkItem>,
