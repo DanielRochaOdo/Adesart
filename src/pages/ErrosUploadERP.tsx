@@ -10,6 +10,7 @@ import {
   FileWarning,
   Loader2,
   RefreshCw,
+  RotateCcw,
   Search,
   Upload,
   UserRound,
@@ -745,35 +746,60 @@ export function ErrosUploadERP() {
                           {item.attempts}
                         </td>
                         <td className="px-3 py-3">
-                          <div className="flex min-w-36 flex-col gap-1.5">
+                          <div className="flex min-w-32 flex-wrap items-center gap-1.5">
                             {item.can_reconcile && (
-                              <Button variant="secondary" disabled={busyId === item.id} onClick={() => handleSync(item)} className="h-8 justify-center px-2 text-xs">
-                                <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-                                Sincronizar
-                              </Button>
+                              <button
+                                type="button"
+                                disabled={busyId === item.id}
+                                onClick={() => handleSync(item)}
+                                title="Sincronizar"
+                                aria-label="Sincronizar este erro"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </button>
                             )}
                             {item.can_upload_replacement && (
-                              <Button disabled={busyId === item.id} onClick={() => chooseReplacement(item)} className="h-8 justify-center px-2 text-xs">
-                                <Upload className="mr-1.5 h-3.5 w-3.5" />
-                                Novo arquivo
-                              </Button>
+                              <button
+                                type="button"
+                                disabled={busyId === item.id}
+                                onClick={() => chooseReplacement(item)}
+                                title="Enviar novo arquivo"
+                                aria-label="Enviar novo arquivo"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 text-emerald-600 transition hover:bg-emerald-50 disabled:opacity-40 dark:border-emerald-900/60 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+                              >
+                                <Upload className="h-4 w-4" />
+                              </button>
                             )}
                             {item.can_compress && (
-                              <Button disabled={busyId === item.id} onClick={() => handleCompress(item)} className="h-8 justify-center px-2 text-xs">
-                                {busyId === item.id ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Wand2 className="mr-1.5 h-3.5 w-3.5" />}
-                                Comprimir
-                              </Button>
+                              <button
+                                type="button"
+                                disabled={busyId === item.id}
+                                onClick={() => handleCompress(item)}
+                                title="Comprimir e reenviar"
+                                aria-label="Comprimir e reenviar"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-amber-200 text-amber-600 transition hover:bg-amber-50 disabled:opacity-40 dark:border-amber-900/60 dark:text-amber-300 dark:hover:bg-amber-950/30"
+                              >
+                                {busyId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                              </button>
                             )}
                             {item.can_reprocess && (
-                              <Button variant="secondary" disabled={busyId === item.id} onClick={() => handleReprocess(item)} className="h-8 justify-center px-2 text-xs">
-                                Tentar novamente
-                              </Button>
+                              <button
+                                type="button"
+                                disabled={busyId === item.id}
+                                onClick={() => handleReprocess(item)}
+                                title="Tentar novamente"
+                                aria-label="Tentar novamente"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                              >
+                                <RotateCcw className="h-4 w-4" />
+                              </button>
                             )}
                             {!item.can_upload_replacement && !item.can_compress && !item.can_reprocess && !item.can_reconcile && (
-                              <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                              <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
                                 <FileWarning className="h-3.5 w-3.5" />
-                                Sem ação automática
-                              </div>
+                                Sem ação
+                              </span>
                             )}
                           </div>
                         </td>
