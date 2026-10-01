@@ -7,8 +7,8 @@ ALTER TABLE public.cadastro_links
   ADD COLUMN IF NOT EXISTS deleted_at timestamptz,
   ADD COLUMN IF NOT EXISTS deleted_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL;
 
-CREATE INDEX IF NOT EXISTS cadastro_links_created_by_empresa_created_idx
-  ON public.cadastro_links(created_by, empresa_codigo, created_at DESC);
+CREATE INDEX IF NOT EXISTS cadastro_links_vendedor_empresa_created_idx
+  ON public.cadastro_links(vendedor_id, empresa_codigo, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS cadastro_links_deleted_at_idx
   ON public.cadastro_links(deleted_at DESC)
