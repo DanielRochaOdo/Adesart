@@ -262,12 +262,14 @@ fun AdminUserLinksSheet(
                                         }
                                     }
 
-                                    OutlinedButton(
-                                        onClick = { pendingDelete = link },
-                                        enabled = !deleting && !historyLoading,
-                                        modifier = Modifier.fillMaxWidth(),
-                                    ) {
-                                        Text(if (deleting) "Excluindo..." else "Excluir definitivamente")
+                                    if (!link.deletedAt.isNullOrBlank()) {
+                                        OutlinedButton(
+                                            onClick = { pendingDelete = link },
+                                            enabled = !deleting && !historyLoading,
+                                            modifier = Modifier.fillMaxWidth(),
+                                        ) {
+                                            Text(if (deleting) "Excluindo..." else "Excluir definitivamente")
+                                        }
                                     }
 
                                     if (expanded && history != null) {
