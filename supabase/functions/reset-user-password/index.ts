@@ -72,7 +72,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const requestingRole = String(requestingProfile.role || '').toUpperCase();
-    if (!['ADMINISTRADOR', 'CADASTRO'].includes(requestingRole)) {
+    if (!['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(requestingRole)) {
       return jsonResponse(
         { success: false, error: 'Sem permissão para redefinir senhas' },
         403,
@@ -115,11 +115,11 @@ Deno.serve(async (req: Request) => {
 
     const targetRole = String(targetProfile.role || '').toUpperCase();
 
-    if (requestingRole === 'CADASTRO' && targetRole === 'ADMINISTRADOR') {
+    if (['CADASTRO', 'GERENTE'].includes(requestingRole) && targetRole === 'ADMINISTRADOR') {
       return jsonResponse(
         {
           success: false,
-          error: 'A função Cadastro não pode redefinir a senha de administradores',
+          error: 'Esta função não pode redefinir a senha de administradores',
         },
         403,
       );
