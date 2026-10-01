@@ -95,14 +95,15 @@ export function Users() {
     }
   );
 
-  const canCreate = profile?.role && ['ADMINISTRADOR', 'GERENTE', 'SUPERVISOR'].includes(profile.role);
+  const canCreate = profile?.role && ['ADMINISTRADOR', 'SUPERVISOR'].includes(profile.role);
   const canEditRole = profile?.role === 'ADMINISTRADOR';
-  const isCadastroRole = profile?.role === 'CADASTRO';
-  const canEditExternalId = !isCadastroRole;
-  const canEditLemmitLimit = !isCadastroRole;
+  const isRestrictedUserOperator = profile?.role === 'CADASTRO' || profile?.role === 'GERENTE';
+  const canEditExternalId = !isRestrictedUserOperator;
+  const canEditLemmitLimit = !isRestrictedUserOperator;
   const canResetPasswordFor = (targetUser: Profile) =>
     profile?.role === 'ADMINISTRADOR' ||
-    (profile?.role === 'CADASTRO' && targetUser.role !== 'ADMINISTRADOR');
+    (['CADASTRO', 'GERENTE'].includes(profile?.role ?? '') &&
+      targetUser.role !== 'ADMINISTRADOR');
 
   useEffect(() => {
     fetchUsers();
