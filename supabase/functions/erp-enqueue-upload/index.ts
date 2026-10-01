@@ -10,7 +10,8 @@ const corsHeaders = {
 interface EnqueueRequest {
   cadastroId: string | null;
   idFuncionario: number;
-  idDependente: number;
+  idDependente?: number;
+  targetCpf?: string;
   arquivoPath: string;
   arquivoNome: string;
   tipo: "titular" | "dependente";
@@ -46,11 +47,10 @@ Deno.serve(async (req: Request) => {
     const arquivoPath = String(body.arquivoPath || "").trim().replace(/^\/+/, "");
     const arquivoNome = String(body.arquivoNome || arquivoPath.split("/").pop() || "").trim();
     const idFuncionario = Number(body.idFuncionario || 0);
-    const idDependente = Number(body.idDependente || 0);
+    let idDependente = Number(body.idDependente || 0);
 
     if (
       !Number.isInteger(idFuncionario) || idFuncionario <= 0 ||
-      !Number.isInteger(idDependente) || idDependente <= 0 ||
       !arquivoPath || !arquivoNome ||
       !["titular", "dependente"].includes(String(body.tipo))
     ) {
@@ -75,6 +75,7 @@ Deno.serve(async (req: Request) => {
     let clienteNome: string | null = null;
     let clienteCpf: string | null = null;
     let empresaNome: string | null = null;
+    let targetDependenteCpf = String(body.targetCpf || "").replace(/\D/g, "");
 
     if (body.cadastroId) {
       const { data: cadastro } = await supabaseClient
@@ -87,15 +88,33 @@ Deno.serve(async (req: Request) => {
       clienteNome = cadastro?.nome?.trim() || null;
       clienteCpf = cadastro?.cpf?.trim() || null;
       empresaNome = cadastro?.empresa_nome?.trim() || null;
+      targetDependenteCpf = targetDependenteCpf ||
+        String(cadastro?.cpf || "").replace(/\D/g, "");
     }
 
-    const { data: existing } = await supabaseClient
+    if ((!Number.isInteger(idDependente) || idDependente <= 0) && !targetDependenteCpf) {
+      return jsonResponse({
+        error: "CPF principal obrigatorio para resolver o destino do anexo",
+        code: "PRIMARY_DEPENDENT_NOT_FOUND",
+      }, 422);
+    }
+
+    if (!Number.isInteger(idDependente) || idDependente <= 0) {
+      idDependente = 0;
+    }
+
+    let existingQuery = supabaseClient
       .from("erp_upload_queue")
       .select("id,status,attempts")
       .eq("bucket", bucket)
       .eq("arquivo_path", arquivoPath)
-      .eq("id_funcionario", idFuncionario)
-      .eq("id_dependente", idDependente)
+      .eq("id_funcionario", idFuncionario);
+
+    existingQuery = targetDependenteCpf
+      ? existingQuery.eq("target_dependente_cpf", targetDependenteCpf)
+      : existingQuery.eq("id_dependente", idDependente);
+
+    const { data: existing } = await existingQuery
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -126,6 +145,7 @@ Deno.serve(async (req: Request) => {
           cliente_nome: clienteNome,
           cliente_cpf: clienteCpf,
           empresa_nome: empresaNome,
+          target_dependente_cpf: targetDependenteCpf || null,
         })
         .eq("id", existing.id)
         .select()
@@ -161,6 +181,7 @@ Deno.serve(async (req: Request) => {
       cliente_nome: clienteNome,
       cliente_cpf: clienteCpf,
       empresa_nome: empresaNome,
+      target_dependente_cpf: targetDependenteCpf || null,
     };
 
     const { data: queueData, error: queueError } = await supabaseClient
