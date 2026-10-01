@@ -697,6 +697,8 @@ export function Users() {
             fetchUsers();
           }}
           canEditRole={canEditRole}
+          canEditExternalId={canEditExternalId}
+          canEditLemmitLimit={canEditLemmitLimit}
         />
       )}
     </Layout>
