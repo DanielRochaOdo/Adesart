@@ -64,7 +64,7 @@ export function Layout({ children }: LayoutProps) {
     setConfigDropdownOpen(false);
   };
 
-  const canViewUsers = profile?.role && ['ADMINISTRADOR', 'GERENTE', 'SUPERVISOR'].includes(profile.role);
+  const canViewUsers = profile?.role && ['ADMINISTRADOR', 'GERENTE', 'SUPERVISOR', 'CADASTRO'].includes(profile.role);
   const canViewTeams = profile?.role && ['ADMINISTRADOR', 'GERENTE', 'CADASTRO', 'SUPERVISOR', 'VENDEDOR', 'ADESIONISTA'].includes(profile.role);
   const canViewConfig = profile?.role === 'ADMINISTRADOR';
   const canViewAudit = profile?.role === 'ADMINISTRADOR';
@@ -81,7 +81,7 @@ export function Layout({ children }: LayoutProps) {
   const configMenuItems = [
     { path: '/configuracoes', label: 'Configurações', icon: Settings, show: canViewConfig },
     { path: '/auditoria-lemmit', label: 'Auditoria Lemmit', icon: Activity, show: canViewAudit },
-    { path: '/fila-upload-erp', label: 'Fila Upload ERP', icon: Upload, show: canViewAudit },
+    { path: '/fila-upload-erp', label: 'Fila Upload ERP', icon: Upload, show: canViewUploadQueue },
     { path: '/adesoes-excluidas', label: 'Adesões Excluídas', icon: Trash2, show: canViewAudit },
   ];
 
