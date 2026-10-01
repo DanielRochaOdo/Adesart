@@ -811,7 +811,7 @@ export function ErrosUploadERP() {
                   ))}
                 </tbody>
               </table>
-            </div>            </div>
+            </div>
           )}
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
