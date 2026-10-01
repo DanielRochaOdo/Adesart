@@ -70,7 +70,8 @@ CREATE POLICY "Administrator permanently delete cadastro links"
   FOR DELETE
   TO authenticated
   USING (
-    EXISTS (
+    deleted_at IS NOT NULL
+    AND EXISTS (
       SELECT 1
       FROM public.profiles p
       WHERE p.id = auth.uid()
