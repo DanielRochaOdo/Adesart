@@ -80,7 +80,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    if (!['ADMINISTRADOR', 'GERENTE', 'SUPERVISOR'].includes(requestingProfile.role)) {
+    if (!['ADMINISTRADOR', 'SUPERVISOR'].includes(requestingProfile.role)) {
       throw new Error('Insufficient permissions to create users');
     }
 

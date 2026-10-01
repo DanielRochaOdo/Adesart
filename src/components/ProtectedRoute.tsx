@@ -21,7 +21,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     );
   }
 
-  if (!user || !profile) {
+  if (!user || !profile || profile.is_active === false) {
     return <Navigate to="/login" replace />;
   }
 

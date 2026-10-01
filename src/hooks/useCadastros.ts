@@ -666,80 +666,27 @@ export function useCadastros() {
     return Array.isArray(dados?.dependente) ? dados.dependente : [];
   };
 
-  const formatDependentesForSync = (dependentesPayload: any[]) => (
-    dependentesPayload.map((dep: any) => ({
-      cpf: normalizeCpf(dep?.cpf),
-      nome: dep?.nome,
-      dataNascimento: dep?.dataNascimento,
-      sexo: dep?.sexo,
-      sexoDescricao: dep?.sexoDescricao,
-      tipo: dep?.tipo,
-      plano: dep?.plano,
-      planoValor: dep?.planoValor,
-      nomeMae: dep?.nomeMae,
-      carenciaAtendimento: dep?.carenciaAtendimento,
-      funcionarioCadastro: dep?.funcionarioCadastro,
-    }))
-  );
-
-  const syncCadastroEnviado = async (id: string, payload: Record<string, unknown>, result: any) => {
-    const dependentesFormatados = formatDependentesForSync(extractDependentesPayload(payload));
-
-    const syncPayloadBase = {
-      status: 'enviado',
-      payload_erp: payload,
-      erp_response: result,
-      dependentes: dependentesFormatados,
-    };
-
-    let { data: syncedCadastro, error: syncError } = await supabase
+  const syncCadastroEnviado = async (id: string, _payload: Record<string, unknown>, _result: any) => {
+    // erp-novo-usuario2 e a autoridade da conclusao. O Web apenas recarrega
+    // o estado canonico persistido pelo backend para nao sobrescrever
+    // nome/empresa/vendedor/adesionista com um PATCH parcial do cliente.
+    const { data: syncedCadastro, error: syncError } = await supabase
       .from('cadastros')
-      .update({
-        ...syncPayloadBase,
-        data_envio: new Date().toISOString(),
-      })
-      .eq('id', id);
-
-    // Compatibilidade com ambientes onde a coluna ainda nao existe
-    if (syncError?.message?.includes('data_envio')) {
-      console.warn('[useCadastros] Coluna data_envio nao encontrada, sincronizando sem data_envio');
-      const retry = await supabase
-        .from('cadastros')
-        .update(syncPayloadBase)
-        .eq('id', id)
-        .select()
-        .single();
-
-      syncedCadastro = retry.data;
-      syncError = retry.error;
-    } else {
-      const selectRetry = await supabase
-        .from('cadastros')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (!syncError) {
-        syncedCadastro = selectRetry.data;
-        if (selectRetry.error) {
-          syncError = selectRetry.error;
-        }
-      }
-    }
+      .select('*')
+      .eq('id', id)
+      .single();
 
     if (syncError) {
-      throw new Error(
-        `Cadastro enviado ao ERP, mas falhou ao sincronizar no Adesart: ${syncError.message}`
+      console.warn(
+        '[useCadastros] ERP confirmou o cadastro, mas a leitura do estado canonico falhou:',
+        syncError
       );
+      return;
     }
 
-    if (!syncedCadastro) {
-      throw new Error(
-        `Cadastro enviado ao ERP, mas nao foi possivel sincronizar o estado local do cadastro ${id}.`
-      );
+    if (syncedCadastro) {
+      upsertCadastroState(syncedCadastro as Cadastro);
     }
-
-    upsertCadastroState(syncedCadastro as Cadastro);
   };
 
   const reconcileCadastroAfterAbort = async (
@@ -1022,14 +969,48 @@ export function useCadastros() {
   };
 
   const deleteCadastro = async (id: string) => {
-    const { error } = await supabase.from('cadastros').delete().eq('id', id);
+    if (profile?.role === 'CADASTRO') {
+      const { data: cadastro, error: cadastroError } = await supabase
+        .from('cadastros')
+        .select('status')
+        .eq('id', id)
+        .maybeSingle();
 
-    if (error) throw error;
+      if (cadastroError) throw cadastroError;
+      if (!cadastro || !PENDING_CADASTRO_STATUSES.includes(cadastro.status as (typeof PENDING_CADASTRO_STATUSES)[number])) {
+        throw new Error('A função Cadastro só pode excluir adesões pendentes.');
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão não encontrada.');
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/excluir-cadastro`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            cadastroId: id,
+            motivoExclusao: 'Exclusão de adesão pendente pela função Cadastro',
+          }),
+        },
+      );
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.error || 'Não foi possível excluir a adesão pendente.');
+      }
+    } else {
+      const { error } = await supabase.from('cadastros').delete().eq('id', id);
+      if (error) throw error;
+    }
 
     removeCadastroState(id);
   };
 
-  const canDelete = profile?.role === 'ADMINISTRADOR';
+  const canDelete = profile?.role === 'ADMINISTRADOR' || profile?.role === 'CADASTRO';
 
   // Carrega somente a lista solicitada e reaproveita o resultado ao trocar de aba.
   const loadCadastros = useCallback(async (listStatus: CadastroListStatus, force = false) => {

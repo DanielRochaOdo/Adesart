@@ -242,6 +242,13 @@ function empresaKey(c: DashboardCadastro): string {
     : String(c.empresa_codigo);
 }
 
+function empresaLabel(c: DashboardCadastro): string {
+  const nome = c.empresa_nome?.trim();
+  if (nome) return nome;
+  if (c.empresa_codigo != null) return `Empresa código ${c.empresa_codigo}`;
+  return 'Não informada';
+}
+
 function canalKey(c: DashboardCadastro): string {
   return c.fluxo_publico || c.origem_link_id ? 'publico' : 'interno';
 }
@@ -349,7 +356,7 @@ function exportarCSV(registros: DashboardCadastro[]) {
     new Date(c.created_at).toLocaleDateString('pt-BR'), c.tipo_cadastro,
     ESTADOS.find((s) => s.key === c.status)?.titulo || c.status,
     c.team_id || '', c.vendedor_nome || 'Não atribuído',
-    c.adesionista_nome || 'Não atribuído', c.empresa_nome || 'Não informada',
+    c.adesionista_nome || 'Não atribuído', empresaLabel(c),
     c.plano_nome || 'Não informado', canalKey(c) === 'publico' ? 'Link / QR Code' : 'Interno',
     c.tipo_cadastro === 'cadastro' ? vidas(c) : '',
   ]);
@@ -505,8 +512,8 @@ function ModalIndicador({ detalhes, onClose }: {
                     </div>
                   </td>
                   <td className="max-w-56 px-4 py-3 text-slate-600">
-                    <span className="block truncate" title={cadastro.empresa_nome || 'Não informada'}>
-                      {cadastro.empresa_nome || 'Não informada'}
+                    <span className="block truncate" title={empresaLabel(cadastro)}>
+                      {empresaLabel(cadastro)}
                     </span>
                   </td>
                   <td className="max-w-56 px-4 py-3 text-slate-600">
@@ -790,7 +797,7 @@ export function Dashboard() {
     periodo, inicioPersonalizado, fimPersonalizado, filtros,
   ]);
 
-  const gerencial = profile?.role === 'ADMINISTRADOR' || profile?.role === 'GERENTE';
+  const gerencial = profile?.role === 'ADMINISTRADOR' || profile?.role === 'GERENTE' || profile?.role === 'CADASTRO';
   const equipeRestrita = profile?.role === 'SUPERVISOR' ? profile.team_id : null;
   const datas = useMemo(
     () => datasPeriodo(periodo, inicioPersonalizado, fimPersonalizado),
@@ -961,34 +968,26 @@ export function Dashboard() {
     datas.inicioAnterior, datas.fimExclusivo, datas.valido, atualizacao,
   ]);
 
-  const opcoes = useMemo(() => {
-    const atuais = registros.filter((c) =>
-      c.created_at >= new Date(datas.inicioAtual + 'T00:00:00').toISOString() &&
-      c.created_at < new Date(datas.fimExclusivo + 'T00:00:00').toISOString()
-    );
-    const unicos = (chave: (c: DashboardCadastro) => string, nome: (c: DashboardCadastro) => string) =>
-      Array.from(new Map(atuais.map((c) => [chave(c), { value: chave(c), label: nome(c) }])).values())
-        .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
-    return {
-      equipes: equipes.filter((e) => gerencial ? true : e.id === profile?.team_id),
-      empresas: unicos(empresaKey, (c) => c.empresa_nome || 'Não informada'),
-      vendedores: unicos(vendedorKey, (c) => c.vendedor_nome || 'Sem vendedor'),
-      adesionistas: unicos(adesionistaKey, (c) => c.adesionista_nome || 'Sem adesionista'),
-    };
-  }, [registros, equipes, datas.inicioAtual, datas.fimExclusivo, gerencial, profile?.team_id]);
-
   const nomePlanosPorCodigo = new Map(catalogoPlanos.map((plano) => [
     plano.plano_id, plano.nome_exibicao.toLocaleLowerCase('pt-BR'),
   ]));
-  const aplicar = (c: DashboardCadastro) => {
-    const equipe = equipeRestrita || filtros.equipe;
-    if (equipe !== 'todos' && c.team_id !== equipe) return false;
-    if (filtros.empresa !== 'todos' && empresaKey(c) !== filtros.empresa) return false;
-    if (filtros.vendedor !== 'todos' && vendedorKey(c) !== filtros.vendedor) return false;
-    if (filtros.adesionista !== 'todos' && adesionistaKey(c) !== filtros.adesionista) return false;
-    if (filtros.canal !== 'todos' && canalKey(c) !== filtros.canal) return false;
-    if (filtros.status !== 'todos' && c.status !== filtros.status) return false;
-    const termo = filtros.busca.trim().toLocaleLowerCase('pt-BR');
+
+  const registroCombinaFiltros = (
+    c: DashboardCadastro,
+    ignorar?: keyof Filtros,
+    filtrosAtuais: Filtros = filtros,
+  ) => {
+    const equipe = equipeRestrita || filtrosAtuais.equipe;
+    if ((ignorar !== 'equipe' || equipeRestrita) && equipe !== 'todos' && c.team_id !== equipe) return false;
+    if (ignorar !== 'empresa' && filtrosAtuais.empresa !== 'todos' && empresaKey(c) !== filtrosAtuais.empresa) return false;
+    if (ignorar !== 'vendedor' && filtrosAtuais.vendedor !== 'todos' && vendedorKey(c) !== filtrosAtuais.vendedor) return false;
+    if (ignorar !== 'adesionista' && filtrosAtuais.adesionista !== 'todos' && adesionistaKey(c) !== filtrosAtuais.adesionista) return false;
+    if (ignorar !== 'canal' && filtrosAtuais.canal !== 'todos' && canalKey(c) !== filtrosAtuais.canal) return false;
+    if (ignorar !== 'status' && filtrosAtuais.status !== 'todos' && c.status !== filtrosAtuais.status) return false;
+
+    if (ignorar === 'busca') return true;
+
+    const termo = filtrosAtuais.busca.trim().toLocaleLowerCase('pt-BR');
     return !termo ||
       [c.empresa_nome, c.plano_nome, c.vendedor_nome, c.adesionista_nome]
         .some((texto) => (texto || '').toLocaleLowerCase('pt-BR').includes(termo)) ||
@@ -997,6 +996,74 @@ export function Dashboard() {
         return codigo !== null && (nomePlanosPorCodigo.get(codigo) || '').includes(termo);
       }));
   };
+
+  const registrosPeriodoAtual = registros.filter((c) =>
+    c.created_at >= new Date(datas.inicioAtual + 'T00:00:00').toISOString() &&
+    c.created_at < new Date(datas.fimExclusivo + 'T00:00:00').toISOString()
+  );
+
+  const opcoes = useMemo(() => {
+    const unicos = (
+      items: DashboardCadastro[],
+      chave: (c: DashboardCadastro) => string,
+      nome: (c: DashboardCadastro) => string,
+    ) => Array.from(
+      new Map(items.map((c) => [chave(c), { value: chave(c), label: nome(c) }])).values(),
+    ).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+
+    const porFaceta = (faceta: keyof Filtros) =>
+      registrosPeriodoAtual.filter((c) => registroCombinaFiltros(c, faceta));
+
+    const equipeNomePorId = new Map(equipes.map((e) => [e.id, e.name]));
+    const equipeItems = porFaceta('equipe')
+      .filter((c) => Boolean(c.team_id))
+      .map((c) => ({
+        value: String(c.team_id),
+        label: equipeNomePorId.get(String(c.team_id)) || 'Equipe não identificada',
+      }));
+    const equipesDisponiveis = Array.from(
+      new Map(equipeItems.map((item) => [item.value, item])).values(),
+    ).sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+
+    const canalDisponivel = new Set(porFaceta('canal').map(canalKey));
+    const statusDisponivel = new Set(porFaceta('status').map((c) => c.status));
+
+    return {
+      equipes: gerencial
+        ? equipesDisponiveis
+        : equipesDisponiveis.filter((e) => e.value === profile?.team_id),
+      empresas: unicos(porFaceta('empresa'), empresaKey, empresaLabel),
+      vendedores: unicos(
+        porFaceta('vendedor'),
+        vendedorKey,
+        (c) => c.vendedor_nome || 'Sem vendedor',
+      ),
+      adesionistas: unicos(
+        porFaceta('adesionista'),
+        adesionistaKey,
+        (c) => c.adesionista_nome || 'Sem adesionista',
+      ),
+      canais: [
+        { value: 'interno', label: 'Interno' },
+        { value: 'publico', label: 'Link / QR Code' },
+      ].filter((item) => canalDisponivel.has(item.value)),
+      status: ESTADOS
+        .filter((item) => statusDisponivel.has(item.key))
+        .map((item) => ({ value: item.key, label: item.titulo })),
+    };
+  }, [
+    registros,
+    equipes,
+    datas.inicioAtual,
+    datas.fimExclusivo,
+    gerencial,
+    profile?.team_id,
+    filtros,
+    equipeRestrita,
+    catalogoPlanos,
+  ]);
+
+  const aplicar = (c: DashboardCadastro) => registroCombinaFiltros(c);
   const filtrados = registros.filter(aplicar);
   const limiteInicioAtual = new Date(datas.inicioAtual + 'T00:00:00').toISOString();
   const limiteFimAtual = new Date(datas.fimExclusivo + 'T00:00:00').toISOString();
@@ -1011,8 +1078,7 @@ export function Dashboard() {
     (c) => c.adesionista_nome || 'Sem adesionista').filter((g) => g.key !== 'sem-adesionista');
   const semVendedor = atual.cadastros.filter((c) => vendedorKey(c) === 'sem-vendedor').length;
   const semAdesionista = atual.cadastros.filter((c) => adesionistaKey(c) === 'sem-adesionista').length;
-  const porEmpresa = agrupar(atual.cadastros, empresaKey,
-    (c) => c.empresa_nome || 'Não informada');
+  const porEmpresa = agrupar(atual.cadastros, empresaKey, empresaLabel);
   const motivos = ESTADOS.filter((s) => s.key !== 'enviado')
     .map((s) => ({ ...s, total: atual.cadastros.filter((c) => c.status === s.key).length }));
 
@@ -1076,8 +1142,32 @@ export function Dashboard() {
     },
   };
 
-  const alterarFiltro = (nome: keyof Filtros, valor: string) =>
-    setFiltros((estado) => ({ ...estado, [nome]: valor }));
+  const alterarFiltro = (nome: keyof Filtros, valor: string) => {
+    setFiltros((estado) => {
+      const proximo = { ...estado, [nome]: valor } as Filtros;
+      if (nome === 'busca') return proximo;
+
+      const facetas: (keyof Filtros)[] = [
+        'equipe', 'empresa', 'vendedor', 'adesionista', 'canal', 'status',
+      ];
+
+      for (const faceta of facetas) {
+        if (faceta === nome || faceta === 'equipe' && equipeRestrita) continue;
+        if (proximo[faceta] === 'todos') continue;
+
+        const aindaCompativel = registrosPeriodoAtual.some((registro) =>
+          registroCombinaFiltros(registro, undefined, proximo)
+        );
+        if (!aindaCompativel) {
+          proximo[faceta] = 'todos';
+        }
+      }
+
+      return proximo;
+    });
+  };
+
+  const limparFiltros = () => setFiltros({ ...EMPTY_FILTERS });
 
   const atualizarDashboard = () => {
     if (profile?.id) limparCacheDashboard(profile.id);
@@ -1144,24 +1234,32 @@ export function Dashboard() {
           desabilitado={!gerencial}
           escolhas={equipeRestrita
             ? [{ value: equipeRestrita, label: equipes.find((e) => e.id === equipeRestrita)?.name || 'Minha equipe' }]
-            : gerencial ? [{ value: 'todos', label: 'Todas as equipes' }, ...opcoes.equipes.map((e) => ({ value: e.id, label: e.name }))].filter((e) => e.value !== 'todos')
+            : gerencial ? opcoes.equipes
               : [{ value: 'todos', label: 'Escopo do meu perfil' }]} />
         <CampoFiltro nome="empresa" titulo="Empresa" escolhas={opcoes.empresas} />
         <CampoFiltro nome="vendedor" titulo="Vendedor" escolhas={opcoes.vendedores} />
         <CampoFiltro nome="adesionista" titulo="Adesionista" escolhas={opcoes.adesionistas} />
-        <CampoFiltro nome="canal" titulo="Canal" escolhas={[
-          { value: 'interno', label: 'Interno' },
-          { value: 'publico', label: 'Link / QR Code' },
-        ]} />
-        <CampoFiltro nome="status" titulo="Situação"
-          escolhas={ESTADOS.map((s) => ({ value: s.key, label: s.titulo }))} />
+        <CampoFiltro nome="canal" titulo="Canal" escolhas={opcoes.canais} />
+        <CampoFiltro nome="status" titulo="Situação" escolhas={opcoes.status} />
       </div>
-      <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
-        <Filter className="h-4 w-4 text-slate-500" />
-        <span className="sr-only">Buscar por nome de empresa, plano ou profissional</span>
-        <input className="w-full bg-transparent text-sm outline-none" placeholder="Buscar empresa, plano ou profissional..."
-          value={filtros.busca} onChange={(e) => alterarFiltro('busca', e.target.value)} />
-      </label>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <label className="flex flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+          <Filter className="h-4 w-4 text-slate-500" />
+          <span className="sr-only">Buscar por nome de empresa, plano ou profissional</span>
+          <input className="w-full bg-transparent text-sm outline-none" placeholder="Buscar empresa, plano ou profissional..."
+            value={filtros.busca} onChange={(e) => alterarFiltro('busca', e.target.value)} />
+        </label>
+        <button
+          type="button"
+          onClick={limparFiltros}
+          disabled={Object.entries(filtros).every(([key, value]) =>
+            key === 'busca' ? value === '' : value === 'todos'
+          )}
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Limpar filtros
+        </button>
+      </div>
 
       {erro && <div role="alert" className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
         <AlertCircle className="h-5 w-5 shrink-0" />

@@ -62,20 +62,20 @@ export function PublicCadastroLinkPreview() {
               </div>
               <div>
                 <p className="text-emerald-100 text-sm uppercase tracking-[0.18em]">Preview local</p>
-                <h1 className="text-2xl font-bold">Adesao por Link</h1>
+                <h1 className="text-2xl font-bold">Adesão por Link</h1>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-white/10 border border-white/15 rounded-2xl p-4">
                 <p className="text-emerald-100 text-xs uppercase tracking-[0.18em] mb-2">Empresa</p>
-                <p className="text-lg font-semibold">Odontoart Clinicas Integradas</p>
-                <p className="text-sm text-emerald-100">Codigo 4451</p>
+                <p className="text-lg font-semibold">Odontoart Clínicas Integradas</p>
+                <p className="text-sm text-emerald-100">Código 4451</p>
               </div>
               <div className="bg-white/10 border border-white/15 rounded-2xl p-4">
                 <p className="text-emerald-100 text-xs uppercase tracking-[0.18em] mb-2">Vendedor</p>
                 <p className="text-lg font-semibold">Carlos Henrique</p>
-                <p className="text-sm text-emerald-100">Codigo 9876</p>
+                <p className="text-sm text-emerald-100">Código 9876</p>
               </div>
             </div>
           </div>
@@ -89,7 +89,7 @@ export function PublicCadastroLinkPreview() {
                 <div>
                   <h2 className="text-lg font-semibold text-slate-800">Titular e Dependentes</h2>
                   <p className="text-sm text-slate-600">
-                    Este preview usa o mesmo componente real da tela publica para voce validar a nova acao de plano.
+                    Este preview usa o mesmo componente real da tela publica para você validar a nova ação de plano.
                   </p>
                 </div>
               </div>

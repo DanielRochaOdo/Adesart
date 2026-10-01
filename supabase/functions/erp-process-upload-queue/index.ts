@@ -1,311 +1,549 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { corsHeaders, createServiceClient, jsonResponse } from "../_shared/public-flow.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey",
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
+
+class UploadQueueError extends Error {
+  statusCode: number | null;
+  code: string;
+
+  constructor(message: string, code: string, statusCode: number | null = null) {
+    super(message);
+    this.name = "UploadQueueError";
+    this.code = code;
+    this.statusCode = statusCode;
+  }
+}
+
+const toBase64 = (bytes: Uint8Array) => {
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, Math.min(i + chunk, bytes.length)));
+  }
+  return btoa(binary);
 };
 
-interface QueueItem {
-  id: string;
-  cadastro_id: string;
-  id_funcionario: number;
-  id_dependente: number;
-  arquivo_path: string;
-  arquivo_nome: string;
-  bucket: string;
-  tipo: string;
-  attempts: number;
-  status: string;
-}
+const authorize = async (req: Request, supabase: any) => {
+  const expectedServiceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const bearer = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
 
-async function processQueueItem(
-  supabase: any,
-  item: QueueItem
-): Promise<{ success: boolean; error?: string; statusCode?: number; response?: any }> {
-  try {
-    console.log(`Processando item ${item.id} - tentativa ${item.attempts + 1}/5`);
-
-    const { data: fileData, error: downloadError } = await supabase.storage
-      .from(item.bucket)
-      .download(item.arquivo_path);
-
-    if (downloadError || !fileData) {
-      console.error(`Erro ao baixar arquivo ${item.arquivo_path}:`, downloadError);
-      return {
-        success: false,
-        error: `Erro ao baixar arquivo: ${downloadError?.message || 'Arquivo não encontrado'}`,
-        statusCode: 404,
-      };
-    }
-
-    const arrayBuffer = await fileData.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
-    let binary = '';
-    for (let i = 0; i < uint8Array.byteLength; i++) {
-      binary += String.fromCharCode(uint8Array[i]);
-    }
-    const base64 = btoa(binary);
-
-    const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
-    const ERP_ENDPOINT = Deno.env.get("ERP_ENDPOINT") || "https://odontoart.s4e.com.br";
-    const ERP_URL = `${ERP_ENDPOINT}/api/dependente/UploadDocDependente?token=${ERP_TOKEN}`;
-
-    if (!ERP_TOKEN) {
-      return {
-        success: false,
-        error: "ERP_TOKEN não configurado",
-        statusCode: 500,
-      };
-    }
-
-    const erpPayload = {
-      idFuncionario: item.id_funcionario,
-      idDependente: item.id_dependente,
-      arquivo: base64,
-      arquivoNome: item.arquivo_nome,
-    };
-
-    console.log(`Enviando documento para ERP: ${item.arquivo_nome}`);
-
-    const erpResponse = await fetch(ERP_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(erpPayload),
-    });
-
-    const responseData = await erpResponse.json();
-    const statusCode = erpResponse.status;
-
-    if (!erpResponse.ok) {
-      const errorMsg = responseData.message || responseData?.mensagem || "Erro ao enviar documento para o ERP";
-      console.error(`Erro no ERP (${statusCode}):`, errorMsg);
-      return {
-        success: false,
-        error: errorMsg,
-        statusCode,
-        response: responseData,
-      };
-    }
-
-    console.log(`Documento enviado com sucesso! Removendo do bucket...`);
-
-    const { error: deleteError } = await supabase.storage
-      .from(item.bucket)
-      .remove([item.arquivo_path]);
-
-    if (deleteError) {
-      console.warn(`Aviso: Não foi possível deletar arquivo ${item.arquivo_path}:`, deleteError);
-    }
-
-    return {
-      success: true,
-      statusCode: 200,
-      response: responseData,
-    };
-  } catch (error) {
-    console.error(`Erro ao processar item ${item.id}:`, error);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : "Erro desconhecido",
-      statusCode: 500,
-    };
+  if (expectedServiceRole && bearer && bearer === expectedServiceRole) {
+    return { ok: true, source: "service_role", userId: null };
   }
-}
 
-async function processQueueInBackground(supabaseClient: any, queueItems: QueueItem[]) {
-  console.log(`Processando ${queueItems.length} itens em background com intervalo de 10s entre uploads...`);
+  const internalToken = (req.headers.get("X-Queue-Worker-Token") || "").trim();
+  if (internalToken) {
+    const { data, error } = await supabase
+      .from("erp_upload_queue_worker_secret")
+      .select("token")
+      .eq("singleton", true)
+      .maybeSingle();
 
-  const results = {
-    processed: 0,
-    success: 0,
-    failed: 0,
-    retry: 0,
-    errors: [] as any[],
+    if (!error && data?.token && data.token === internalToken) {
+      return { ok: true, source: "cron", userId: null };
+    }
+  }
+
+  if (!bearer) return { ok: false, source: "unknown", userId: null };
+
+  const { data: userData } = await supabase.auth.getUser(bearer);
+  const user = userData?.user;
+  if (!user) return { ok: false, source: "unknown", userId: null };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!["ADMINISTRADOR", "CADASTRO", "GERENTE"].includes(String(profile?.role || ""))) {
+    return { ok: false, source: "user", userId: user.id };
+  }
+
+  return { ok: true, source: "manual", userId: user.id };
+};
+
+const extractErpAcceptance = (result: any) => {
+  const rawCode =
+    result?.codigo ??
+    result?.dados?.codigo ??
+    result?.data?.codigo ??
+    result?.data?.dados?.codigo;
+
+  const erpCode = rawCode === null || rawCode === undefined || rawCode === ""
+    ? null
+    : Number(rawCode);
+
+  const erpMessage = String(
+    result?.message ??
+    result?.mensagem ??
+    result?.dados?.mensagem ??
+    result?.data?.mensagem ??
+    "",
+  ).trim();
+
+  const hasErrors = Array.isArray(result?.erros)
+    ? result.erros.length > 0
+    : Boolean(result?.erros);
+
+  return {
+    erpCode,
+    erpMessage,
+    accepted:
+      erpCode === 1 &&
+      result?.success !== false &&
+      !hasErrors,
   };
+};
 
-  for (const item of queueItems) {
-    const { error: lockError } = await supabaseClient
-      .from("erp_upload_queue")
-      .update({ status: "processing", last_attempt_at: new Date().toISOString() })
-      .eq("id", item.id)
-      .eq("status", item.status);
+const uploadItem = async (supabase: any, item: any) => {
+  const { data, error } = await supabase.storage
+    .from(item.bucket)
+    .download(item.arquivo_path);
 
-    if (lockError) {
-      console.log(`Item ${item.id} já está sendo processado`);
-      continue;
-    }
-
-    results.processed++;
-
-    const result = await processQueueItem(supabaseClient, item);
-
-    const newAttempts = item.attempts + 1;
-
-    if (result.success) {
-      await supabaseClient
-        .from("erp_upload_queue")
-        .update({
-          status: "success",
-          attempts: newAttempts,
-          last_attempt_at: new Date().toISOString(),
-          erp_response: result.response,
-          last_status_code: result.statusCode,
-        })
-        .eq("id", item.id);
-
-      results.success++;
-      console.log(`✓ Item ${item.id} processado com sucesso`);
-    } else {
-      const isFinalFailure = newAttempts >= 5;
-      const newStatus = isFinalFailure ? "failed" : "retry_wait";
-
-      const nextAttempt = new Date();
-      nextAttempt.setMinutes(nextAttempt.getMinutes() + 10);
-
-      await supabaseClient
-        .from("erp_upload_queue")
-        .update({
-          status: newStatus,
-          attempts: newAttempts,
-          last_attempt_at: new Date().toISOString(),
-          next_attempt_at: isFinalFailure ? null : nextAttempt.toISOString(),
-          last_error: result.error,
-          last_status_code: result.statusCode,
-          erp_response: result.response,
-        })
-        .eq("id", item.id);
-
-      if (isFinalFailure) {
-        results.failed++;
-        console.error(`✗ Item ${item.id} falhou permanentemente após 5 tentativas`);
-      } else {
-        results.retry++;
-        console.warn(`⟳ Item ${item.id} falhará nova tentativa em 10 minutos (tentativa ${newAttempts}/5)`);
-      }
-
-      results.errors.push({
-        id: item.id,
-        error: result.error,
-        attempts: newAttempts,
-        final_failure: isFinalFailure,
-      });
-    }
-
-    if (queueItems.indexOf(item) < queueItems.length - 1) {
-      console.log(`Aguardando 10 segundos antes do próximo upload...`);
-      await new Promise(resolve => setTimeout(resolve, 10000));
-    }
+  if (error || !data) {
+    throw new UploadQueueError(
+      `Arquivo nao encontrado no Storage: ${error?.message || item.arquivo_path}`,
+      "FILE_NOT_FOUND",
+      404,
+    );
   }
 
-  console.log(`Processamento em background concluído:`, results);
-  return results;
-}
+  const bytes = new Uint8Array(await data.arrayBuffer());
+
+  if (bytes.length === 0) {
+    throw new UploadQueueError("Arquivo vazio no Storage", "EMPTY_FILE", 422);
+  }
+
+  if (bytes.length > MAX_FILE_BYTES) {
+    throw new UploadQueueError(
+      `Arquivo excede o limite de 5 MB aceito pelo ERP (${bytes.length} bytes)`,
+      "FILE_TOO_LARGE",
+      413,
+    );
+  }
+
+  const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
+  let ERP_ENDPOINT =
+    Deno.env.get("ERP_ENDPOINT") ||
+    Deno.env.get("ERP_BASE_URL") ||
+    "https://odontoart.s4e.com.br";
+
+  if (!ERP_TOKEN) {
+    throw new UploadQueueError("ERP_TOKEN not configured", "ERP_CONFIG", 500);
+  }
+
+  if (!/^https?:\/\//i.test(ERP_ENDPOINT)) {
+    ERP_ENDPOINT = `https://${ERP_ENDPOINT}`;
+  }
+  ERP_ENDPOINT = ERP_ENDPOINT.replace(/\/+$/, "");
+
+  let response: Response;
+  try {
+    response = await fetch(
+      `${ERP_ENDPOINT}/api/dependente/UploadDocDependente?token=${encodeURIComponent(ERP_TOKEN)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          idFuncionario: item.id_funcionario,
+          idDependente: item.id_dependente,
+          arquivo: toBase64(bytes),
+          arquivoNome: item.arquivo_nome,
+        }),
+        signal: AbortSignal.timeout(45_000),
+      },
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new UploadQueueError(
+      `Falha de conexao com o ERP: ${message}`,
+      "ERP_NETWORK",
+      null,
+    );
+  }
+
+  const responseText = await response.text();
+  let result: any = {};
+  try {
+    result = responseText ? JSON.parse(responseText) : {};
+  } catch {
+    throw new UploadQueueError(
+      `ERP retornou conteudo invalido: ${responseText.slice(0, 300)}`,
+      "ERP_INVALID_RESPONSE",
+      response.status,
+    );
+  }
+
+  if (!response.ok) {
+    throw new UploadQueueError(
+      String(
+        result?.message ||
+        result?.mensagem ||
+        `ERP respondeu HTTP ${response.status}`,
+      ),
+      "ERP_HTTP",
+      response.status,
+    );
+  }
+
+  const acceptance = extractErpAcceptance(result);
+  if (!acceptance.accepted) {
+    throw new UploadQueueError(
+      acceptance.erpMessage ||
+        (acceptance.erpCode !== null
+          ? `ERP rejeitou o arquivo com codigo ${acceptance.erpCode}`
+          : "ERP nao confirmou o aceite do arquivo"),
+      "ERP_REJECTED",
+      response.status,
+    );
+  }
+
+  return {
+    result,
+    fileSize: bytes.length,
+    erpCode: acceptance.erpCode,
+    erpMessage: acceptance.erpMessage,
+  };
+};
+
+const retryDelayMs = (attempt: number) => {
+  const minutes = [1, 5, 15, 30];
+  const index = Math.min(Math.max(attempt - 1, 0), minutes.length - 1);
+  return minutes[index] * 60_000;
+};
+
+const isRetryableError = (error: unknown) => {
+  if (!(error instanceof UploadQueueError)) return true;
+
+  if (error.code === "ERP_NETWORK") return true;
+
+  if (error.code === "ERP_HTTP") {
+    const status = Number(error.statusCode || 0);
+    return status === 408 || status === 425 || status === 429 || status >= 500;
+  }
+
+  if (
+    [
+      "FILE_NOT_FOUND",
+      "EMPTY_FILE",
+      "FILE_TOO_LARGE",
+      "ERP_CONFIG",
+      "ERP_INVALID_RESPONSE",
+      "ERP_REJECTED",
+    ].includes(error.code)
+  ) {
+    return false;
+  }
+
+  return true;
+};
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders,
-    });
+    return new Response(null, { status: 200, headers: corsHeaders });
+  }
+  if (req.method !== "POST") {
+    return jsonResponse({ error: "Metodo nao permitido" }, 405);
   }
 
+  const supabase = createServiceClient();
+  const authorization = await authorize(req, supabase);
+  if (!authorization.ok) {
+    return jsonResponse({ error: "Nao autorizado" }, 401);
+  }
+
+  let requestBody: Record<string, unknown> = {};
   try {
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-        },
-      }
+    requestBody = await req.json();
+  } catch {
+    requestBody = {};
+  }
+
+  const requestedLimit = Number(requestBody.limit || 20);
+  const limit = Math.max(
+    1,
+    Math.min(Number.isFinite(requestedLimit) ? requestedLimit : 20, 50),
+  );
+  const source = String(
+    requestBody.source || authorization.source || "worker",
+  );
+
+  let workerLockToken: string | null = null;
+
+  try {
+    const { data: lockToken, error: lockError } = await supabase.rpc(
+      "acquire_erp_upload_worker_lock_v1",
+      { p_source: source, p_lease_seconds: 600 },
     );
 
-    console.log("Verificando e resetando itens travados...");
-    const { data: resetResult, error: resetError } = await supabaseClient
-      .rpc("reset_stuck_queue_items", { stuck_threshold_minutes: 15 });
+    if (lockError) {
+      throw new Error(`Falha ao adquirir lock global do worker: ${lockError.message}`);
+    }
+
+    workerLockToken = typeof lockToken === "string" && lockToken.trim()
+      ? lockToken.trim()
+      : null;
+
+    if (!workerLockToken) {
+      return jsonResponse({
+        ok: true,
+        skipped: true,
+        code: "WORKER_ALREADY_RUNNING",
+        message: "A fila ja esta sendo processada por outro worker.",
+        processed: 0,
+        success: 0,
+        retry_wait: 0,
+        failed: 0,
+        source,
+      }, 202);
+    }
+
+    const { error: resetError } = await supabase.rpc(
+      "reset_stuck_queue_items_v3",
+      { stuck_threshold_minutes: 10 },
+    );
 
     if (resetError) {
-      console.warn("Aviso: Erro ao resetar itens travados:", resetError);
-    } else if (resetResult && resetResult.length > 0) {
-      const { reset_count } = resetResult[0];
-      if (reset_count > 0) {
-        console.log(`✓ ${reset_count} item(ns) travado(s) foram resetados`);
-      }
-    }
-
-    const now = new Date().toISOString();
-
-    const { data: queueItems, error: fetchError } = await supabaseClient
-      .from("erp_upload_queue")
-      .select("*")
-      .in("status", ["queued", "retry_wait"])
-      .lt("attempts", 5)
-      .lte("next_attempt_at", now)
-      .order("created_at", { ascending: true })
-      .limit(100);
-
-    if (fetchError) {
-      console.error("Erro ao buscar itens da fila:", fetchError);
-      return new Response(
-        JSON.stringify({ error: "Erro ao buscar fila", details: fetchError.message }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+      console.warn(
+        "[erp-process-upload-queue] Falha ao recuperar itens travados:",
+        resetError.message,
       );
     }
 
-    if (!queueItems || queueItems.length === 0) {
-      console.log("Nenhum item elegível para processamento");
-      return new Response(
-        JSON.stringify({
-          message: "Nenhum item na fila para processar",
-          queued_count: 0
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    console.log(`Encontrados ${queueItems.length} itens na fila. Iniciando processamento em background...`);
-
-    const ctx = (req as any).ctx;
-    if (ctx && typeof ctx.waitUntil === 'function') {
-      ctx.waitUntil(processQueueInBackground(supabaseClient, queueItems));
-    } else {
-      processQueueInBackground(supabaseClient, queueItems);
-    }
-
-    return new Response(
-      JSON.stringify({
-        message: "Processamento iniciado em background",
-        queued_count: queueItems.length,
-        estimated_time_seconds: queueItems.length * 10,
-        note: "Os itens serão processados automaticamente. Acompanhe o status na tela."
-      }),
-      {
-        status: 202,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+    const { data: items, error } = await supabase.rpc(
+      "claim_erp_upload_queue_v4",
+      { p_limit: limit },
     );
+    if (error) throw error;
+
+    const claimed = Array.isArray(items) ? items : [];
+    const results: Array<Record<string, unknown>> = [];
+
+    const processOne = async (item: any) => {
+      const attempts = Number(item.attempts || 0) + 1;
+      const processingToken = String(item.processing_token || "").trim();
+
+      if (!processingToken) {
+        results.push({
+          id: item.id,
+          status: "worker_error",
+          error_code: "MISSING_PROCESSING_TOKEN",
+        });
+        return;
+      }
+
+      try {
+        const uploaded = await uploadItem(supabase, item);
+        const now = new Date().toISOString();
+
+        const { data: completed, error: updateError } = await supabase
+          .from("erp_upload_queue")
+          .update({
+            status: "success",
+            attempts,
+            last_attempt_at: now,
+            next_attempt_at: null,
+            finished_at: now,
+            claimed_at: null,
+            processing_token: null,
+            processing_started_at: null,
+            erp_response: uploaded.result,
+            last_status_code: 200,
+            last_error: null,
+            last_error_code: null,
+            file_size_bytes: uploaded.fileSize,
+            worker_source: source,
+            error_resolution:
+              Number(item.replacement_count || 0) > 0 ||
+                Number(item.manual_reprocess_count || 0) > 0
+                ? "REPROCESSED_SUCCESS"
+                : null,
+            resolved_at:
+              Number(item.replacement_count || 0) > 0 ||
+                Number(item.manual_reprocess_count || 0) > 0
+                ? now
+                : null,
+          })
+          .eq("id", item.id)
+          .eq("processing_token", processingToken)
+          .select("id")
+          .maybeSingle();
+
+        if (updateError) {
+          throw new UploadQueueError(
+            `Falha ao registrar sucesso na fila: ${updateError.message}`,
+            "QUEUE_STATE_UPDATE",
+            500,
+          );
+        }
+
+        if (!completed?.id) {
+          results.push({
+            id: item.id,
+            status: "claim_lost",
+            error_code: "CLAIM_LOST",
+          });
+          return;
+        }
+
+        const { error: removeError } = await supabase.storage
+          .from(item.bucket)
+          .remove([item.arquivo_path]);
+
+        results.push({
+          id: item.id,
+          status: "success",
+          erp_code: uploaded.erpCode,
+          erp_message: uploaded.erpMessage,
+          cleanup_warning: removeError?.message || null,
+        });
+      } catch (itemError) {
+        const retryable = isRetryableError(itemError);
+        const finalFailure = !retryable || attempts >= 5;
+        const message =
+          itemError instanceof Error ? itemError.message : String(itemError);
+        const statusCode =
+          itemError instanceof UploadQueueError
+            ? itemError.statusCode
+            : null;
+        const errorCode =
+          itemError instanceof UploadQueueError
+            ? itemError.code
+            : "WORKER_ERROR";
+
+        const now = new Date().toISOString();
+        const nextAttemptAt = finalFailure
+          ? null
+          : new Date(Date.now() + retryDelayMs(attempts)).toISOString();
+
+        const { data: failedRow, error: failureUpdateError } = await supabase
+          .from("erp_upload_queue")
+          .update({
+            status: finalFailure ? "failed" : "retry_wait",
+            attempts,
+            last_attempt_at: now,
+            next_attempt_at: nextAttemptAt,
+            finished_at: finalFailure ? now : null,
+            claimed_at: null,
+            processing_token: null,
+            processing_started_at: null,
+            last_error: message.slice(0, 1000),
+            last_error_code: errorCode,
+            last_status_code: statusCode,
+            worker_source: source,
+            error_resolution:
+              finalFailure &&
+                (
+                  Number(item.replacement_count || 0) > 0 ||
+                  Number(item.manual_reprocess_count || 0) > 0
+                )
+                ? "REPROCESS_FAILED"
+                : null,
+            resolved_at: null,
+          })
+          .eq("id", item.id)
+          .eq("processing_token", processingToken)
+          .select("id")
+          .maybeSingle();
+
+        if (failureUpdateError) {
+          console.error(
+            "[erp-process-upload-queue] Falha ao persistir erro do item",
+            item.id,
+            failureUpdateError,
+          );
+          results.push({
+            id: item.id,
+            status: "queue_update_failed",
+            error_code: errorCode,
+            details: failureUpdateError.message,
+          });
+          return;
+        }
+
+        if (!failedRow?.id) {
+          results.push({
+            id: item.id,
+            status: "claim_lost",
+            error_code: "CLAIM_LOST",
+          });
+          return;
+        }
+
+        results.push({
+          id: item.id,
+          status: finalFailure ? "failed" : "retry_wait",
+          retryable,
+          attempts,
+          error_code: errorCode,
+          status_code: statusCode,
+        });
+      }
+    };
+
+    const concurrency = 3;
+    for (let index = 0; index < claimed.length; index += concurrency) {
+      await Promise.all(
+        claimed.slice(index, index + concurrency).map(processOne),
+      );
+    }
+
+    const successCount = results.filter(
+      (item) => item.status === "success",
+    ).length;
+    const retryCount = results.filter(
+      (item) => item.status === "retry_wait",
+    ).length;
+    const failedCount = results.filter(
+      (item) => item.status === "failed",
+    ).length;
+    const claimLostCount = results.filter(
+      (item) => item.status === "claim_lost",
+    ).length;
+    const workerErrorCount = results.filter(
+      (item) =>
+        item.status === "worker_error" ||
+        item.status === "queue_update_failed",
+    ).length;
+
+    return jsonResponse({
+      ok: workerErrorCount === 0,
+      message:
+        claimed.length === 0
+          ? "Nenhum documento elegivel para processamento."
+          : `${claimed.length} documento(s) processado(s): ${successCount} sucesso, ${retryCount} nova tentativa, ${failedCount} falha definitiva, ${claimLostCount} claim expirado.`,
+      processed: claimed.length,
+      success: successCount,
+      retry_wait: retryCount,
+      failed: failedCount,
+      claim_lost: claimLostCount,
+      worker_errors: workerErrorCount,
+      source,
+      results,
+    });
   } catch (error) {
-    console.error("Erro no worker de processamento:", error);
-    return new Response(
-      JSON.stringify({
-        error: "Erro no worker",
-        details: error instanceof Error ? error.message : "Erro desconhecido",
-      }),
+    console.error("[erp-process-upload-queue]", error);
+    return jsonResponse(
       {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+        error: "Erro ao processar fila ERP",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      500,
     );
+  } finally {
+    if (workerLockToken) {
+      const { error: releaseError } = await supabase.rpc(
+        "release_erp_upload_worker_lock_v1",
+        { p_token: workerLockToken },
+      );
+      if (releaseError) {
+        console.warn(
+          "[erp-process-upload-queue] Falha ao liberar lock global:",
+          releaseError.message,
+        );
+      }
+    }
   }
 });

@@ -13,6 +13,7 @@ import { Cadastro } from './pages/Cadastro';
 import { ConfiguracoesCadastro } from './pages/ConfiguracoesCadastro';
 import { AuditoriaLemmit } from './pages/AuditoriaLemmit';
 import { FilaUploadERP } from './pages/FilaUploadERP';
+import { ErrosUploadERP } from './pages/ErrosUploadERP';
 import { AdesoesExcluidas } from './pages/AdesoesExcluidas';
 import { PublicCadastroLink } from './pages/PublicCadastroLink';
 import { PublicCadastroLinkPreview } from './pages/PublicCadastroLinkPreview';
@@ -35,6 +36,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/adesao/:token" element={<PublicCadastroLink />} />
+      <Route path="/adesao" element={<PublicCadastroLink />} />
       <Route path="/preview/link-plano" element={<PublicCadastroLinkPreview />} />
       <Route
         path="/login"
@@ -51,7 +53,7 @@ function AppRoutes() {
       <Route
         path="/users"
         element={
-          <ProtectedRoute allowedRoles={['ADMINISTRADOR', 'GERENTE', 'SUPERVISOR']}>
+          <ProtectedRoute allowedRoles={['ADMINISTRADOR', 'GERENTE', 'SUPERVISOR', 'CADASTRO']}>
             <Users />
           </ProtectedRoute>
         }
@@ -75,7 +77,7 @@ function AppRoutes() {
       <Route
         path="/configuracoes"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRoles={['ADMINISTRADOR']}>
             <ConfiguracoesCadastro />
           </ProtectedRoute>
         }
@@ -91,8 +93,16 @@ function AppRoutes() {
       <Route
         path="/fila-upload-erp"
         element={
-          <ProtectedRoute allowedRoles={['ADMINISTRADOR']}>
+          <ProtectedRoute allowedRoles={['ADMINISTRADOR', 'CADASTRO', 'GERENTE']}>
             <FilaUploadERP />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/fila-upload-erp/erros"
+        element={
+          <ProtectedRoute allowedRoles={['ADMINISTRADOR', 'CADASTRO', 'GERENTE']}>
+            <ErrosUploadERP />
           </ProtectedRoute>
         }
       />

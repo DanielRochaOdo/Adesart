@@ -286,17 +286,17 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
     const linhas = cadastrosFiltrados.map((cadastro) => {
       const statusAdesao = statusList.find((status) => status.id === cadastro.status_adesao_id);
       const exibirCpf = cadastro.cpf && !cadastro.cpf.includes('-');
-      const tipoCadastroLabel = cadastro.tipo_cadastro === 'inclusao_dependente' ? 'Inclusao de Dependente' : 'Cadastro';
+      const tipoCadastroLabel = cadastro.tipo_cadastro === 'inclusao_dependente' ? 'Inclusão de Dependente' : 'Cadastro';
 
       return {
         tipo: tipoCadastroLabel,
-        nome: cadastro.nome || 'Nome nao informado',
+        nome: cadastro.nome || 'Nome não informado',
         cpf: exibirCpf ? formatCPF(cadastro.cpf as string) : '',
         nascimento: cadastro.data_nascimento ? formatDate(cadastro.data_nascimento) : '',
         empresa: cadastro.empresa_nome || '',
         cnpj: cadastro.empresa_cnpj || '',
         vendedor: cadastro.vendedor_nome || '',
-        bloqueado: cadastro.motivo_bloqueio ? 'Sim' : 'Nao',
+        bloqueado: cadastro.motivo_bloqueio ? 'Sim' : 'Não',
         motivo_bloqueio: cadastro.motivo_bloqueio || '',
         status_adesao: statusAdesao?.nome || '',
         atualizado_em: new Date(cadastro.updated_at).toLocaleString('pt-BR'),
@@ -308,7 +308,7 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
     XLSX.utils.book_append_sheet(workbook, worksheet, 'AdesoesPendentes');
 
     const dataAtual = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(workbook, `adesoes-pendentes-${dataAtual}.xlsx`);
+    XLSX.writeFile(workbook, `adesões-pendentes-${dataAtual}.xlsx`);
   };
 
 

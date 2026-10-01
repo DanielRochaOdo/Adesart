@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -7,6 +8,25 @@ import { formatCPF, formatDate } from '../lib/cpf';
 import { Button } from '../components/Button';
 import { Select } from '../components/Select';
 import { usePersistentState } from '../hooks/usePersistentState';
+
+interface QueueHealth {
+  total: number;
+  queued: number;
+  processing: number;
+  retry_wait: number;
+  success: number;
+  failed: number;
+  claimable: number;
+  stuck: number;
+  missing_file_pending: number;
+  active_failures: number;
+  historical_failures: number;
+  resolved_failures: number;
+  active_missing_file_failures: number;
+  oldest_pending_at: string | null;
+  last_success_at: string | null;
+  last_failure_at: string | null;
+}
 
 interface QueueItem {
   id: string;
@@ -18,6 +38,11 @@ interface QueueItem {
   last_attempt_at: string | null;
   last_error: string | null;
   last_status_code: number | null;
+  last_error_code?: string | null;
+  file_size_bytes?: number | null;
+  cliente_nome?: string | null;
+  cliente_cpf?: string | null;
+  empresa_nome?: string | null;
   cadastro_id: string;
   id_funcionario: number;
   id_dependente: number;
@@ -36,6 +61,7 @@ const ITEMS_PER_PAGE = 20;
 
 export function FilaUploadERP() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [items, setItems] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const { value: statusFilter, setValue: setStatusFilter } = usePersistentState<string>(
@@ -50,10 +76,11 @@ export function FilaUploadERP() {
   const [processingQueue, setProcessingQueue] = useState(false);
   const [resettingStuck, setResettingStuck] = useState(false);
   const [processingCount, setProcessingCount] = useState(0);
+  const [queueHealth, setQueueHealth] = useState<QueueHealth | null>(null);
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
   useEffect(() => {
-    if (profile?.role === 'ADMINISTRADOR') {
+    if (['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(profile?.role ?? '')) {
       fetchQueueItems();
       const unsubscribe = subscribeToQueueChanges();
       return unsubscribe;
@@ -100,9 +127,9 @@ export function FilaUploadERP() {
       const mappedData = (data || []).map(item => ({
         ...item,
         cadastro: item.cadastros || {
-          nome: `Dependente ID: ${item.id_dependente}`,
-          cpf: '-',
-          empresa_nome: '-'
+          nome: item.cliente_nome || `Dependente ID: ${item.id_dependente}`,
+          cpf: item.cliente_cpf || '-',
+          empresa_nome: item.empresa_nome || '-'
         }
       })) as QueueItem[];
 
@@ -111,6 +138,12 @@ export function FilaUploadERP() {
 
       const processingItems = mappedData.filter(item => item.status === 'processing').length;
       setProcessingCount(processingItems);
+
+      const { data: healthData, error: healthError } = await supabase.rpc('get_erp_upload_queue_health_v1');
+      if (!healthError && healthData) {
+        setQueueHealth(healthData as QueueHealth);
+        setProcessingCount(Number((healthData as QueueHealth).processing || 0));
+      }
     } catch (error) {
       console.error('Erro ao carregar fila:', error);
     } finally {
@@ -181,18 +214,8 @@ export function FilaUploadERP() {
       const result = await response.json();
 
       if (response.ok || response.status === 202) {
-        if (result.queued_count === 0) {
-          alert('Nenhum item na fila para processar no momento.');
-        } else {
-          const estimatedMinutes = Math.ceil(result.estimated_time_seconds / 60);
-          alert(
-            `Processamento iniciado em background!\n\n` +
-            `${result.queued_count} item(ns) sendo processado(s)\n` +
-            `Tempo estimado: ~${estimatedMinutes} minuto(s)\n\n` +
-            `A tela será atualizada automaticamente conforme os uploads são concluídos.`
-          );
-        }
-        fetchQueueItems();
+        alert(result.message || 'Fila processada.');
+        await fetchQueueItems();
       } else {
         alert(`Erro ao iniciar processamento: ${result.error || result.details || 'Erro desconhecido'}`);
       }
@@ -210,23 +233,18 @@ export function FilaUploadERP() {
     }
 
     try {
-      const { error } = await supabase
-        .from('erp_upload_queue')
-        .update({
-          status: 'queued',
-          attempts: 0,
-          next_attempt_at: new Date().toISOString(),
-          last_error: null,
-        })
-        .eq('id', itemId);
+      const { data, error } = await supabase.rpc('requeue_erp_upload_v1', {
+        p_id: itemId,
+        p_scope: 'item',
+      });
 
       if (error) {
-        alert('Erro ao reprocessar item');
+        alert(`Erro ao reprocessar item: ${error.message}`);
         return;
       }
 
-      alert('Item marcado para reprocessamento');
-      fetchQueueItems();
+      alert(`${Number((data as any)?.requeued || 0)} item marcado para reprocessamento.`);
+      await fetchQueueItems();
     } catch (error) {
       console.error('Erro ao reprocessar:', error);
       alert('Erro ao reprocessar item');
@@ -240,28 +258,24 @@ export function FilaUploadERP() {
 
     setResettingStuck(true);
     try {
-      const { data, error } = await supabase.rpc('reset_stuck_queue_items', {
-        stuck_threshold_minutes: 15
+      const { data, error } = await supabase.rpc('reset_stuck_queue_items_v2', {
+        stuck_threshold_minutes: 10
       });
 
       if (error) {
-        console.error('Erro ao resetar itens travados:', error);
-        alert('Erro ao resetar itens travados');
+        console.error('Erro ao liberar itens travados:', error);
+        alert(`Erro ao liberar itens travados: ${error.message}`);
         return;
       }
 
-      if (data && data.length > 0) {
-        const resetCount = data[0].reset_count;
-        if (resetCount > 0) {
-          alert(`${resetCount} item(ns) travado(s) foram resetados com sucesso!`);
-        } else {
-          alert('Nenhum item travado encontrado (15+ minutos em processamento)');
-        }
-      } else {
-        alert('Nenhum item travado encontrado');
-      }
+      const resetCount = Number((data as any)?.reset_count || 0);
+      alert(
+        resetCount > 0
+          ? `${resetCount} item(ns) travado(s) foram liberados para nova tentativa.`
+          : 'Nenhum item travado encontrado.'
+      );
 
-      fetchQueueItems();
+      await fetchQueueItems();
     } catch (error) {
       console.error('Erro ao resetar itens:', error);
       alert('Erro ao resetar itens travados');
@@ -270,13 +284,13 @@ export function FilaUploadERP() {
     }
   };
 
-  if (profile?.role !== 'ADMINISTRADOR') {
+  if (!['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(profile?.role ?? '')) {
     return (
       <Layout>
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12">
           <div className="text-center">
             <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-3" />
-            <p className="text-slate-600">Acesso restrito para administradores</p>
+            <p className="text-slate-600">Acesso permitido para Administrador, Cadastro e Gerente</p>
           </div>
         </div>
       </Layout>
@@ -338,7 +352,19 @@ export function FilaUploadERP() {
             <h1 className="text-3xl font-bold text-slate-800">Fila de Upload ERP</h1>
             <p className="text-slate-600 mt-2">Gerenciamento de uploads de documentos para o ERP</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap justify-end">
+            <Button
+              onClick={() => navigate('/fila-upload-erp/erros?scope=current')}
+              disabled={!queueHealth}
+              variant="secondary"
+              className="flex items-center gap-2"
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Ver Erros
+              {queueHealth && queueHealth.active_failures > 0
+                ? ` (${queueHealth.active_failures})`
+                : ''}
+            </Button>
             <Button
               onClick={handleResetStuckItems}
               disabled={resettingStuck}
@@ -376,6 +402,51 @@ export function FilaUploadERP() {
             </Button>
           </div>
         </div>
+
+        {queueHealth && (
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-9 gap-3">
+            {[
+              { label: 'Aguardando', value: queueHealth.queued },
+              { label: 'Processando', value: queueHealth.processing },
+              { label: 'Nova tentativa', value: queueHealth.retry_wait },
+              {
+                label: 'Falhas atuais',
+                value: queueHealth.active_failures,
+                onClick: () => navigate('/fila-upload-erp/erros?scope=current'),
+                alert: queueHealth.active_failures > 0,
+              },
+              {
+                label: 'Passivo histórico',
+                value: queueHealth.historical_failures,
+                onClick: () => navigate('/fila-upload-erp/erros?scope=historical'),
+              },
+              { label: 'Prontos agora', value: queueHealth.claimable },
+              { label: 'Travados', value: queueHealth.stuck, alert: queueHealth.stuck > 0 },
+              { label: 'Sem arquivo pendente', value: queueHealth.missing_file_pending, alert: queueHealth.missing_file_pending > 0 },
+              { label: 'Concluídos', value: queueHealth.success },
+            ].map((card) => (
+              <button
+                type="button"
+                key={card.label}
+                onClick={card.onClick}
+                disabled={!card.onClick}
+                className={`rounded-xl border p-3 text-left transition ${
+                  card.alert
+                    ? 'border-red-200 bg-red-50'
+                    : 'border-slate-200 bg-white'
+                } ${card.onClick ? 'cursor-pointer hover:border-slate-300 hover:shadow-sm' : 'cursor-default'}`}
+              >
+                <p className="text-xs text-slate-500">{card.label}</p>
+                <p className={`mt-1 text-xl font-bold ${card.alert ? 'text-red-700' : 'text-slate-800'}`}>
+                  {Number(card.value)}
+                </p>
+                {card.onClick && (
+                  <p className="mt-1 text-[11px] font-medium text-slate-400">Ver detalhes</p>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
 
         {processingCount > 0 && (
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">

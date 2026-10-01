@@ -590,7 +590,7 @@ export function DependentesSection({
                       ? 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
                       : 'border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
                   }`}
-                  title={temPlanoValido ? 'Editar dependente ou trocar plano' : 'Selecionar plano disponivel'}
+                  title={temPlanoValido ? 'Editar dependente ou trocar plano' : 'Selecionar plano disponível'}
                 >
                   <Pencil className={`w-4 h-4 ${temPlanoValido ? 'text-slate-600' : 'text-amber-700'}`} />
                   <span>{temPlanoValido ? 'Editar / plano' : 'Selecionar plano'}</span>

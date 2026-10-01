@@ -49,7 +49,7 @@ Deno.serve(async (req: Request) => {
       throw new Error('User profile not found or inactive');
     }
 
-    if (!['ADMINISTRADOR', 'GERENTE', 'SUPERVISOR'].includes(requestingProfile.role)) {
+    if (!['ADMINISTRADOR', 'GERENTE', 'SUPERVISOR', 'CADASTRO'].includes(requestingProfile.role)) {
       throw new Error('Insufficient permissions to update users');
     }
 
@@ -62,7 +62,7 @@ Deno.serve(async (req: Request) => {
 
     const { data: targetProfile, error: targetError } = await supabaseClient
       .from('profiles')
-      .select('id, role, team_id, email')
+      .select('id, role, team_id, email, external_id, lemmit_limite_consultas')
       .eq('id', user_id)
       .maybeSingle();
 
@@ -74,9 +74,14 @@ Deno.serve(async (req: Request) => {
       throw new Error('Supervisors can only update users in their own team');
     }
 
-    const effectiveRole = role ?? targetProfile.role;
-    const nextExternalId = requiresTeamAndExternal(effectiveRole) ? external_id ?? null : null;
-    const nextTeamId = requiresTeamAndExternal(effectiveRole) ? team_id ?? null : null;
+    const isRestrictedOperator = ['CADASTRO', 'GERENTE'].includes(requestingProfile.role);
+    const effectiveRole = isRestrictedOperator ? targetProfile.role : (role ?? targetProfile.role);
+    const nextExternalId = isRestrictedOperator
+      ? targetProfile.external_id ?? null
+      : (requiresTeamAndExternal(effectiveRole) ? external_id ?? null : null);
+    const nextTeamId = requiresTeamAndExternal(effectiveRole)
+      ? team_id ?? targetProfile.team_id ?? null
+      : null;
 
     if (requiresTeamAndExternal(effectiveRole) && (!nextExternalId || !nextTeamId)) {
       throw new Error(`${effectiveRole} requires external_id and team_id`);
@@ -100,7 +105,9 @@ Deno.serve(async (req: Request) => {
       email,
       telefone: telefone ?? null,
       is_active,
-      lemmit_limite_consultas: lemmit_limite_consultas ?? null,
+      lemmit_limite_consultas: isRestrictedOperator
+        ? targetProfile.lemmit_limite_consultas ?? null
+        : lemmit_limite_consultas ?? null,
       ...(requestingProfile.role === 'ADMINISTRADOR' ? { role: role ?? targetProfile.role } : {}),
       external_id: nextExternalId,
       team_id: nextTeamId,

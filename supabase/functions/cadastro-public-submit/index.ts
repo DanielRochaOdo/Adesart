@@ -1,867 +1,949 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.57.4";
+import { PDFDocument, StandardFonts } from "npm:pdf-lib@1.17.1";
+import {
+  corsHeaders,
+  createServiceClient,
+  getRequestIp,
+  hashSensitiveValue,
+  jsonResponse,
+  normalizeDigits,
+  resolveAttempt,
+  sha256,
+} from "../_shared/public-flow.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Client-Info, Apikey, X-Idempotency-Key, X-Cadastro-Id",
+const ERP_REQUEST_TIMEOUT_MS = 20_000;
+const ERP_VALIDATION_TIMEOUT_MS = 15_000;
+const ERP_RECONCILE_TIMEOUT_MS = 8_000;
+const STALE_ERP_PROCESSING_MS = 2 * 60_000;
+const RECONCILE_DELAYS_MS = [0, 1200, 2500];
+const ERP_ABORT_FRIENDLY_MESSAGE =
+  "A conexao foi interrompida durante o envio ao ERP. Nao foi possivel confirmar automaticamente o resultado.";
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const cpfFmt = (v: string) => normalizeDigits(v).replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+const dateFmt = (v: string) => {
+  const [y, m, d] = String(v || "").split("-");
+  return y && m && d ? `${d}/${m}/${y}` : v;
 };
+const moneyFmt = (v: number) => Number(v || 0).toFixed(2).replace(".", ",");
 
-type CadastroContato = {
-  tipo: "celular" | "fixo" | "email" | "whatsapp";
-  valor: string;
-  principal?: boolean;
-};
+class ErpSubmitError extends Error {
+  uncertain: boolean;
+  details: any;
+  httpStatus: number | null;
 
-type CadastroEndereco = {
-  cep: string;
-  tipoLogradouro?: string;
-  logradouro: string;
-  numero: string;
-  complemento?: string;
-  bairro: string;
-  cidade: string;
-  uf: string;
-  idTipoLogradouro?: number;
-  idBairro?: number;
-  idMunicipio?: number;
-  idUf?: number;
-  ufSigla?: string;
-};
-
-type Dependente = {
-  tipo: number;
-  nome: string;
-  dataNascimento: string;
-  cpf: string;
-  sexo: number;
-  sexoDescricao: string;
-  plano: number;
-  planoValor: string;
-  nomeMae: string;
-  carenciaAtendimento: number;
-  funcionarioCadastro: number;
-};
-
-type PublicCadastroPayload = {
-  cpf: string;
-  nome: string;
-  dataNascimento: string;
-  sexoCodigo: number;
-  contatos: CadastroContato[];
-  endereco: CadastroEndereco;
-  nomeMae: string;
-  numeroMatricula?: string;
-  dependentes: Dependente[];
-};
-
-type ErpDependente = {
-  codigoDependente: number;
-  nomeDependente: string;
-  numeroCpfDependente: string;
-  codigoPlano: number;
-  nomePlano: string;
-  codigoSituacao: number;
-  nomeSituacao: string;
-};
-
-type ErpAssociado = {
-  codigo: number;
-  nome: string;
-  cpf: string;
-  codigoDaEmpresa: number;
-  nomeFantasiaDaEmpresa: string;
-  dependentes: ErpDependente[];
-};
-
-type ErpAssociadoResponse = {
-  totalRegistros: number;
-  dados: ErpAssociado[];
-};
-
-const jsonResponse = (body: Record<string, unknown>, status = 200) =>
-  new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      ...corsHeaders,
-      "Content-Type": "application/json",
-    },
-  });
-
-const normalizeDigits = (value?: string | null) => (value || "").replace(/\D/g, "");
-
-const formatCpf = (cpf: string) => {
-  const digits = normalizeDigits(cpf);
-  return digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-};
-
-const formatDateFromISO = (isoDate: string) => {
-  if (!isoDate) return "";
-  const [year, month, day] = isoDate.split("-");
-  if (!year || !month || !day) return isoDate;
-  return `${day}/${month}/${year}`;
-};
-
-const extractMessage = (payload: any): string | null => {
-  if (!payload || typeof payload !== "object") return null;
-
-  const candidates = [
-    payload.error,
-    payload.message,
-    payload.mensagem,
-    payload.details?.error,
-    payload.details?.message,
-    payload.details?.mensagem,
-    payload.details?.details?.message,
-    payload.details?.details?.mensagem,
-    Array.isArray(payload.errors) ? payload.errors[0] : null,
-    Array.isArray(payload.details?.errors) ? payload.details.errors[0] : null,
-    Array.isArray(payload.details?.details?.errors) ? payload.details.details.errors[0] : null,
-  ];
-
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim()) {
-      return candidate.trim();
-    }
+  constructor(
+    message: string,
+    options: { uncertain?: boolean; details?: any; httpStatus?: number | null } = {},
+  ) {
+    super(message);
+    this.name = "ErpSubmitError";
+    this.uncertain = Boolean(options.uncertain);
+    this.details = options.details ?? null;
+    this.httpStatus = options.httpStatus ?? null;
   }
+}
 
-  return null;
-};
-
-const hashToken = async (token: string) => {
-  const data = new TextEncoder().encode(token);
-  const digest = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-};
-
-const checkCpfAlreadyCompletedOnLink = async (
-  supabase: ReturnType<typeof createClient>,
-  linkId: string,
-  cpf: string,
-) => {
-  const { data, error } = await supabase
-    .from("cadastros")
-    .select("id")
-    .eq("origem_link_id", linkId)
-    .eq("cpf", cpf)
-    .eq("status", "enviado")
-    .limit(1)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
+const extractErpMessage = (payload: any) => {
+  for (const value of [
+    payload?.message,
+    payload?.mensagem,
+    payload?.error,
+    payload?.dados?.mensagem,
+    payload?.data?.mensagem,
+  ]) {
+    if (typeof value === "string" && value.trim()) return value.trim();
   }
-
-  return Boolean(data);
+  return "Erro ao cadastrar no ERP";
 };
 
-const checkLocalBlockedCpf = async (
-  supabase: ReturnType<typeof createClient>,
-  cpf: string,
-) => {
-  const { data, error } = await supabase.rpc("check_public_link_blocked_cpf", {
-    p_cpf: cpf,
-  });
-
-  if (error) {
-    throw error;
-  }
-
-  return data as { blocked?: boolean; reason?: string | null; code?: string | null } | null;
+const erpBaseUrl = () => {
+  let base = Deno.env.get("ERP_BASE_URL") || Deno.env.get("ERP_ENDPOINT") || "https://odontoart.s4e.com.br";
+  if (!/^https?:\/\//i.test(base)) base = `https://${base}`;
+  return base.replace(/\/+$/, "");
 };
 
-const saveApiLog = async (
-  supabase: ReturnType<typeof createClient>,
-  logData: {
-    endpoint: string;
-    method: string;
-    request_body: any;
-    response_body?: any;
-    status_code?: number;
-    success: boolean;
-    error_message?: string;
-    duration_ms: number;
-  },
-) => {
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    await supabase.from("api_logs").insert(logData);
-  } catch (error) {
-    console.error("[cadastro-public-submit] failed to save api log:", error);
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
   }
-};
+}
 
-const checkErpAssociado = async (
-  supabase: ReturnType<typeof createClient>,
-  cpf: string,
-) => {
-  const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
-  const ERP_BASE_URL = Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
+async function sellerCode(supabase: any, link: any) {
+  const direct = Number.parseInt(String(link.vendedorCodigo || ""), 10);
+  if (direct > 0) return direct;
 
-  if (!ERP_TOKEN) {
-    throw new Error("ERP_TOKEN not configured");
+  for (const id of [link.vendedorId, link.createdBy].filter(Boolean)) {
+    const { data } = await supabase.from("profiles").select("external_id").eq("id", id).maybeSingle();
+    const code = Number.parseInt(String(data?.external_id || ""), 10);
+    if (code > 0) return code;
   }
+  return 0;
+}
 
-  const startedAt = Date.now();
-  const cpfLimpo = normalizeDigits(cpf);
-  const erpUrl = `${ERP_BASE_URL}/v2/api/associados?token=${ERP_TOKEN}&cpfAssociado=${cpfLimpo}&incluirAns=true`;
-  const response = await fetch(erpUrl, {
-    method: "GET",
-    headers: {
-      Accept: "application/json",
-    },
-  });
+async function buildErpPayload(supabase: any, snapshot: any) {
+  const c = snapshot.cadastro;
+  const l = snapshot.link;
+  const vendedor = await sellerCode(supabase, l);
+  if (!vendedor) throw new Error("SELLER_CODE_MISSING");
+  // O codigo do adesionista vem do link validado no banco, nunca do cliente publico.
+  const adesionista = l.adesionistaId
+    ? Number.parseInt(String(l.adesionistaCodigo || ""), 10)
+    : 0;
 
-  if (!response.ok) {
-    const errorText = await response.text();
-
-    await saveApiLog(supabase, {
-      endpoint: "erp-check-associado-public",
-      method: "GET",
-      request_body: { cpf: cpfLimpo },
-      response_body: { error: "Erro ao consultar ERP", details: errorText },
-      status_code: response.status,
-      success: false,
-      error_message: "Erro ao consultar ERP",
-      duration_ms: Date.now() - startedAt,
-    });
-
-    throw new Error("Erro ao validar CPF no ERP");
-  }
-
-  const result = await response.json() as ErpAssociadoResponse;
-
-  const { data: config } = await supabase
-    .from("cadastro_config")
-    .select("situacoes_que_barram, planos_validos")
-    .eq("id", 1)
-    .maybeSingle();
-
-  const situacoesQueBarram = config?.situacoes_que_barram || [1, 4, 6];
-  const planosValidos = config?.planos_validos || [4, 11, 3, 26];
-  const exists = result.totalRegistros > 0 || (Array.isArray(result.dados) && result.dados.length > 0);
-
-  let shouldBlock = false;
-  let blockReason = "";
-  const summary = {
-    empresa: null as string | null,
-    codigo: null as number | null,
-    nomeFantasiaDaEmpresa: null as string | null,
-    codigoPlano: null as number | null,
-    codigoSituacao: null as number | null,
-    nomeSituacao: null as string | null,
-  };
-
-  if (exists && Array.isArray(result.dados)) {
-    for (const associado of result.dados) {
-      if (!Array.isArray(associado.dependentes)) continue;
-
-      for (const dependente of associado.dependentes) {
-        if (situacoesQueBarram.includes(dependente.codigoSituacao) && !planosValidos.includes(dependente.codigoPlano)) {
-          shouldBlock = true;
-          blockReason = `Associado ja cadastrado na empresa ${associado.nomeFantasiaDaEmpresa} com situacao "${dependente.nomeSituacao}" (codigo ${dependente.codigoSituacao}) e plano ${dependente.codigoPlano} que nao permite recadastro`;
-          summary.empresa = associado.codigoDaEmpresa?.toString() || null;
-          summary.codigo = associado.codigo;
-          summary.nomeFantasiaDaEmpresa = associado.nomeFantasiaDaEmpresa;
-          summary.codigoPlano = dependente.codigoPlano;
-          summary.codigoSituacao = dependente.codigoSituacao;
-          summary.nomeSituacao = dependente.nomeSituacao;
-          break;
-        }
-      }
-
-      if (shouldBlock) break;
-    }
-
-    if (!shouldBlock && result.dados.length > 0) {
-      const firstRecord = result.dados[0];
-      summary.empresa = firstRecord.codigoDaEmpresa?.toString() || null;
-      summary.codigo = firstRecord.codigo;
-      summary.nomeFantasiaDaEmpresa = firstRecord.nomeFantasiaDaEmpresa;
-
-      if (Array.isArray(firstRecord.dependentes) && firstRecord.dependentes.length > 0) {
-        const firstDep = firstRecord.dependentes[0];
-        summary.codigoPlano = firstDep.codigoPlano;
-        summary.codigoSituacao = firstDep.codigoSituacao;
-        summary.nomeSituacao = firstDep.nomeSituacao;
-      }
-    }
-  }
-
-  const normalizedResult = {
-    exists,
-    shouldBlock,
-    blockReason,
-    totalRegistros: result.totalRegistros || 0,
-    dados: result.dados || [],
-    summary,
-  };
-
-  await saveApiLog(supabase, {
-    endpoint: "erp-check-associado-public",
-    method: "GET",
-    request_body: { cpf: cpfLimpo },
-    response_body: normalizedResult,
-    status_code: 200,
-    success: true,
-    duration_ms: Date.now() - startedAt,
-  });
-
-  return normalizedResult;
-};
-
-const formatDependentesForSync = (dependentes: Dependente[]) =>
-  dependentes.map((dep) => ({
-    cpf: normalizeDigits(dep.cpf),
-    nome: dep.nome,
-    dataNascimento: dep.dataNascimento,
-    sexo: dep.sexo,
-    sexoDescricao: dep.sexoDescricao,
-    tipo: dep.tipo,
-    plano: dep.plano,
-    planoValor: dep.planoValor,
-    nomeMae: dep.nomeMae,
-    carenciaAtendimento: dep.carenciaAtendimento,
-    funcionarioCadastro: dep.funcionarioCadastro,
+  const contacts = (c.contatos || []).map((x: any) => ({
+    tipo: x.tipo === "fixo" ? 1 : x.tipo === "email" ? 50 : x.tipo === "whatsapp" ? 10 : 8,
+    dado: x.valor,
   }));
 
-const isValidSellerCode = (value?: string | null) => {
-  const numeric = Number.parseInt(String(value || "").trim(), 10);
-  return Number.isFinite(numeric) && numeric > 0;
-};
-
-const resolveVendedorCodigo = async (
-  supabase: ReturnType<typeof createClient>,
-  link: {
-    vendedor_codigo?: string | null;
-    vendedor_id?: string | null;
-    created_by?: string | null;
-  },
-) => {
-  if (isValidSellerCode(link.vendedor_codigo)) {
-    return String(link.vendedor_codigo).trim();
-  }
-
-  const candidateIds = [link.vendedor_id, link.created_by].filter(Boolean) as string[];
-
-  for (const profileId of candidateIds) {
-    const { data, error } = await supabase
-      .from("profiles")
-      .select("external_id")
-      .eq("id", profileId)
-      .maybeSingle();
-
-    if (error) {
-      throw error;
-    }
-
-    if (isValidSellerCode(data?.external_id)) {
-      return String(data?.external_id).trim();
-    }
-  }
-
-  return null;
-};
-
-const resolveProfileContext = async (
-  supabase: ReturnType<typeof createClient>,
-  userId?: string | null,
-) => {
-  if (!userId) {
-    return null;
-  }
-
-  const { data, error } = await supabase
-    .from("profiles")
-    .select("role, external_id")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (error) {
-    throw error;
-  }
-
-  return data as { role?: string | null; external_id?: string | null } | null;
-};
-
-const buildErpPayload = (
-  cadastro: PublicCadastroPayload,
-  empresaCodigo: number,
-  vendedorCodigo: string,
-  funcionarioCadastroId?: number | null,
-  userRole?: string | null,
-  userExternalId?: string | null,
-  adesionistaCodigo?: string | null,
-) => {
-  const sexoDescricao = cadastro.sexoCodigo === 1 ? "Masculino" : "Feminino";
-  let codigoVendedor = 0;
-  let codigoAdesionista = 0;
-
-  if (userRole === "VENDEDOR" && userExternalId) {
-    codigoVendedor = Number.parseInt(userExternalId, 10) || 0;
-  } else if (vendedorCodigo) {
-    codigoVendedor = Number.parseInt(vendedorCodigo, 10) || 0;
-  }
-
-  if (adesionistaCodigo) {
-    codigoAdesionista = Number.parseInt(adesionistaCodigo, 10) || 0;
-  }
-
-  const funcionarioCadastroCode = userExternalId
-    ? Number.parseInt(userExternalId, 10) || 0
-    : (funcionarioCadastroId || 0);
-
-  const contatosRespFin = cadastro.contatos.map((contato) => {
-    let tipo = 8;
-
-    if (contato.tipo === "fixo") tipo = 1;
-    if (contato.tipo === "email") tipo = 50;
-    if (contato.tipo === "whatsapp") tipo = 10;
-
-    return {
-      tipo,
-      dado: contato.valor,
-    };
-  });
-
-  const responsavelFinanceiro: Record<string, unknown> = {
-    codigoContrato: empresaCodigo.toString(),
-    nome: cadastro.nome,
-    dataNascimento: formatDateFromISO(cadastro.dataNascimento),
-    cpf: formatCpf(cadastro.cpf),
-    sexo: cadastro.sexoCodigo,
+  const rf: Record<string, unknown> = {
+    codigoContrato: String(l.empresaCodigo),
+    nome: c.nome,
+    dataNascimento: dateFmt(c.dataNascimento),
+    cpf: cpfFmt(c.cpf),
+    sexo: c.sexoCodigo,
     grupoFaturamento: 0,
-    sexoDescricao,
+    sexoDescricao: c.sexoCodigo === 1 ? "Masculino" : "Feminino",
     identidadeNumero: "123456789",
     identidadeOrgaoExpeditor: "SSPDS",
     endereco: {
-      cep: cadastro.endereco.cep,
-      tipoLogradouro: cadastro.endereco.idTipoLogradouro?.toString() || "816",
-      logradouro: cadastro.endereco.logradouro,
-      numero: cadastro.endereco.numero,
-      complemento: cadastro.endereco.complemento || "N/D",
-      bairro: cadastro.endereco.idBairro?.toString() || "1262",
-      municipio: cadastro.endereco.idMunicipio?.toString() || "2",
-      uf: cadastro.endereco.idUf?.toString() || "5",
-      descricaoUf: cadastro.endereco.ufSigla || cadastro.endereco.uf,
+      cep: c.endereco.cep,
+      tipoLogradouro: String(c.endereco.idTipoLogradouro || 816),
+      logradouro: c.endereco.logradouro,
+      numero: c.endereco.numero,
+      complemento: c.endereco.complemento || "N/D",
+      bairro: String(c.endereco.idBairro || 1262),
+      municipio: String(c.endereco.idMunicipio || 2),
+      uf: String(c.endereco.idUf || 5),
+      descricaoUf: c.endereco.ufSigla || c.endereco.uf,
     },
-    contatoResponsavelFinanceiro: contatosRespFin,
+    contatoResponsavelFinanceiro: contacts,
     fl_AlteraSituacao: 1,
+    dataApresentacao: new Date().toISOString(),
   };
 
-  if (cadastro.numeroMatricula) {
-    (responsavelFinanceiro as { Matricula?: string }).Matricula = cadastro.numeroMatricula;
-  }
+  if (c.numeroMatricula) rf.Matricula = c.numeroMatricula;
 
-  (responsavelFinanceiro as { dataApresentacao?: string }).dataApresentacao = new Date().toISOString();
-
-  const parceiro: Record<string, unknown> = {
-    codigo: codigoVendedor,
-    tipoCobranca: 1,
+  const titular = {
+    tipo: 1,
+    nome: c.nome,
+    dataNascimento: dateFmt(c.dataNascimento),
+    cpf: cpfFmt(c.cpf),
+    sexo: c.sexoCodigo,
+    sexoDescricao: c.sexoCodigo === 1 ? "Masculino" : "Feminino",
+    plano: c.titularPlano,
+    planoValor: moneyFmt(c.titularPlanoValor),
+    nomeMae: c.nomeMae,
+    carenciaAtendimento: 0,
+    funcionarioCadastro: vendedor,
   };
 
-  if (codigoAdesionista > 0) {
-    parceiro.adesionista = codigoAdesionista;
-  }
-
-  const payload = {
-    dados: {
-      parceiro,
-      parcelaRetidaComissao: "0",
-      responsavelFinanceiro,
-      dependente: cadastro.dependentes.map((dep) => ({
-        tipo: dep.tipo,
-        nome: dep.nome,
-        dataNascimento: formatDateFromISO(dep.dataNascimento),
-        cpf: formatCpf(dep.cpf),
-        sexo: dep.sexo,
-        sexoDescricao: dep.sexoDescricao,
-        plano: dep.plano,
-        planoValor: dep.planoValor,
-        nomeMae: dep.nomeMae,
-        carenciaAtendimento: dep.carenciaAtendimento,
-        funcionarioCadastro: funcionarioCadastroCode,
-      })),
-    },
-    empresa: empresaCodigo.toString(),
-  };
-
-  return payload;
-};
-
-const sendCadastroToErp = async (
-  supabase: ReturnType<typeof createClient>,
-  payload: Record<string, unknown>,
-  cadastroId: string,
-) => {
-  const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
-  const ERP_URL = Deno.env.get("ERP_URL") || "https://odontoart.s4e.com.br/api/vendedor/NovoUsuario2";
-
-  if (!ERP_TOKEN) {
-    throw new Error("ERP_TOKEN not configured");
-  }
-
-  const startedAt = Date.now();
-  const response = await fetch(ERP_URL, {
-    method: "POST",
-    headers: {
-      token: ERP_TOKEN,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const result = await response.json();
-  const hasDadosCodigo = result?.dados?.codigo || result?.data?.dados?.codigo;
-
-  if (!response.ok || !hasDadosCodigo) {
-    const errorMessage = extractMessage(result) ||
-      (!response.ok ? "Erro ao enviar cadastro para o ERP" : "Erro no cadastro: dados invalidos retornados pelo ERP");
-
-    const responseBody = {
-      error: errorMessage,
-      details: result,
-      status: response.status,
-    };
-
-    await saveApiLog(supabase, {
-      endpoint: "erp-novo-usuario2-public",
-      method: "POST",
-      request_body: { ...payload, cadastro_id: cadastroId },
-      response_body: responseBody,
-      status_code: response.status,
-      success: false,
-      error_message: errorMessage,
-      duration_ms: Date.now() - startedAt,
-    });
-
-    return {
-      ok: false,
-      status: response.status,
-      result: responseBody,
-    };
-  }
-
-  const responseBody = {
-    success: true,
-    data: result,
-  };
-
-  await saveApiLog(supabase, {
-    endpoint: "erp-novo-usuario2-public",
-    method: "POST",
-    request_body: { ...payload, cadastro_id: cadastroId },
-    response_body: responseBody,
-    status_code: 200,
-    success: true,
-    duration_ms: Date.now() - startedAt,
-  });
+  const deps = (c.dependentes || []).map((d: any) => ({
+    tipo: d.tipo,
+    nome: d.nome,
+    dataNascimento: dateFmt(d.dataNascimento),
+    cpf: d.cpf ? cpfFmt(d.cpf) : "",
+    sexo: d.sexo,
+    sexoDescricao: d.sexoDescricao,
+    plano: d.plano,
+    planoValor: moneyFmt(d.planoValor),
+    nomeMae: d.nomeMae,
+    carenciaAtendimento: 0,
+    funcionarioCadastro: vendedor,
+  }));
 
   return {
-    ok: true,
-    status: 200,
-    result: responseBody,
+    dados: {
+      parceiro: { codigo: vendedor, tipoCobranca: 1, ...(adesionista > 0 ? { adesionista } : {}) },
+      parcelaRetidaComissao: "0",
+      responsavelFinanceiro: rf,
+      dependente: [titular, ...deps],
+    },
+    empresa: String(l.empresaCodigo),
   };
-};
+}
 
-const syncCadastroEnviado = async (
-  supabase: ReturnType<typeof createClient>,
-  cadastroId: string,
-  erpPayload: Record<string, unknown>,
-  erpResult: Record<string, unknown>,
-  dependentes: Dependente[],
-) => {
-  const syncPayloadBase = {
-    status: "enviado",
-    payload_erp: erpPayload,
-    erp_response: erpResult,
-    dependentes: formatDependentesForSync(dependentes),
-  };
+async function erpCreate(payload: any) {
+  const token = Deno.env.get("ERP_TOKEN");
+  const url = Deno.env.get("ERP_URL") || "https://odontoart.s4e.com.br/api/vendedor/NovoUsuario2";
+  if (!token) throw new Error("ERP_TOKEN not configured");
 
-  let { error, count } = await supabase
-    .from("cadastros")
-    .update({
-      ...syncPayloadBase,
-      data_envio: new Date().toISOString(),
-    }, { count: "exact" })
-    .eq("id", cadastroId);
-
-  if (error?.message?.includes("data_envio")) {
-    console.warn("[cadastro-public-submit] data_envio not available, retrying sync without the column");
-
-    const retry = await supabase
-      .from("cadastros")
-      .update(syncPayloadBase, { count: "exact" })
-      .eq("id", cadastroId);
-
-    error = retry.error;
-    count = retry.count;
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(
+      url,
+      {
+        method: "POST",
+        headers: { token, "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+      ERP_REQUEST_TIMEOUT_MS,
+    );
+  } catch (error) {
+    console.warn("[cadastro-public-submit] ERP transport", error);
+    throw new ErpSubmitError(ERP_ABORT_FRIENDLY_MESSAGE, {
+      uncertain: true,
+      details: { cause: error instanceof Error ? error.message : String(error) },
+    });
   }
 
-  if (error) {
-    throw new Error(`Falha ao sincronizar cadastro local apos envio ao ERP: ${error.message}`);
+  const data = await res.json().catch(() => ({}));
+  const hasCode = data?.dados?.codigo || data?.data?.dados?.codigo;
+  if (!res.ok || !hasCode) {
+    throw new ErpSubmitError(extractErpMessage(data), {
+      uncertain: false,
+      details: data,
+      httpStatus: res.status,
+    });
+  }
+  return data;
+}
+
+function isActiveErpStatus(dep: any) {
+  const statusCode = Number(dep?.codigoSituacao);
+  const statusName = String(dep?.nomeSituacao || "")
+    .trim()
+    .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  // Regra exclusiva do fluxo por link: bloqueia somente situacao ATIVO.
+  return statusCode === 1 || statusName === "ATIVO";
+}
+
+async function checkErpEligibility(cpfValue: string) {
+  const token = Deno.env.get("ERP_TOKEN");
+  if (!token) throw new Error("ERP_TOKEN not configured");
+
+  const cpf = normalizeDigits(cpfValue);
+  let response: Response;
+  try {
+    response = await fetchWithTimeout(
+      `${erpBaseUrl()}/v2/api/associados?token=${encodeURIComponent(token)}&cpfAssociado=${cpf}&incluirAns=true`,
+      { headers: { Accept: "application/json" } },
+      ERP_VALIDATION_TIMEOUT_MS,
+    );
+  } catch (error) {
+    console.warn("[cadastro-public-submit] ERP eligibility transport", error);
+    throw new Error("ERP_VALIDATION_UNAVAILABLE");
   }
 
-  if (!count || count < 1) {
-    throw new Error(`Nenhum cadastro local foi atualizado apos envio ao ERP (cadastro ${cadastroId}).`);
+  if (!response.ok) throw new Error("ERP_VALIDATION_UNAVAILABLE");
+
+  const result = await response.json();
+  const records = Array.isArray(result?.dados) ? result.dados : [];
+
+  for (const associado of records) {
+    const dependentes = Array.isArray(associado?.dependentes) ? associado.dependentes : [];
+    const exactMatches = dependentes.filter(
+      (dep: any) => normalizeDigits(dep?.numeroCpfDependente) === cpf,
+    );
+
+    let candidates = exactMatches;
+    if (candidates.length === 0 && normalizeDigits(associado?.cpf) === cpf && dependentes.length > 0) {
+      candidates = [dependentes[0]];
+    }
+
+    for (const dep of candidates) {
+      if (isActiveErpStatus(dep)) {
+        return {
+          eligible: false,
+          activeRecord: {
+            codigoAssociado: associado?.codigo ?? null,
+            codigoEmpresa: associado?.codigoDaEmpresa ?? null,
+            codigoDependente: dep?.codigoDependente ?? null,
+            codigoPlano: dep?.codigoPlano ?? null,
+            codigoSituacao: dep?.codigoSituacao ?? null,
+            nomeSituacao: dep?.nomeSituacao ?? null,
+          },
+        };
+      }
+    }
   }
-};
 
-const syncLinkUsage = async (
-  supabase: ReturnType<typeof createClient>,
-  linkId: string,
-  cpf: string,
-  cadastroId: string,
-) => {
-  const { error } = await supabase
-    .from("cadastro_links")
-    .update({
-      used_at: new Date().toISOString(),
-      used_cpf: cpf,
-      used_cadastro_id: cadastroId,
-    })
-    .eq("id", linkId);
+  return { eligible: true, activeRecord: null };
+}
 
-  if (error) {
-    throw new Error(`Falha ao atualizar historico do link: ${error.message}`);
-  }
-};
+async function reconcile(snapshot: any) {
+  const token = Deno.env.get("ERP_TOKEN");
+  if (!token) return null;
 
-const validatePayload = (cadastro?: PublicCadastroPayload) => {
-  if (!cadastro) return "Dados do cadastro obrigatorios";
-  if (!normalizeDigits(cadastro.cpf) || normalizeDigits(cadastro.cpf).length !== 11) return "CPF invalido";
-  if (!cadastro.nome) return "Nome obrigatorio";
-  if (!cadastro.nomeMae) return "Nome da mae obrigatorio";
-  if (!cadastro.dataNascimento) return "Data de nascimento obrigatoria";
-  if (cadastro.sexoCodigo !== 0 && cadastro.sexoCodigo !== 1) return "Sexo obrigatorio";
-  if (!Array.isArray(cadastro.contatos) || cadastro.contatos.length === 0) return "Informe ao menos um contato";
+  const cpf = normalizeDigits(snapshot.cadastro.cpf);
 
-  const telefones = cadastro.contatos.filter((contato) =>
-    ["celular", "fixo", "whatsapp"].includes(contato.tipo)
-  );
+  for (const delay of RECONCILE_DELAYS_MS) {
+    if (delay > 0) await sleep(delay);
 
-  if (telefones.length === 0) return "Informe ao menos um telefone";
-  if (!cadastro.endereco?.cep) return "CEP obrigatorio";
-  if (!cadastro.endereco?.logradouro) return "Logradouro obrigatorio";
-  if (!cadastro.endereco?.numero) return "Numero obrigatorio";
-  if (!cadastro.endereco?.bairro) return "Bairro obrigatorio";
-  if (!cadastro.endereco?.cidade) return "Cidade obrigatoria";
-  if (!cadastro.endereco?.uf) return "UF obrigatoria";
-  if (!Array.isArray(cadastro.dependentes) || cadastro.dependentes.length === 0) return "Dependentes obrigatorios";
+    try {
+      const res = await fetchWithTimeout(
+        `${erpBaseUrl()}/v2/api/associados?token=${encodeURIComponent(token)}&cpfAssociado=${cpf}&incluirAns=true`,
+        { headers: { Accept: "application/json" } },
+        ERP_RECONCILE_TIMEOUT_MS,
+      );
+      if (!res.ok) continue;
 
-  const titulares = cadastro.dependentes.filter((dep) => Number(dep.tipo) === 1);
-  if (titulares.length !== 1) return "O cadastro precisa ter exatamente um titular";
-
-  for (const dependente of cadastro.dependentes) {
-    if (!dependente.nome) return "Todos os dependentes precisam de nome";
-    if (!dependente.dataNascimento) return "Todos os dependentes precisam de data de nascimento";
-    if (!dependente.nomeMae) return "Todos os dependentes precisam de nome da mae";
-    if (!dependente.plano) return "Todos os dependentes precisam de plano";
+      const raw = await res.json();
+      for (const a of Array.isArray(raw?.dados) ? raw.dados : []) {
+        if (Number(a?.codigoDaEmpresa) !== Number(snapshot.link.empresaCodigo)) continue;
+        const titular = (Array.isArray(a?.dependentes) ? a.dependentes : []).find(
+          (d: any) =>
+            normalizeDigits(d?.numeroCpfDependente) === cpf
+            && Number(d?.codigoPlano) === Number(snapshot.cadastro.titularPlano)
+            && isActiveErpStatus(d),
+        );
+        if (titular) {
+          return {
+            reconciled: true,
+            dados: { codigo: a.codigo },
+            titularCodigo: Number(titular?.codigoDependente || titular?.codigo || 0) || null,
+            source: raw,
+          };
+        }
+      }
+    } catch (error) {
+      console.warn("[cadastro-public-submit] reconcile", error);
+    }
   }
 
   return null;
-};
+}
 
-Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { status: 200, headers: corsHeaders });
+function extractTitularErpId(erpResult: any, cpf: string, empresaCodigo: number) {
+  const direct = [
+    erpResult?.data?.dados?.dependentes?.[0]?.codigo,
+    erpResult?.dados?.dependentes?.[0]?.codigo,
+    erpResult?.data?.dados?.dependente?.[0]?.codigo,
+    erpResult?.dados?.dependente?.[0]?.codigo,
+    erpResult?.titularCodigo,
+  ]
+    .map((value) => Number(value || 0))
+    .find((value) => value > 0);
+
+  if (direct) return direct;
+
+  const normalizedCpf = normalizeDigits(cpf);
+  const records = Array.isArray(erpResult?.source?.dados) ? erpResult.source.dados : [];
+  const associado = records.find((item: any) => Number(item?.codigoDaEmpresa) === Number(empresaCodigo)) || records[0];
+  const deps = Array.isArray(associado?.dependentes) ? associado.dependentes : [];
+  const titular = deps.find(
+    (dep: any) => normalizeDigits(dep?.numeroCpfDependente) === normalizedCpf && isActiveErpStatus(dep),
+  ) || deps.find((dep: any) => normalizeDigits(dep?.numeroCpfDependente) === normalizedCpf) || deps[0];
+  const fallback = Number(titular?.codigoDependente || titular?.codigo || 0);
+  return fallback > 0 ? fallback : null;
+}
+
+async function syncCadastroEnviado(supabase: any, cadastroId: string, erpResult: any) {
+  const basePayload = {
+    status: "enviado",
+    erp_response: erpResult,
+  };
+
+  let update = await supabase
+    .from("cadastros")
+    .update({
+      ...basePayload,
+      data_envio: new Date().toISOString(),
+    })
+    .eq("id", cadastroId)
+    .select("id")
+    .maybeSingle();
+
+  if (update.error?.message?.includes("data_envio")) {
+    console.warn("[cadastro-public-submit] coluna data_envio ausente; sincronizando sem a coluna");
+    update = await supabase
+      .from("cadastros")
+      .update(basePayload)
+      .eq("id", cadastroId)
+      .select("id")
+      .maybeSingle();
   }
 
-  if (req.method !== "POST") {
-    return jsonResponse({ error: "Metodo nao permitido" }, 405);
+  if (update.error || !update.data) {
+    throw update.error || new Error("CADASTRO_SYNC_FAILED");
+  }
+}
+
+async function resetProcessingSession(
+  supabase: any,
+  sessionId: string | null,
+  stage: string,
+  error: unknown,
+) {
+  if (!sessionId) return;
+
+  const message = error instanceof Error ? error.message : String(error || "Erro inesperado");
+  await supabase
+    .from("public_contract_sessions")
+    .update({
+      status: "erp_failed",
+      erp_response: {
+        error: message.slice(0, 500),
+        stage,
+        failed_at: new Date().toISOString(),
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", sessionId)
+    .eq("status", "erp_processing");
+}
+
+async function makePdf(text: string, acceptance: { acceptedAt: string }) {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const W = 595.28;
+  const H = 841.89;
+  const M = 48;
+  const S = 9.5;
+  const L = 13;
+  const MAX = W - M * 2;
+
+  const clean = (v: string) => v
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/[^\x09\x0A\x0D\x20-\xFF]/g, "");
+
+  const wrap = (v: string) => {
+    const out: string[] = [];
+    let line = "";
+    for (const w of clean(v).split(/\s+/)) {
+      const candidate = line ? `${line} ${w}` : w;
+      if (font.widthOfTextAtSize(candidate, S) <= MAX) line = candidate;
+      else {
+        if (line) out.push(line);
+        line = w;
+      }
+    }
+    if (line) out.push(line);
+    return out.length ? out : [""];
+  };
+
+  let page = pdf.addPage([W, H]);
+  let y = H - M;
+  const ensure = () => {
+    if (y < M + L * 2) {
+      page = pdf.addPage([W, H]);
+      y = H - M;
+    }
+  };
+
+  page.drawText("ODONTOART - CONTRATO DE ADESAO", { x: M, y, size: 13, font: bold });
+  y -= 24;
+
+  for (const p of clean(text).split("\n")) {
+    ensure();
+    if (!p.trim()) {
+      y -= L;
+      continue;
+    }
+    for (const line of wrap(p)) {
+      ensure();
+      page.drawText(line, { x: M, y, size: S, font });
+      y -= L;
+    }
+    y -= 3;
+  }
+
+  y -= 8;
+  for (const line of wrap(`Aceite eletrônico realizado em ${acceptance.acceptedAt}`)) {
+    ensure();
+    page.drawText(line, { x: M, y, size: S, font });
+    y -= L;
+  }
+
+  return new Uint8Array(await pdf.save());
+}
+
+async function triggerDeliveryWorker(contractSessionId: string) {
+  const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const base = Deno.env.get("SUPABASE_URL") || "";
+  if (!service || !base) {
+    return { ok: false, error: "DELIVERY_WORKER_CONFIG_MISSING" };
   }
 
   try {
-    const { token, cadastro } = await req.json() as {
-      token?: string;
-      cadastro?: PublicCadastroPayload;
+    const response = await fetch(`${base}/functions/v1/process-contract-deliveries`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${service}`,
+        apikey: service,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        source: "cadastro-public-submit",
+        contractSessionId,
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.warn("[cadastro-public-submit] delivery worker HTTP", response.status, result);
+      return { ok: false, status: response.status, error: result?.error || "DELIVERY_WORKER_FAILED" };
+    }
+    return result;
+  } catch (error) {
+    console.warn("[cadastro-public-submit] delivery trigger", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "DELIVERY_WORKER_FAILED",
+    };
+  }
+}
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
+  if (req.method !== "POST") return jsonResponse({ error: "Metodo nao permitido" }, 405);
+
+  const supabase = createServiceClient();
+  let claimedSessionId: string | null = null;
+  let stage = "request";
+
+  try {
+    const body = await req.json() as {
+      attemptToken?: string;
+      contractToken?: string;
+      acceptedTerms?: boolean;
+      acceptedData?: boolean;
+      acceptedCoverage?: boolean;
     };
 
-    if (!token || typeof token !== "string") {
-      return jsonResponse({ error: "Token obrigatorio" }, 400);
+    if (!body.attemptToken || !body.contractToken || body.acceptedTerms !== true || body.acceptedData !== true) {
+      return jsonResponse({ error: "O aceite do contrato e a confirmacao dos dados sao obrigatorios" }, 400);
     }
 
-    const validationError = validatePayload(cadastro);
-    if (validationError) {
-      return jsonResponse({ error: validationError }, 400);
-    }
+    stage = "resolve_attempt";
+    const attempt = await resolveAttempt(supabase, body.attemptToken);
+    if (!attempt || attempt.status !== "authenticated") return jsonResponse({ error: "Sessao expirada" }, 401);
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-    const tokenHash = await hashToken(token.trim());
-
-    const { data: link, error: linkError } = await supabase
-      .from("cadastro_links")
+    stage = "load_contract_session";
+    const tokenHash = await sha256(body.contractToken.trim());
+    const { data: initialSession, error: sessionError } = await supabase
+      .from("public_contract_sessions")
       .select("*")
-      .eq("token_hash", tokenHash)
+      .eq("attempt_id", attempt.id)
+      .eq("contract_token_hash", tokenHash)
       .maybeSingle();
 
-    if (linkError) {
-      console.error("[cadastro-public-submit] link error:", linkError);
-      return jsonResponse({ error: "Erro ao validar link" }, 500);
+    if (sessionError || !initialSession) return jsonResponse({ error: "Contrato nao encontrado ou expirado" }, 404);
+
+    let session = initialSession;
+    if (["erp_registered", "deliveries_pending", "completed"].includes(session.status)) {
+      return jsonResponse({ ok: true, cadastroId: session.cadastro_id, state: session.status, message: "Adesao ja processada" });
     }
 
-    if (!link) {
-      return jsonResponse({ error: "Link nao encontrado ou invalido" }, 404);
+    if (session.status === "erp_processing") {
+      const updatedAt = new Date(session.updated_at || session.created_at || 0).getTime();
+      const isStale = Number.isFinite(updatedAt) && Date.now() - updatedAt >= STALE_ERP_PROCESSING_MS;
+
+      if (!isStale) {
+        return jsonResponse({ ok: true, cadastroId: session.cadastro_id, state: "processing", message: "Sua adesao esta sendo processada" }, 202);
+      }
+
+      stage = "recover_stale_processing";
+      const { data: recovered, error: recoverError } = await supabase
+        .from("public_contract_sessions")
+        .update({
+          status: "erp_failed",
+          erp_response: {
+            error: "STALE_ERP_PROCESSING_RECOVERED",
+            stage: "erp_processing",
+            recovered_at: new Date().toISOString(),
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", session.id)
+        .eq("status", "erp_processing")
+        .select("*")
+        .maybeSingle();
+
+      if (recoverError) throw recoverError;
+      if (!recovered) {
+        return jsonResponse({ ok: true, cadastroId: session.cadastro_id, state: "processing", message: "Sua adesao esta sendo processada" }, 202);
+      }
+
+      session = recovered;
     }
 
-    if (!link.is_active) {
-      return jsonResponse({ error: "Link inativo" }, 410);
+    if (!["prepared", "erp_failed"].includes(session.status)) {
+      return jsonResponse({ error: "Este contrato nao pode mais ser utilizado" }, 409);
     }
 
-    const alreadyCompletedOnLink = await checkCpfAlreadyCompletedOnLink(supabase, link.id, normalizeDigits(cadastro!.cpf));
-    if (alreadyCompletedOnLink) {
-      return jsonResponse({
-        error: "Este CPF ja concluiu uma adesao por este link e nao pode reutiliza-lo.",
-      }, 409);
+    // O requisito de aceite e determinado pelo snapshot preparado no servidor.
+    // A ausencia de cobertura nunca gera aceite presumido nem bloqueia a adesao.
+    const preparedCadastro = session.snapshot?.cadastro;
+    const requiresCoverageConsent = preparedCadastro?.coberturaDisponivel === true ||
+      (preparedCadastro?.coberturaDisponivel == null &&
+        Array.isArray(preparedCadastro?.coberturaPlanoArquivos) &&
+        preparedCadastro.coberturaPlanoArquivos.length > 0);
+    if (requiresCoverageConsent && body.acceptedCoverage !== true) {
+      return jsonResponse({ error: "Leia e aceite a cobertura disponibilizada antes de concluir." }, 400);
     }
 
-    if (Number(link.empresa_exige_matricula) === 1 && !cadastro?.numeroMatricula) {
-      return jsonResponse({ error: "Matricula obrigatoria para esta empresa" }, 400);
+    const previousStatus = session.status;
+    const now = new Date().toISOString();
+    const ipHash = await hashSensitiveValue(getRequestIp(req));
+
+    stage = "claim_session";
+    const { data: claimed, error: claimError } = await supabase
+      .from("public_contract_sessions")
+      .update({
+        status: "erp_processing",
+        accepted_terms: true,
+        accepted_data: true,
+        accepted_at: session.accepted_at || now,
+        accepted_ip_hash: session.accepted_ip_hash || ipHash,
+        accepted_user_agent: session.accepted_user_agent || req.headers.get("user-agent") || "unknown",
+        updated_at: now,
+      })
+      .eq("id", session.id)
+      .in("status", ["prepared", "erp_failed"])
+      .select("*")
+      .maybeSingle();
+
+    if (claimError) throw claimError;
+    if (!claimed) return jsonResponse({ ok: true, state: "processing", message: "Sua adesao esta sendo processada" }, 202);
+
+    claimedSessionId = claimed.id;
+    const snapshot = claimed.snapshot;
+    const c = snapshot.cadastro;
+    const l = snapshot.link;
+
+    // O fluxo interno reconcilia uma tentativa incerta antes de reenviar ao ERP.
+    // No link fazemos isso apenas quando ja existe cadastro local, evitando reaproveitar historico antigo.
+    let erpResult: any = null;
+    if (previousStatus === "erp_failed" && claimed.cadastro_id) {
+      stage = "reconcile_previous_attempt";
+      erpResult = await reconcile(snapshot);
     }
 
-    const normalizedCpf = normalizeDigits(cadastro!.cpf);
-    const localBlockedCpf = await checkLocalBlockedCpf(supabase, normalizedCpf);
-    if (localBlockedCpf?.blocked) {
-      return jsonResponse({
-        error: localBlockedCpf.reason || "Este CPF nao pode utilizar este link.",
-      }, 409);
-    }
+    if (!erpResult) {
+      stage = "erp_eligibility";
+      let erpEligibility: { eligible: boolean; activeRecord: any };
+      try {
+        erpEligibility = await checkErpEligibility(c.cpf);
+      } catch (eligibilityError) {
+        await supabase.from("public_contract_sessions").update({
+          status: previousStatus,
+          updated_at: new Date().toISOString(),
+        }).eq("id", claimed.id).eq("status", "erp_processing");
+        claimedSessionId = null;
 
-    try {
-      const erpCheck = await checkErpAssociado(supabase, normalizedCpf);
-      if (erpCheck?.exists && erpCheck?.shouldBlock) {
+        const eligibilityMessage = eligibilityError instanceof Error ? eligibilityError.message : "ERP_VALIDATION_UNAVAILABLE";
+        if (eligibilityMessage === "ERP_VALIDATION_UNAVAILABLE") {
+          return jsonResponse({
+            error: "Nao foi possivel validar a situacao atual do CPF no ERP. Tente novamente.",
+            code: "ERP_VALIDATION_UNAVAILABLE",
+          }, 503);
+        }
+        throw eligibilityError;
+      }
+
+      if (!erpEligibility.eligible) {
+        await supabase.from("public_contract_sessions").update({
+          status: "needs_attention",
+          updated_at: new Date().toISOString(),
+        }).eq("id", claimed.id);
+        claimedSessionId = null;
         return jsonResponse({
-          error: erpCheck.blockReason || "Cliente ja cadastrado no sistema",
+          error: "Este CPF ja possui uma adesao ativa no ERP",
+          code: "CPF_ACTIVE_IN_ERP",
         }, 409);
       }
-    } catch (erpValidationError) {
-      console.warn("[cadastro-public-submit] ERP validation failed during final submit, continuing with ERP send:", erpValidationError);
     }
 
-    const vendedorCodigoResolvido = await resolveVendedorCodigo(supabase, link);
-    if (!vendedorCodigoResolvido) {
-      return jsonResponse({
-        error: "Link sem codigo de vendedor valido. Gere um novo link com um usuario que possua codigo externo configurado.",
-      }, 400);
-    }
+    stage = "build_erp_payload";
+    const erpPayload = await buildErpPayload(supabase, snapshot);
+    let cadastroId = claimed.cadastro_id as string | null;
 
-    const ownerContext = await resolveProfileContext(supabase, link.vendedor_id || link.created_by);
-    const dependentesNormalizados = formatDependentesForSync(cadastro!.dependentes);
-    const erpPayload = buildErpPayload(
-      cadastro!,
-      link.empresa_codigo,
-      vendedorCodigoResolvido,
-      ownerContext?.external_id ? Number.parseInt(ownerContext.external_id, 10) || 0 : 0,
-      ownerContext?.role || null,
-      ownerContext?.external_id || null,
-      ownerContext?.role === "ADESIONISTA" ? ownerContext?.external_id || null : null,
-    );
+    if (!cadastroId) {
+      stage = "create_local_cadastro";
+      const vendedor = await sellerCode(supabase, l);
+      const stored = [
+        {
+          tipo: 1,
+          nome: c.nome,
+          dataNascimento: c.dataNascimento,
+          cpf: c.cpf,
+          sexo: c.sexoCodigo,
+          sexoDescricao: c.sexoCodigo === 1 ? "Masculino" : "Feminino",
+          plano: c.titularPlano,
+          planoValor: moneyFmt(c.titularPlanoValor),
+          nomeMae: c.nomeMae,
+          carenciaAtendimento: 0,
+          funcionarioCadastro: vendedor,
+        },
+        ...(c.dependentes || []).map((d: any) => ({
+          tipo: d.tipo,
+          nome: d.nome,
+          dataNascimento: d.dataNascimento,
+          cpf: d.cpf,
+          sexo: d.sexo,
+          sexoDescricao: d.sexoDescricao,
+          plano: d.plano,
+          planoValor: moneyFmt(d.planoValor),
+          nomeMae: d.nomeMae,
+          carenciaAtendimento: 0,
+          funcionarioCadastro: vendedor,
+        })),
+      ];
 
-    const { data: insertedCadastro, error: insertError } = await supabase
-      .from("cadastros")
-      .insert({
+      const { data: created, error: insertError } = await supabase.from("cadastros").insert({
         status: "incompleto",
         tipo_cadastro: "cadastro",
-        created_by: link.created_by,
-        team_id: link.team_id,
-        cpf: normalizedCpf,
-        nome: cadastro!.nome,
-        data_nascimento: cadastro!.dataNascimento,
-        sexo: cadastro!.sexoCodigo === 1 ? "M" : "F",
-        sexo_codigo: cadastro!.sexoCodigo,
-        nome_mae: cadastro!.nomeMae,
-        contatos: cadastro!.contatos,
-        endereco: cadastro!.endereco,
+        created_by: l.createdBy,
+        team_id: l.teamId,
+        cpf: c.cpf,
+        nome: c.nome,
+        data_nascimento: c.dataNascimento,
+        sexo: c.sexoCodigo === 1 ? "M" : "F",
+        sexo_codigo: c.sexoCodigo,
+        nome_mae: c.nomeMae,
+        contatos: c.contatos,
+        endereco: c.endereco,
         cliente_sera_usuario: true,
-        empresa_id: link.empresa_codigo,
-        empresa_codigo: link.empresa_codigo,
-        empresa_nome: link.empresa_nome,
-        empresa_cnpj: link.empresa_cnpj,
-        empresa_raw: link.empresa_raw,
-        empresa_exige_matricula: link.empresa_exige_matricula,
-        planos_raw: link.planos_raw,
-        dependentes: dependentesNormalizados,
-        numero_matricula: cadastro!.numeroMatricula || null,
-        vendedor_id: link.vendedor_id,
-        vendedor_codigo: vendedorCodigoResolvido,
-        vendedor_nome: link.vendedor_nome,
-        origem_link_id: link.id,
+        empresa_id: l.empresaCodigo,
+        empresa_codigo: l.empresaCodigo,
+        empresa_nome: l.empresaNome,
+        empresa_cnpj: l.empresaCnpj,
+        empresa_raw: { codigo: l.empresaCodigo, nome: l.empresaNome },
+        empresa_exige_matricula: l.empresaExigeMatricula,
+        planos_raw: [
+          { Plano: c.titularPlano, nomeExibicao: c.titularPlanoNome, ValorTitular: c.titularPlanoValor },
+          ...(c.dependentes || []).map((d: any) => ({
+            Plano: d.plano,
+            nomeExibicao: d.planoNome,
+            ValorDependente: d.planoValor,
+          })),
+        ],
+        dependentes: stored,
+        numero_matricula: c.numeroMatricula || null,
+        vendedor_id: l.vendedorId,
+        vendedor_codigo: String(vendedor),
+        vendedor_nome: l.vendedorNome,
+        adesionista_id: l.adesionistaId || null,
+        adesionista_codigo: l.adesionistaId ? l.adesionistaCodigo || null : null,
+        adesionista_nome: l.adesionistaId ? l.adesionistaNome || null : null,
+        origem_link_id: l.id,
         fluxo_publico: true,
-      })
-      .select("id")
-      .single();
+        payload_erp: erpPayload,
+      }).select("id").single();
 
-    if (insertError || !insertedCadastro) {
-      console.error("[cadastro-public-submit] insert error:", insertError);
-      return jsonResponse({ error: "Nao foi possivel criar o cadastro" }, 500);
+      if (insertError || !created) throw insertError || new Error("CADASTRO_CREATE_FAILED");
+      cadastroId = created.id;
+
+      const { error: sessionCadastroError } = await supabase
+        .from("public_contract_sessions")
+        .update({ cadastro_id: cadastroId, updated_at: new Date().toISOString() })
+        .eq("id", claimed.id);
+      if (sessionCadastroError) throw sessionCadastroError;
     }
 
-    const { ok: erpOk, result: erpResult } = await sendCadastroToErp(supabase, erpPayload, insertedCadastro.id);
+    if (!erpResult) {
+      stage = "erp_submit";
+      try {
+        erpResult = await erpCreate(erpPayload);
+      } catch (error) {
+        const uncertain = error instanceof ErpSubmitError && error.uncertain;
+        if (uncertain) {
+          stage = "erp_reconcile_after_transport";
+          erpResult = await reconcile(snapshot);
+        }
 
-    if (!erpOk || erpResult?.error) {
-      await supabase
-        .from("cadastros")
-        .update({
-          status: "incompleto",
-          payload_erp: erpPayload,
-          erp_response: erpResult,
-        })
-        .eq("id", insertedCadastro.id);
+        if (!erpResult) {
+          const message = error instanceof Error ? error.message : "Erro ao cadastrar no ERP";
+          await supabase.from("cadastros").update({
+            status: "incompleto",
+            erp_response: error instanceof ErpSubmitError && error.details
+              ? { error: message, details: error.details }
+              : { error: message },
+          }).eq("id", cadastroId);
 
-      return jsonResponse({
-        error: extractMessage(erpResult) || "Erro ao enviar cadastro para o ERP",
-        details: erpResult,
-        cadastroId: insertedCadastro.id,
-      }, 400);
+          await supabase.from("public_contract_sessions").update({
+            status: "erp_failed",
+            erp_response: {
+              error: message,
+              uncertain,
+              stage: "erp_submit",
+              failed_at: new Date().toISOString(),
+            },
+            updated_at: new Date().toISOString(),
+          }).eq("id", claimed.id).eq("status", "erp_processing");
+          claimedSessionId = null;
+
+          return jsonResponse({ error: message, code: "ERP_SUBMIT_FAILED", cadastroId }, 502);
+        }
+      }
     }
 
-    try {
-      await syncCadastroEnviado(
-        supabase,
-        insertedCadastro.id,
-        erpPayload,
-        erpResult,
-        cadastro!.dependentes,
-      );
-    } catch (syncError) {
-      console.error("[cadastro-public-submit] cadastro sync error after ERP success:", syncError);
+    stage = "sync_local_cadastro";
+    if (!cadastroId) throw new Error("CADASTRO_ID_MISSING");
+    await syncCadastroEnviado(supabase, cadastroId, erpResult);
 
+    stage = "mark_link_used";
+    const { error: linkUpdateError } = await supabase.from("cadastro_links").update({
+      used_at: new Date().toISOString(),
+      used_cpf: c.cpf,
+      used_cadastro_id: cadastroId,
+    }).eq("id", l.id);
+    if (linkUpdateError) throw linkUpdateError;
+
+    stage = "mark_erp_registered";
+    const { error: registeredError } = await supabase.from("public_contract_sessions").update({
+      status: "erp_registered",
+      erp_response: erpResult,
+      updated_at: new Date().toISOString(),
+    }).eq("id", claimed.id);
+    if (registeredError) throw registeredError;
+    claimedSessionId = null;
+
+    const acceptedAt = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Fortaleza",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).format(new Date(claimed.accepted_at || now)).replace(",", "");
+
+    stage = "generate_contract_pdf";
+    const pdf = await makePdf(claimed.contract_text, { acceptedAt });
+    const pdfHash = await sha256(pdf);
+    const path = `${new Date().getUTCFullYear()}/${cadastroId}/contrato-${claimed.id}.pdf`;
+    const { error: uploadError } = await supabase.storage.from("contracts").upload(path, pdf, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+
+    if (uploadError) {
+      await supabase.from("public_contract_sessions").update({
+        status: "needs_attention",
+        updated_at: new Date().toISOString(),
+      }).eq("id", claimed.id);
       return jsonResponse({
         ok: true,
-        warning: syncError instanceof Error
-          ? syncError.message
-          : "Cadastro enviado ao ERP, mas houve uma divergencia na sincronizacao local",
-        cadastroId: insertedCadastro.id,
-        message: "Cadastro concluido com sucesso",
+        cadastroId,
+        warning: "Cadastro concluido no ERP, mas o contrato precisa de reprocessamento.",
       });
     }
 
-    try {
-      await syncLinkUsage(supabase, link.id, normalizedCpf, insertedCadastro.id);
-    } catch (linkSyncError) {
-      console.error("[cadastro-public-submit] link sync warning after ERP success:", linkSyncError);
+    stage = "prepare_deliveries";
+    const { error: pendingError } = await supabase.from("public_contract_sessions").update({
+      status: "deliveries_pending",
+      pdf_storage_path: path,
+      pdf_hash: pdfHash,
+      updated_at: new Date().toISOString(),
+    }).eq("id", claimed.id);
+    if (pendingError) throw pendingError;
 
-      return jsonResponse({
-        ok: true,
-        warning: linkSyncError instanceof Error
-          ? linkSyncError.message
-          : "Cadastro concluido, mas o historico do link nao foi atualizado corretamente",
-        cadastroId: insertedCadastro.id,
-        message: "Cadastro concluido com sucesso",
-      });
+    const fileName = `Contrato-Odontoart-${cadastroId}.pdf`;
+    const idFuncionario = await sellerCode(supabase, l);
+    const idDependente = extractTitularErpId(erpResult, c.cpf, l.empresaCodigo);
+
+    if (!idFuncionario) throw new Error("ERP_FUNCIONARIO_ID_NOT_FOUND");
+
+    // Telefone do mesmo vendedor que consta no snapshot do link, nunca do adesionista.
+    // Falha de leitura do contato não pode impedir a entrega do contrato.
+    let vendedorTelefone: string | null = null;
+    if (l.vendedorId) {
+      try {
+        const { data: vendedorProfile, error: vendedorContactError } = await supabase
+          .from("profiles")
+          .select("telefone")
+          .eq("id", l.vendedorId)
+          .maybeSingle();
+        if (vendedorContactError) {
+          console.warn("[cadastro-public-submit] contato do vendedor indisponivel", vendedorContactError.message);
+        } else {
+          vendedorTelefone = vendedorProfile?.telefone ?? null;
+        }
+      } catch (vendedorContactError) {
+        console.warn("[cadastro-public-submit] falha ao carregar contato do vendedor", vendedorContactError);
+      }
     }
+
+    const { error: jobsError } = await supabase.from("contract_delivery_jobs").upsert([
+      {
+        contract_session_id: claimed.id,
+        channel: "email",
+        payload: {
+          email: claimed.confirmed_email,
+          nome: c.nome,
+          vendedorNome: l.vendedorNome || null,
+          vendedorTelefone,
+          storagePath: path,
+          fileName,
+          pdfHash,
+          coveragePlanCodes: Array.isArray(c.coberturaPlanoCodigos) ? c.coberturaPlanoCodigos : [Number(c.titularPlano)],
+          coverageFiles: Array.isArray(c.coberturaPlanoArquivos) ? c.coberturaPlanoArquivos : [],
+        },
+        status: "pending",
+        attempts: 0,
+        next_attempt_at: new Date().toISOString(),
+      },
+      {
+        contract_session_id: claimed.id,
+        channel: "erp_document",
+        payload: {
+          cpf: c.cpf,
+          empresaCodigo: l.empresaCodigo,
+          idFuncionario,
+          idDependente,
+          storagePath: path,
+          fileName,
+          pdfHash,
+        },
+        status: "pending",
+        attempts: 0,
+        next_attempt_at: new Date().toISOString(),
+      },
+    ], { onConflict: "contract_session_id,channel" });
+
+    if (jobsError) throw jobsError;
+
+    stage = "complete_attempt";
+    const { error: attemptUpdateError } = await supabase.from("public_adesao_attempts").update({
+      status: "completed",
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", attempt.id);
+    if (attemptUpdateError) throw attemptUpdateError;
+
+    stage = "deliver_contract";
+    const deliveryResult = await triggerDeliveryWorker(claimed.id);
+    const results = Array.isArray(deliveryResult?.results) ? deliveryResult.results : [];
+    const deliveryPending = !deliveryResult?.ok || results.some((item: any) => item?.status !== "sent");
 
     return jsonResponse({
       ok: true,
-      cadastroId: insertedCadastro.id,
-      message: "Cadastro concluido com sucesso",
+      cadastroId,
+      state: "completed",
+      contractHash: claimed.contract_hash,
+      pdfHash,
+      deliveryPending,
+      message: deliveryPending
+        ? "Adesão concluída com sucesso! Seu contrato está sendo enviado para o e-mail confirmado."
+        : "Adesão concluída com sucesso!",
     });
   } catch (error) {
-    console.error("[cadastro-public-submit] unexpected error:", error);
+    console.error("[cadastro-public-submit]", {
+      stage,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    await resetProcessingSession(supabase, claimedSessionId, stage, error);
+
     const message = error instanceof Error ? error.message : "Erro inesperado";
-    return jsonResponse({ error: message }, 500);
+    if (message === "SELLER_CODE_MISSING") {
+      return jsonResponse({ error: "Link sem codigo de vendedor valido" }, 400);
+    }
+    return jsonResponse({
+      error: "Nao foi possivel concluir a adesao",
+      code: "PUBLIC_SUBMIT_FAILED",
+      stage,
+    }, 500);
   }
 });
