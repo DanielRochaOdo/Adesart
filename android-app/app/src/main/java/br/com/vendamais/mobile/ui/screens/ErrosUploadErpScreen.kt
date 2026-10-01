@@ -312,6 +312,20 @@ fun ErrosUploadErpScreen(
                         item.empresaNome?.takeIf { it.isNotBlank() }?.let {
                             Text(text = "Empresa: $it", style = MaterialTheme.typography.bodySmall)
                         }
+                        item.vendedorNome?.takeIf { it.isNotBlank() }?.let {
+                            Text(
+                                text = "Vendedor: $it",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        item.adesionistaNome?.takeIf { it.isNotBlank() }?.let {
+                            Text(
+                                text = "Adesionista: $it",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
 
                         Text(
                             text = "Arquivo: ${item.arquivoNome.ifBlank { "-" }} (${formatErrorBytes(item.fileSizeBytes)})",
