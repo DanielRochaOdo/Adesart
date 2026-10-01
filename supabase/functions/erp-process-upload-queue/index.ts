@@ -136,9 +136,6 @@ const resolveCanonicalDependentId = async (supabase: any, item: any) => {
     );
   }
 
-  const canonicalDependenteId = await resolveCanonicalDependentId(supabase, item);
-  item.id_dependente = canonicalDependenteId;
-
   const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
   let ERP_ENDPOINT =
     Deno.env.get("ERP_ENDPOINT") ||
@@ -269,6 +266,9 @@ const uploadItem = async (supabase: any, item: any) => {
       413,
     );
   }
+
+  const canonicalDependenteId = await resolveCanonicalDependentId(supabase, item);
+  item.id_dependente = canonicalDependenteId;
 
   const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
   let ERP_ENDPOINT =
