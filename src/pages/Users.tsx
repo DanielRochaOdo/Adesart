@@ -6,8 +6,9 @@ import { Input } from '../components/Input';
 import { Select } from '../components/Select';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Profile, Team } from '../lib/supabase';
-import { Plus, X, Edit, UserCheck, UserX, Download, ArrowLeft, ArrowRight, KeyRound, FilterX, SlidersHorizontal } from 'lucide-react';
+import { Plus, X, Edit, UserCheck, UserX, Download, ArrowLeft, ArrowRight, KeyRound, FilterX, SlidersHorizontal, History } from 'lucide-react';
 import { EditUserModal } from '../components/users/EditUserModal';
+import { UserLinkHistoryModal } from '../components/users/UserLinkHistoryModal';
 import { usePersistentState } from '../hooks/usePersistentState';
 
 type UserWithTeam = Profile & { team_name?: string };
@@ -65,6 +66,7 @@ export function Users() {
   const [createLoading, setCreateLoading] = useState(false);
   const [error, setError] = useState('');
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
+  const [linksHistoryUser, setLinksHistoryUser] = useState<Profile | null>(null);
   const [resetPasswordUser, setResetPasswordUser] = useState<Profile | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -717,6 +719,9 @@ export function Users() {
                           {column.label}
                         </th>
                       ))}
+                      {profile?.role === 'ADMINISTRADOR' && (
+                        <th className="text-center py-3 px-4 text-sm font-semibold text-slate-600">Link</th>
+                      )}
                       <th className="text-center py-3 px-4 text-sm font-semibold text-slate-600">Ações</th>
                     </tr>
                   </thead>
@@ -728,6 +733,19 @@ export function Users() {
                             {renderCell(user, column.key)}
                           </td>
                         ))}
+                        {profile?.role === 'ADMINISTRADOR' && (
+                          <td className="py-3 px-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => setLinksHistoryUser(user)}
+                              className="inline-flex items-center justify-center rounded-lg p-2 text-sky-600 transition-colors hover:bg-sky-50 dark:hover:bg-sky-950/30"
+                              title="Histórico de links"
+                              aria-label={`Histórico de links de ${user.name}`}
+                            >
+                              <History className="h-4 w-4" />
+                            </button>
+                          </td>
+                        )}
                         <td className="py-3 px-4 text-center">
                           <div className="inline-flex items-center gap-1">
                             <button
@@ -778,6 +796,17 @@ export function Users() {
                         >
                           <Edit className="h-4 w-4" />
                         </button>
+                        {profile?.role === 'ADMINISTRADOR' && (
+                          <button
+                            type="button"
+                            onClick={() => setLinksHistoryUser(user)}
+                            className="rounded-lg p-1 text-sky-600 transition-colors hover:bg-sky-50 dark:hover:bg-sky-950/30"
+                            title="Histórico de links"
+                            aria-label={`Histórico de links de ${user.name}`}
+                          >
+                            <History className="h-4 w-4" />
+                          </button>
+                        )}
                         {canResetPasswordFor(user) && (
                           <button
                             onClick={() => openPasswordReset(user)}
@@ -926,6 +955,13 @@ export function Users() {
           canEditRole={canEditRole}
           canEditExternalId={canEditExternalId}
           canEditLemmitLimit={canEditLemmitLimit}
+        />
+      )}
+
+      {linksHistoryUser && profile?.role === 'ADMINISTRADOR' && (
+        <UserLinkHistoryModal
+          user={linksHistoryUser}
+          onClose={() => setLinksHistoryUser(null)}
         />
       )}
 
