@@ -70,6 +70,7 @@ fun UsersScreen(
     var editingUser by remember { mutableStateOf<AdminUser?>(null) }
     var creatingUser by remember { mutableStateOf(false) }
     var resettingPasswordUser by remember { mutableStateOf<AdminUser?>(null) }
+    var linksHistoryUser by remember { mutableStateOf<AdminUser?>(null) }
     var userSubmitError by remember { mutableStateOf<String?>(null) }
     var userSubmitting by remember { mutableStateOf(false) }
     var passwordResetError by remember { mutableStateOf<String?>(null) }
@@ -341,6 +342,15 @@ fun UsersScreen(
                             Text("Editar dados e acesso")
                         }
 
+                        if (state.profile?.role == "ADMINISTRADOR") {
+                            OutlinedButton(
+                                onClick = { linksHistoryUser = user },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("Historico de links")
+                            }
+                        }
+
                         if (canResetPassword(state.profile?.role, user.role)) {
                             OutlinedButton(
                                 onClick = {
@@ -413,6 +423,14 @@ fun UsersScreen(
                     userSubmitting = false
                 }
             },
+        )
+    }
+
+    linksHistoryUser?.let { user ->
+        AdminUserLinksSheet(
+            user = user,
+            viewModel = viewModel,
+            onDismiss = { linksHistoryUser = null },
         )
     }
 
