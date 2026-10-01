@@ -2564,6 +2564,12 @@ class AppViewModel(
         refreshAdminData(activeSession)
     }
 
+    suspend fun resetUserPassword(id: String, newPassword: String) {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        repository.resetUserPassword(activeSession, id, newPassword)
+    }
+
     suspend fun updateUser(id: String, payload: JsonObject): AdminUser {
         val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
         val activeSession = ensureFreshSession(session)

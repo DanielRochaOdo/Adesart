@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.data.models.AdminTeam
@@ -63,18 +64,42 @@ fun UsersScreen(
     viewModel: AppViewModel,
 ) {
     var searchTerm by rememberSaveable { mutableStateOf("") }
+    var selectedRole by rememberSaveable { mutableStateOf("") }
+    var selectedTeamId by rememberSaveable { mutableStateOf("") }
+    var selectedStatus by rememberSaveable { mutableStateOf("") }
     var editingUser by remember { mutableStateOf<AdminUser?>(null) }
     var creatingUser by remember { mutableStateOf(false) }
+    var resettingPasswordUser by remember { mutableStateOf<AdminUser?>(null) }
     var userSubmitError by remember { mutableStateOf<String?>(null) }
     var userSubmitting by remember { mutableStateOf(false) }
+    var passwordResetError by remember { mutableStateOf<String?>(null) }
+    var passwordResetSubmitting by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val teamNames = remember(state.adminTeams) { state.adminTeams.associateBy({ it.id }, { it.name }) }
-    val filteredUsers = remember(state.adminUsers, searchTerm) {
+    val filteredUsers = remember(
+        state.adminUsers,
+        searchTerm,
+        selectedRole,
+        selectedTeamId,
+        selectedStatus,
+    ) {
         val normalized = searchTerm.trim().lowercase()
         state.adminUsers.filter { user ->
-            normalized.isBlank() ||
-                user.name.lowercase().contains(normalized) ||
-                user.email.lowercase().contains(normalized)
+            val matchesSearch =
+                normalized.isBlank() ||
+                    user.name.lowercase().contains(normalized) ||
+                    user.email.lowercase().contains(normalized) ||
+                    user.externalId.orEmpty().lowercase().contains(normalized)
+            val matchesRole =
+                selectedRole.isBlank() || normalizeRole(user.role) == normalizeRole(selectedRole)
+            val matchesTeam =
+                selectedTeamId.isBlank() || user.teamId == selectedTeamId
+            val matchesStatus =
+                selectedStatus.isBlank() ||
+                    (selectedStatus == "ACTIVE" && user.isActive) ||
+                    (selectedStatus == "INACTIVE" && !user.isActive)
+
+            matchesSearch && matchesRole && matchesTeam && matchesStatus
         }
     }
     val canCreate = state.profile?.role in setOf("ADMINISTRADOR", "GERENTE", "SUPERVISOR")
@@ -82,6 +107,11 @@ fun UsersScreen(
     val isCadastroOperator = state.profile?.role == "CADASTRO"
     val canEditExternalId = !isCadastroOperator
     val canEditLemmitLimit = !isCadastroOperator
+    val hasActiveFilters =
+        searchTerm.isNotBlank() ||
+            selectedRole.isNotBlank() ||
+            selectedTeamId.isNotBlank() ||
+            selectedStatus.isNotBlank()
     val activeUsers = state.adminUsers.count { it.isActive }
     val commercialUsers = state.adminUsers.count {
         normalizeRole(it.role) in setOf("VENDEDOR", "ADESIONISTA", "SUPERVISOR")
@@ -124,14 +154,88 @@ fun UsersScreen(
         item {
             WebCard {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "Filtros",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = "Combine busca, funcao, equipe e status para localizar usuarios.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
                     OutlinedTextField(
                         value = searchTerm,
                         onValueChange = { searchTerm = it },
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                         label = { Text("Buscar usuario") },
-                        placeholder = { Text("Nome ou email") },
+                        placeholder = { Text("Nome, email ou ID externo") },
                         singleLine = true,
                     )
+
+                    SelectionField(
+                        label = "Funcao",
+                        value = userRoleFilterOptions()
+                            .firstOrNull { it.first == selectedRole }
+                            ?.second
+                            ?: "Todas as funcoes",
+                        options = userRoleFilterOptions(),
+                        onSelected = { selectedRole = it },
+                    )
+
+                    SelectionField(
+                        label = "Equipe",
+                        value = state.adminTeams
+                            .firstOrNull { it.id == selectedTeamId }
+                            ?.name
+                            ?: "Todas as equipes",
+                        options = listOf("" to "Todas as equipes") +
+                            state.adminTeams.map { it.id to it.name },
+                        onSelected = { selectedTeamId = it },
+                    )
+
+                    SelectionField(
+                        label = "Status",
+                        value = when (selectedStatus) {
+                            "ACTIVE" -> "Ativos"
+                            "INACTIVE" -> "Inativos"
+                            else -> "Todos os status"
+                        },
+                        options = listOf(
+                            "" to "Todos os status",
+                            "ACTIVE" to "Ativos",
+                            "INACTIVE" to "Inativos",
+                        ),
+                        onSelected = { selectedStatus = it },
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "${filteredUsers.size} de ${state.adminUsers.size} usuario(s)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (hasActiveFilters) {
+                            OutlinedButton(
+                                onClick = {
+                                    searchTerm = ""
+                                    selectedRole = ""
+                                    selectedTeamId = ""
+                                    selectedStatus = ""
+                                },
+                            ) {
+                                Text("Limpar filtros")
+                            }
+                        }
+                    }
+
                     if (canCreate) {
                         VendaButton(
                             label = "Adicionar usuario",
@@ -236,6 +340,19 @@ fun UsersScreen(
                         ) {
                             Text("Editar dados e acesso")
                         }
+
+                        if (canResetPassword(state.profile?.role, user.role)) {
+                            OutlinedButton(
+                                onClick = {
+                                    passwordResetError = null
+                                    passwordResetSubmitting = false
+                                    resettingPasswordUser = user
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("Redefinir senha")
+                            }
+                        }
                     }
                 }
             }
@@ -294,6 +411,31 @@ fun UsersScreen(
                             userSubmitError = throwable.message ?: "Falha ao atualizar usuario."
                         }
                     userSubmitting = false
+                }
+            },
+        )
+    }
+
+    resettingPasswordUser?.let { user ->
+        PasswordResetSheet(
+            user = user,
+            submitError = passwordResetError,
+            isSubmitting = passwordResetSubmitting,
+            onDismiss = {
+                passwordResetError = null
+                passwordResetSubmitting = false
+                resettingPasswordUser = null
+            },
+            onSubmit = { newPassword ->
+                scope.launch {
+                    passwordResetError = null
+                    passwordResetSubmitting = true
+                    runCatching { viewModel.resetUserPassword(user.id, newPassword) }
+                        .onSuccess { resettingPasswordUser = null }
+                        .onFailure { throwable ->
+                            passwordResetError = throwable.message ?: "Falha ao redefinir senha."
+                        }
+                    passwordResetSubmitting = false
                 }
             },
         )
@@ -519,6 +661,119 @@ private fun UserEditorSheet(
             }
         }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PasswordResetSheet(
+    user: AdminUser,
+    submitError: String? = null,
+    isSubmitting: Boolean = false,
+    onDismiss: () -> Unit,
+    onSubmit: (String) -> Unit,
+) {
+    var password by remember(user.id) { mutableStateOf("") }
+    var confirmation by remember(user.id) { mutableStateOf("") }
+
+    val validationError = when {
+        password.length < 6 -> "A nova senha deve ter no minimo 6 caracteres."
+        password != confirmation -> "A confirmacao da senha nao confere."
+        else -> null
+    }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Redefinir senha",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = "${user.name} · ${user.email}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                label = { Text("Nova senha") },
+                visualTransformation = PasswordVisualTransformation(),
+                singleLine = true,
+            )
+
+            OutlinedTextField(
+                value = confirmation,
+                onValueChange = { confirmation = it },
+                modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                label = { Text("Confirmar nova senha") },
+                visualTransformation = PasswordVisualTransformation(),
+                singleLine = true,
+            )
+
+            submitError?.takeIf { it.isNotBlank() }?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
+            validationError?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    enabled = !isSubmitting,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Cancelar")
+                }
+                Button(
+                    enabled = !isSubmitting && validationError == null,
+                    onClick = { onSubmit(password) },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(if (isSubmitting) "Redefinindo..." else "Redefinir")
+                }
+            }
+        }
+    }
+}
+
+private fun userRoleFilterOptions(): List<Pair<String, String>> = listOf(
+    "" to "Todas as funcoes",
+    "ADMINISTRADOR" to "Administrador",
+    "GERENTE" to "Gerente",
+    "GESTOR" to "Gestor",
+    "CADASTRO" to "Cadastro",
+    "SUPERVISOR" to "Supervisor",
+    "VENDEDOR" to "Vendedor",
+    "ADESIONISTA" to "Adesionista",
+)
+
+private fun canResetPassword(actorRole: String?, targetRole: String): Boolean {
+    val actor = normalizeRole(actorRole.orEmpty())
+    val target = normalizeRole(targetRole)
+    return actor == "ADMINISTRADOR" || (actor == "CADASTRO" && target != "ADMINISTRADOR")
 }
 
 private data class UserFormState(
