@@ -81,6 +81,7 @@ import br.com.vendamais.mobile.domain.cadastro.CadastroModalSignal
 import br.com.vendamais.mobile.domain.cadastro.LemmitAgePolicy
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
+import br.com.vendamais.mobile.util.ErpFileCompressor
 import br.com.vendamais.mobile.ui.components.rememberKeyboardAwareFooterState
 import br.com.vendamais.mobile.ui.components.WebCard
 import br.com.vendamais.mobile.ui.components.VendaWizardProgress
@@ -91,8 +92,10 @@ import br.com.vendamais.mobile.ui.theme.EmeraldDark
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
 import br.com.vendamais.mobile.ui.theme.Red100
 import br.com.vendamais.mobile.ui.theme.Red500
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -115,10 +118,17 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 
-private const val MAX_UPLOAD_BYTES = 10 * 1024 * 1024
+private const val MAX_UPLOAD_BYTES = 5 * 1024 * 1024
 private const val LEMMIT_MAX_ATTEMPTS = 3
 private const val LEMMIT_TIMEOUT_MS = 12000L
 private const val LEMMIT_RETRY_DELAY_MS = 900L
+
+private data class PendingDependenteCompression(
+    val index: Int,
+    val fileName: String,
+    val mimeType: String,
+    val bytes: ByteArray,
+)
 
 private data class DependenteFormState(
     val nome: String = "",
@@ -182,6 +192,8 @@ fun InclusaoDependenteDialog(
     var salvando by rememberSaveable { mutableStateOf(false) }
     var enviando by rememberSaveable { mutableStateOf(false) }
     var localError by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingCompression by remember { mutableStateOf<PendingDependenteCompression?>(null) }
+    var compressingFile by rememberSaveable { mutableStateOf(false) }
     var localNotice by rememberSaveable { mutableStateOf<String?>(null) }
     var successDialogMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var completionHasPendingAttachments by rememberSaveable { mutableStateOf(false) }
@@ -337,10 +349,19 @@ fun InclusaoDependenteDialog(
             runCatching {
                 val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                     ?: error("Nao foi possivel ler o arquivo.")
+                val fileName = resolveFileName(context, uri)
+                val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
+                if (bytes.size > MAX_UPLOAD_BYTES) {
+                    pendingCompression = PendingDependenteCompression(index, fileName, mimeType, bytes)
+                    updateDependente(dependentes, index) { it.copy(uploading = false) }
+                    localError = "O anexo excede o limite de 5 MB aceito pelo ERP."
+                    return@runCatching
+                }
+                pendingCompression = null
                 uploadDependenteArquivo(
                     index = index,
-                    fileName = resolveFileName(context, uri),
-                    mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream",
+                    fileName = fileName,
+                    mimeType = mimeType,
                     bytes = bytes,
                 )
             }.onSuccess {
@@ -365,6 +386,13 @@ fun InclusaoDependenteDialog(
             runCatching {
                 val cameraFile = File(cameraPath)
                 val bytes = cameraFile.readBytes()
+                if (bytes.size > MAX_UPLOAD_BYTES) {
+                    pendingCompression = PendingDependenteCompression(index, cameraFile.name, "image/jpeg", bytes)
+                    updateDependente(dependentes, index) { it.copy(uploading = false) }
+                    localError = "O anexo excede o limite de 5 MB aceito pelo ERP."
+                    return@runCatching
+                }
+                pendingCompression = null
                 uploadDependenteArquivo(
                     index = index,
                     fileName = cameraFile.name,
@@ -1553,7 +1581,10 @@ fun InclusaoDependenteDialog(
             InclusaoMessageTone.SUCCESS -> "Sucesso"
         }
         AlertDialog(
-            onDismissRequest = { localError = null },
+            onDismissRequest = {
+                localError = null
+                pendingCompression = null
+            },
             title = {
                 Text(
                     title,
@@ -1561,19 +1592,69 @@ fun InclusaoDependenteDialog(
                 )
             },
             text = {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = container,
-                    shape = MaterialTheme.shapes.medium,
-                ) {
-                    Text(
-                        text = message,
-                        color = textColor,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = container,
+                        shape = MaterialTheme.shapes.medium,
+                    ) {
+                        Text(
+                            text = message,
+                            color = textColor,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        )
+                    }
+                    if (pendingCompression != null) {
+                        Button(
+                            onClick = {
+                                val pending = pendingCompression ?: return@Button
+                                scope.launch {
+                                    compressingFile = true
+                                    runCatching {
+                                        val prepared = withContext(Dispatchers.IO) {
+                                            ErpFileCompressor.compress(
+                                                context = context,
+                                                bytes = pending.bytes,
+                                                fileName = pending.fileName,
+                                                mimeType = pending.mimeType,
+                                            )
+                                        }
+                                        updateDependente(dependentes, pending.index) { it.copy(uploading = true) }
+                                        uploadDependenteArquivo(
+                                            index = pending.index,
+                                            fileName = prepared.fileName,
+                                            mimeType = prepared.mimeType,
+                                            bytes = prepared.bytes,
+                                        )
+                                        pendingCompression = null
+                                        localError = null
+                                        localNotice = "Arquivo comprimido e anexado com sucesso."
+                                    }.onFailure { throwable ->
+                                        updateDependente(dependentes, pending.index) { it.copy(uploading = false) }
+                                        localError = CadastroApiErrorMapper.mapUserMessage(
+                                            throwable.message,
+                                            "Nao foi possivel comprimir o arquivo.",
+                                        )
+                                    }
+                                    compressingFile = false
+                                }
+                            },
+                            enabled = !compressingFile,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(if (compressingFile) "Comprimindo..." else "Comprimir")
+                        }
+                    }
                 }
             },
-            confirmButton = { TextButton(onClick = { localError = null }) { Text("OK") } },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        localError = null
+                        pendingCompression = null
+                    },
+                ) { Text("OK") }
+            },
         )
     }
 
@@ -2121,7 +2202,7 @@ private fun validateUpload(fileName: String, mimeType: String, size: Long) {
     val acceptedName = lower.endsWith(".pdf") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png")
     val acceptedMime = mimeType in setOf("application/pdf", "image/jpeg", "image/png")
     if (!acceptedName && !acceptedMime) throw IllegalStateException("Arquivo invalido. Use PDF, JPG ou PNG.")
-    if (size > MAX_UPLOAD_BYTES) throw IllegalStateException("Arquivo excede 10MB.")
+    if (size > MAX_UPLOAD_BYTES) throw IllegalStateException("O anexo excede o limite de 5 MB aceito pelo ERP.")
 }
 
 private fun createCameraCaptureUri(context: Context): Pair<Uri, String> {

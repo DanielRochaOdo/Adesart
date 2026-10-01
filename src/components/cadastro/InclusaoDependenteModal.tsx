@@ -13,7 +13,8 @@ import { LemmitLimitModal } from './LemmitLimitModal';
 import { ParceiroInvalidoModal } from './ParceiroInvalidoModal';
 import { SelectStatusModal } from './SelectStatusModal';
 import { EmpresaNaoIdentificadaModal } from './EmpresaNaoIdentificadaModal';
-import { uploadToStorage, UploadedFile, validateFile } from '../../utils/uploadFile';
+import { ERP_MAX_FILE_SIZE, uploadToStorage, UploadedFile, validateFile } from '../../utils/uploadFile';
+import { compressFileForErp } from '../../utils/compressErpFile';
 import { clearDraft, loadDraft, saveBeforeFilePicker, saveDraft } from '../../utils/draftStorage';
 import { clearPendingFile, loadPendingFile, savePendingFile } from '../../utils/pendingFileStore';
 
@@ -121,6 +122,8 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [uploadingFileIndex, setUploadingFileIndex] = useState<number | null>(null);
+  const [pendingCompression, setPendingCompression] = useState<{ index: number; file: File } | null>(null);
+  const [compressingFile, setCompressingFile] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [salvandoPendente, setSalvandoPendente] = useState(false);
   const [planosEmpresa, setPlanosEmpresa] = useState<any[]>([]);
@@ -806,7 +809,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
     }
   };
 
-  const uploadDependenteFile = async (index: number, file: File) => {
+  const uploadDependenteFile = async (index: number, file: File): Promise<boolean> => {
     if (profile?.id) {
       try {
         await savePendingFile(profile.id, 'inclusao-dependente-modal', getPendingFileSlotKey(index), file);
@@ -867,6 +870,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
 
       setSuccess('Arquivo carregado com sucesso!');
       setTimeout(() => setSuccess(''), 3000);
+      return true;
     } catch (err) {
       console.error('Erro ao fazer upload do arquivo:', err);
       const errorMessage = err instanceof Error ? err.message : 'Erro ao fazer upload do arquivo';
@@ -876,6 +880,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
       );
       setDependentesState(dependentesComFalha);
       persistInclusaoDraftSnapshot(dependentesComFalha);
+      return false;
     } finally {
       setUploadingFileIndex(null);
     }
@@ -894,71 +899,46 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
 
     const validation = validateFile(file);
     if (!validation.valid) {
-      setError(validation.error || 'Arquivo inválido');
+      if (file.size > ERP_MAX_FILE_SIZE) {
+        setPendingCompression({ index, file });
+        setError('O arquivo excede o limite de 5 MB aceito pelo ERP.');
+      } else {
+        setPendingCompression(null);
+        setError(validation.error || 'Arquivo inválido');
+      }
       e.target.value = '';
       return;
     }
 
+    setPendingCompression(null);
     try {
       await uploadDependenteFile(index, file);
     } finally {
       e.target.value = '';
     }
-    return;
 
+  };
+
+  const handleCompressPendingFile = async () => {
+    if (!pendingCompression || compressingFile || uploadingFileIndex !== null) return;
+
+    setCompressingFile(true);
+    setError('');
     try {
-      const dependente = dependentesRef.current[index];
-      if (dependente.arquivo?.path) {
-        try {
-          await supabase.storage
-            .from('cadastros-temp-files')
-            .remove([dependente.arquivo.path]);
-        } catch (err) {
-          console.error('Erro ao remover arquivo anterior:', err);
-        }
+      const originalSize = pendingCompression.file.size;
+      const compressed = await compressFileForErp(pendingCompression.file);
+      const uploaded = await uploadDependenteFile(pendingCompression.index, compressed);
+      if (!uploaded) {
+        throw new Error('O arquivo foi comprimido, mas não pôde ser anexado. Tente novamente.');
       }
-
-      if (!profile?.id) {
-        throw new Error('Usuário não autenticado');
-      }
-
-      const cpfLimpo = removeCPFMask(dependente.cpf);
-      const cpfArquivo = cpfLimpo && cpfLimpo.trim() ? cpfLimpo : '0';
-      const prefix = `dependentes-temp/${cpfArquivo}`;
-
-      const uploadedFile = await uploadToStorage(
-        file,
-        profile.id,
-        'cadastros-temp-files',
-        prefix
+      setPendingCompression(null);
+      setSuccess(
+        `Arquivo comprimido de ${(originalSize / 1024 / 1024).toFixed(2)} MB para ${(compressed.size / 1024 / 1024).toFixed(2)} MB e anexado com sucesso!`,
       );
-
-      const novosDependentes = [...dependentesRef.current];
-      novosDependentes[index] = {
-        ...novosDependentes[index],
-        arquivo: uploadedFile,
-        uploadingFile: false,
-      };
-      setDependentesState(novosDependentes);
-      persistInclusaoDraftSnapshot(novosDependentes);
-      if (profile?.id) {
-        await clearPendingFile(profile.id, 'inclusao-dependente-modal', getPendingFileSlotKey(index));
-      }
-
-      setSuccess('Arquivo carregado com sucesso!');
-      setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
-      console.error('Erro ao fazer upload do arquivo:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Erro ao fazer upload do arquivo';
-      setError(errorMessage);
-      setDependentesState((prevDependentes) =>
-        prevDependentes.map((dep, depIndex) =>
-          depIndex === index ? { ...dep, uploadingFile: false } : dep
-        )
-      );
+      setError(err instanceof Error ? err.message : 'Não foi possível comprimir o arquivo.');
     } finally {
-      setUploadingFileIndex(null);
-      e.target.value = '';
+      setCompressingFile(false);
     }
   };
 
@@ -1893,7 +1873,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
                               className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                             />
                             <p className="text-xs text-slate-500 mt-1">
-                              Formatos aceitos: PDF, JPG, PNG. Tamanho máximo: 10MB.
+                              Formatos aceitos: PDF, JPG, PNG. Tamanho máximo: 5MB.
                             </p>
                             {uploadingFileIndex === index && (
                               <div className="flex items-center gap-2 mt-2">
@@ -2018,7 +1998,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
                         className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                       />
                       <p className="text-xs text-slate-500 mt-1">
-                        Formatos aceitos: PDF, JPG, PNG. Tamanho máximo: 10MB.
+                        Formatos aceitos: PDF, JPG, PNG. Tamanho máximo: 5MB.
                       </p>
                       {(dep.uploadingFile || uploadingFileIndex === index) && (
                         <div className="flex items-center gap-2 mt-2">
@@ -2069,8 +2049,28 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
           )}
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-              {error}
+            <div className="space-y-2">
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                {error}
+              </div>
+              {pendingCompression && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleCompressPendingFile}
+                  disabled={compressingFile || uploadingFileIndex !== null}
+                  className="w-full sm:w-auto"
+                >
+                  {compressingFile ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Comprimindo...
+                    </>
+                  ) : (
+                    'Comprimir'
+                  )}
+                </Button>
+              )}
             </div>
           )}
 

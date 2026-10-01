@@ -790,6 +790,14 @@ private fun resolveNavigationGroups(roleRaw: String?): List<AppNavGroupItem> {
             AppNavModule("teams", "Equipes", Icons.Rounded.Groups, MainTab.TEAMS),
         ),
     )
+    val administracaoCadastro = AppNavGroupItem(
+        group = AppNavGroup.ADMINISTRACAO,
+        label = "Admin",
+        icon = Icons.Rounded.Settings,
+        modules = listOf(
+            AppNavModule("fila_upload", "Fila Upload ERP", Icons.Rounded.Refresh, MainTab.FILA_UPLOAD_ERP),
+        ),
+    )
     val administracao = AppNavGroupItem(
         group = AppNavGroup.ADMINISTRACAO,
         label = "Admin",
@@ -813,7 +821,8 @@ private fun resolveNavigationGroups(roleRaw: String?): List<AppNavGroupItem> {
     return when (role) {
         "ADMINISTRADOR", "ADMIN" -> listOf(inicio, operacao, pessoasCompleto, administracao, conta)
         "GERENTE", "SUPERVISOR" -> listOf(inicio, operacao, pessoasCompleto, conta)
-        "CADASTRO", "VENDEDOR", "ADESIONISTA" -> {
+        "CADASTRO" -> listOf(inicio, operacao, pessoasCompleto, administracaoCadastro, conta)
+        "VENDEDOR", "ADESIONISTA" -> {
             val groups = mutableListOf(inicio, operacao)
             if (canSeeEquipes(role)) groups.add(pessoasEquipes)
             groups.add(conta)

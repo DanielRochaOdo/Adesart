@@ -57,7 +57,7 @@ const authorize = async (req: Request, supabase: any) => {
     .eq("id", user.id)
     .maybeSingle();
 
-  if (profile?.role !== "ADMINISTRADOR") {
+  if (!["ADMINISTRADOR", "CADASTRO"].includes(String(profile?.role || ""))) {
     return { ok: false, source: "user", userId: user.id };
   }
 

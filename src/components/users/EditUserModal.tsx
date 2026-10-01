@@ -11,6 +11,8 @@ interface EditUserModalProps {
   onClose: () => void;
   onSuccess: () => void;
   canEditRole: boolean;
+  canEditExternalId?: boolean;
+  canEditLemmitLimit?: boolean;
 }
 
 type ProfileUpdateData = {
@@ -18,13 +20,13 @@ type ProfileUpdateData = {
   email: string;
   telefone: string | null;
   is_active: boolean;
-  lemmit_limite_consultas: number | null;
+  lemmit_limite_consultas?: number | null;
   role?: Profile['role'];
   external_id?: string | null;
   team_id?: string | null;
 };
 
-export function EditUserModal({ user, onClose, onSuccess, canEditRole }: EditUserModalProps) {
+export function EditUserModal({ user, onClose, onSuccess, canEditRole, canEditExternalId = true, canEditLemmitLimit = true }: EditUserModalProps) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingTeams, setLoadingTeams] = useState(true);
@@ -85,18 +87,21 @@ export function EditUserModal({ user, onClose, onSuccess, canEditRole }: EditUse
         email: formData.email,
         telefone: telefone || null,
         is_active: formData.is_active,
-        lemmit_limite_consultas: formData.lemmit_limite_consultas === '' ? null : parseFloat(formData.lemmit_limite_consultas as string),
       };
+
+      if (canEditLemmitLimit) {
+        payload.lemmit_limite_consultas = formData.lemmit_limite_consultas === '' ? null : parseFloat(formData.lemmit_limite_consultas as string);
+      }
 
       if (canEditRole) {
         payload.role = formData.role;
       }
 
       if (['CADASTRO', 'SUPERVISOR', 'VENDEDOR', 'ADESIONISTA'].includes(formData.role)) {
-        payload.external_id = formData.external_id;
+        if (canEditExternalId) payload.external_id = formData.external_id;
         payload.team_id = formData.team_id || null;
       } else {
-        payload.external_id = null;
+        if (canEditExternalId) payload.external_id = null;
         payload.team_id = null;
       }
 
@@ -196,6 +201,7 @@ export function EditUserModal({ user, onClose, onSuccess, canEditRole }: EditUse
                 value={formData.external_id}
                 onChange={(e) => setFormData({ ...formData, external_id: e.target.value })}
                 placeholder="Digite o código do vendedor"
+                disabled={!canEditExternalId}
               />
 
               {loadingTeams ? (
@@ -228,6 +234,7 @@ export function EditUserModal({ user, onClose, onSuccess, canEditRole }: EditUse
               placeholder="Ex: 10.00 para R$ 10,00 por mês"
               min="0"
               step="0.01"
+              disabled={!canEditLemmitLimit}
             />
             <p className="text-xs text-gray-500 mt-1">
               Valor em reais (R$) que o usuário pode gastar por mês com consultas Lemmit. Cada consulta custa R$ 0,12. Deixe em branco para ilimitado ou digite 0 para bloquear consultas.

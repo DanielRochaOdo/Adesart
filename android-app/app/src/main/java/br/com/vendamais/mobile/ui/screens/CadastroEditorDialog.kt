@@ -89,6 +89,7 @@ import br.com.vendamais.mobile.domain.cadastro.LemmitAgePolicy
 import br.com.vendamais.mobile.domain.cadastro.isPendingCadastroStatus
 import br.com.vendamais.mobile.ui.AppUiState
 import br.com.vendamais.mobile.ui.AppViewModel
+import br.com.vendamais.mobile.util.ErpFileCompressor
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 import br.com.vendamais.mobile.ui.components.rememberKeyboardAwareFooterState
 import br.com.vendamais.mobile.ui.components.WebCard
@@ -180,6 +181,12 @@ private data class CadastroEnderecoFormState(
     val ufSigla: String? = null,
 )
 
+private data class PendingCadastroCompression(
+    val fileName: String,
+    val mimeType: String,
+    val bytes: ByteArray,
+)
+
 private enum class CadastroMessageTone {
     WARNING,
     ALERT,
@@ -243,6 +250,8 @@ fun CadastroEditorDialog(
     var uploading by rememberSaveable { mutableStateOf(false) }
     var previewingArquivo by rememberSaveable { mutableStateOf(false) }
     var localMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingCompression by remember { mutableStateOf<PendingCadastroCompression?>(null) }
+    var compressingFile by rememberSaveable { mutableStateOf(false) }
     var showSelectStatusOnClose by rememberSaveable { mutableStateOf(false) }
     var suppressBackgroundPersist by rememberSaveable(cadastro.id) { mutableStateOf(false) }
     var showArquivoSourceModal by rememberSaveable { mutableStateOf(false) }
@@ -464,9 +473,17 @@ fun CadastroEditorDialog(
                     context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                         ?: error("Nao foi possivel ler o arquivo.")
                 }
+                val fileName = resolveFileName(context, uri)
+                val mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream"
+                if (bytes.size > MAX_UPLOAD_BYTES) {
+                    pendingCompression = PendingCadastroCompression(fileName, mimeType, bytes)
+                    localMessage = "O anexo excede o limite de 5 MB aceito pelo ERP."
+                    return@runCatching
+                }
+                pendingCompression = null
                 uploadSelectedArquivo(
-                    fileName = resolveFileName(context, uri),
-                    mimeType = context.contentResolver.getType(uri) ?: "application/octet-stream",
+                    fileName = fileName,
+                    mimeType = mimeType,
                     bytes = bytes,
                 )
             }.onSuccess {
@@ -491,6 +508,12 @@ fun CadastroEditorDialog(
             runCatching {
                 val cameraFile = File(cameraPath)
                 val bytes = withContext(Dispatchers.IO) { cameraFile.readBytes() }
+                if (bytes.size > MAX_UPLOAD_BYTES) {
+                    pendingCompression = PendingCadastroCompression(cameraFile.name, "image/jpeg", bytes)
+                    localMessage = "O anexo excede o limite de 5 MB aceito pelo ERP."
+                    return@runCatching
+                }
+                pendingCompression = null
                 uploadSelectedArquivo(
                     fileName = cameraFile.name,
                     mimeType = "image/jpeg",
@@ -1923,16 +1946,58 @@ fun CadastroEditorDialog(
                         val tone = resolveCadastroMessageTone(message)
                         val (container, textColor) = messageToneColors(tone)
                         WebCard {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = container,
-                                shape = MaterialTheme.shapes.medium,
-                            ) {
-                                Text(
-                                    text = message,
-                                    color = textColor,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                )
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Surface(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    color = container,
+                                    shape = MaterialTheme.shapes.medium,
+                                ) {
+                                    Text(
+                                        text = message,
+                                        color = textColor,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    )
+                                }
+                                if (pendingCompression != null) {
+                                    Button(
+                                        onClick = {
+                                            val pending = pendingCompression ?: return@Button
+                                            scope.launch {
+                                                compressingFile = true
+                                                uploading = true
+                                                runCatching {
+                                                    val prepared = withContext(Dispatchers.IO) {
+                                                        ErpFileCompressor.compress(
+                                                            context = context,
+                                                            bytes = pending.bytes,
+                                                            fileName = pending.fileName,
+                                                            mimeType = pending.mimeType,
+                                                        )
+                                                    }
+                                                    uploadSelectedArquivo(
+                                                        fileName = prepared.fileName,
+                                                        mimeType = prepared.mimeType,
+                                                        bytes = prepared.bytes,
+                                                    )
+                                                    pendingCompression = null
+                                                    localMessage =
+                                                        "Arquivo comprimido e anexado com sucesso."
+                                                }.onFailure { throwable ->
+                                                    localMessage = CadastroApiErrorMapper.mapUserMessage(
+                                                        throwable.message,
+                                                        "Nao foi possivel comprimir o arquivo.",
+                                                    )
+                                                }
+                                                uploading = false
+                                                compressingFile = false
+                                            }
+                                        },
+                                        enabled = !compressingFile && !uploading,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) {
+                                        Text(if (compressingFile) "Comprimindo..." else "Comprimir")
+                                    }
+                                }
                             }
                         }
                     }
@@ -1947,7 +2012,7 @@ fun CadastroEditorDialog(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                     if (
-                        state.profile?.role in setOf("ADMINISTRADOR", "ADMIN", "VENDEDOR") &&
+                        state.profile?.role in setOf("ADMINISTRADOR", "ADMIN", "VENDEDOR", "CADASTRO") &&
                         currentStep == 1 &&
                         isPendingCadastroStatus(cadastro.status)
                     ) {

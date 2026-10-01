@@ -2126,7 +2126,7 @@ class AppViewModel(
     fun openDashboardDrilldown(tipoCadastro: String, metricType: DashboardMetricType) {
         val session = currentSession ?: return
         val profile = _uiState.value.profile ?: return
-        if (profile.role !in setOf("ADMINISTRADOR", "ADMIN", "GERENTE", "GESTOR", "SUPERVISOR")) return
+        if (profile.role !in setOf("ADMINISTRADOR", "ADMIN", "GERENTE", "GESTOR", "SUPERVISOR", "CADASTRO")) return
 
         val titlePrefix = when (metricType) {
             DashboardMetricType.TOTAL -> "Total"
