@@ -1517,9 +1517,29 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
 
         <div className="p-6 space-y-6">
           {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-800">{error}</p>
+            <div className="space-y-2">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-800">{error}</p>
+              </div>
+              {pendingCompression && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleCompressPendingFile}
+                  disabled={compressingFile || dependentes.some((dep) => dep.uploadingFile)}
+                  className="w-full sm:w-auto"
+                >
+                  {compressingFile ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Comprimindo...
+                    </>
+                  ) : (
+                    'Comprimir'
+                  )}
+                </Button>
+              )}
             </div>
           )}
 
