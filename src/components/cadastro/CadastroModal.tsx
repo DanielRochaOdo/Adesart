@@ -15,7 +15,8 @@ import { SelectStatusModal } from './SelectStatusModal';
 import { ParceiroInvalidoModal } from './ParceiroInvalidoModal';
 import { EmpresaSearchCard } from './EmpresaSearchCard';
 import { supabase } from '../../lib/supabase';
-import { uploadToStorage, UploadedFile, validateFile } from '../../utils/uploadFile';
+import { ERP_MAX_FILE_SIZE, uploadToStorage, UploadedFile, validateFile } from '../../utils/uploadFile';
+import { compressFileForErp } from '../../utils/compressErpFile';
 import { clearDraft, loadDraft, saveBeforeFilePicker, saveDraft } from '../../utils/draftStorage';
 
 interface CadastroModalProps {
@@ -73,6 +74,8 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
   const [selectedEmpresa, setSelectedEmpresa] = useState<Empresa | null>(null);
   const [arquivo, setArquivo] = useState<UploadedFile | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
+  const [pendingCompressionFile, setPendingCompressionFile] = useState<File | null>(null);
+  const [compressingFile, setCompressingFile] = useState(false);
   const [novoContato, setNovoContato] = useState({ tipo: 'celular', valor: '' });
   const [currentStep, setCurrentStep] = useState<1 | 2>(1);
   const [draftInitialized, setDraftInitialized] = useState(false);
@@ -634,24 +637,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
     onClose();
   };
 
-  const handleArquivoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const files = e.target.files;
-    if (!files || files.length === 0) {
-      return;
-    }
-
-    const file = files[0];
-
-    const validation = validateFile(file);
-    if (!validation.valid) {
-      setError(validation.error || 'Arquivo invÃ¡lido');
-      e.target.value = '';
-      return;
-    }
-
+  const uploadArquivoSelecionado = async (file: File) => {
     setUploadingFile(true);
     setError('');
 
@@ -678,6 +664,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
       );
 
       setArquivo(uploadedFile);
+      setPendingCompressionFile(null);
 
       await updateCadastro(cadastroAtual.id, {
         arquivo_path: uploadedFile.path
@@ -685,13 +672,55 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
 
       setSuccess('Arquivo carregado com sucesso!');
       setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      console.error('Erro ao fazer upload do arquivo:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Erro ao fazer upload do arquivo';
-      setError(errorMessage);
     } finally {
       setUploadingFile(false);
-      e.target.value = '';
+    }
+  };
+
+  const handleArquivoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    const validation = validateFile(file);
+    if (!validation.valid) {
+      if (file.size > ERP_MAX_FILE_SIZE) {
+        setPendingCompressionFile(file);
+        setError('O arquivo excede o limite de 5 MB aceito pelo ERP.');
+      } else {
+        setPendingCompressionFile(null);
+        setError(validation.error || 'Arquivo invÃ¡lido');
+      }
+      return;
+    }
+
+    try {
+      await uploadArquivoSelecionado(file);
+    } catch (err) {
+      console.error('Erro ao fazer upload do arquivo:', err);
+      setError(err instanceof Error ? err.message : 'Erro ao fazer upload do arquivo');
+    }
+  };
+
+  const handleCompressArquivo = async () => {
+    if (!pendingCompressionFile || compressingFile || uploadingFile) return;
+
+    setCompressingFile(true);
+    setError('');
+    try {
+      const compressed = await compressFileForErp(pendingCompressionFile);
+      await uploadArquivoSelecionado(compressed);
+      setSuccess(
+        `Arquivo comprimido de ${(pendingCompressionFile.size / 1024 / 1024).toFixed(2)} MB para ${(compressed.size / 1024 / 1024).toFixed(2)} MB e anexado com sucesso!`,
+      );
+    } catch (err) {
+      console.error('Erro ao comprimir arquivo:', err);
+      setError(err instanceof Error ? err.message : 'NÃ£o foi possÃ­vel comprimir o arquivo.');
+    } finally {
+      setCompressingFile(false);
     }
   };
 
@@ -1816,7 +1845,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
                       className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     <p className="text-xs text-slate-500 mt-1">
-                      Formatos aceitos: PDF, JPG, PNG. Tamanho máximo: 10MB.
+                      Formatos aceitos: PDF, JPG, PNG. Tamanho máximo: 5MB.
                     </p>
                     {uploadingFile && (
                       <div className="flex items-center gap-2 mt-2">
@@ -1858,8 +1887,28 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
           )}
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-              {error}
+            <div className="space-y-2">
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                {error}
+              </div>
+              {pendingCompressionFile && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleCompressArquivo}
+                  disabled={compressingFile || uploadingFile}
+                  className="w-full sm:w-auto"
+                >
+                  {compressingFile ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Comprimindo...
+                    </>
+                  ) : (
+                    'Comprimir'
+                  )}
+                </Button>
+              )}
             </div>
           )}
 
