@@ -797,7 +797,7 @@ export function Dashboard() {
     periodo, inicioPersonalizado, fimPersonalizado, filtros,
   ]);
 
-  const gerencial = profile?.role === 'ADMINISTRADOR' || profile?.role === 'GERENTE';
+  const gerencial = profile?.role === 'ADMINISTRADOR' || profile?.role === 'GERENTE' || profile?.role === 'CADASTRO';
   const equipeRestrita = profile?.role === 'SUPERVISOR' ? profile.team_id : null;
   const datas = useMemo(
     () => datasPeriodo(periodo, inicioPersonalizado, fimPersonalizado),
