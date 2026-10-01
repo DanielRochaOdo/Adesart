@@ -54,6 +54,8 @@ interface QueueItem {
     nome: string;
     cpf: string;
     empresa_nome: string;
+    vendedor_nome?: string | null;
+    adesionista_nome?: string | null;
   };
 }
 
@@ -106,7 +108,7 @@ export function FilaUploadERP() {
         .from('erp_upload_queue')
         .select(`
           *,
-          cadastros(nome, cpf, empresa_nome)
+          cadastros(nome, cpf, empresa_nome, vendedor_nome, adesionista_nome)
         `, { count: 'exact' })
         .order('created_at', { ascending: false });
 
@@ -129,7 +131,9 @@ export function FilaUploadERP() {
         cadastro: item.cadastros || {
           nome: item.cliente_nome || `Dependente ID: ${item.id_dependente}`,
           cpf: item.cliente_cpf || '-',
-          empresa_nome: item.empresa_nome || '-'
+          empresa_nome: item.empresa_nome || '-',
+          vendedor_nome: null,
+          adesionista_nome: null,
         }
       })) as QueueItem[];
 
@@ -511,6 +515,8 @@ export function FilaUploadERP() {
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Status</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Cliente</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Empresa</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Vendedor</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Adesionista</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Arquivo</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Tipo</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Tentativas</th>
@@ -542,6 +548,22 @@ export function FilaUploadERP() {
                         <td className="px-4 py-3">
                           <div className="text-sm text-slate-600">
                             {item.cadastro?.empresa_nome || 'N/A'}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div
+                            className="max-w-48 truncate text-sm text-slate-600"
+                            title={item.cadastro?.vendedor_nome || undefined}
+                          >
+                            {item.cadastro?.vendedor_nome || '—'}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div
+                            className="max-w-48 truncate text-sm text-slate-600"
+                            title={item.cadastro?.adesionista_nome || undefined}
+                          >
+                            {item.cadastro?.adesionista_nome || '—'}
                           </div>
                         </td>
                         <td className="px-4 py-3">

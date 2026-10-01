@@ -377,7 +377,7 @@ class SupabaseRepository(
             header("Prefer", "count=exact")
             parameter(
                 "select",
-                "id,created_at,updated_at,status,attempts,next_attempt_at,last_attempt_at,last_error,last_error_code,last_status_code,claimed_at,finished_at,manual_reprocess_count,worker_source,file_size_bytes,cliente_nome,cliente_cpf,empresa_nome,erp_response,cadastro_id,created_by,id_funcionario,id_dependente,arquivo_path,arquivo_nome,bucket,tipo,cadastros(nome,cpf,empresa_nome)",
+                "id,created_at,updated_at,status,attempts,next_attempt_at,last_attempt_at,last_error,last_error_code,last_status_code,claimed_at,finished_at,manual_reprocess_count,worker_source,file_size_bytes,cliente_nome,cliente_cpf,empresa_nome,erp_response,cadastro_id,created_by,id_funcionario,id_dependente,arquivo_path,arquivo_nome,bucket,tipo,cadastros(nome,cpf,empresa_nome,vendedor_nome,adesionista_nome)",
             )
             status?.takeIf { it.isNotBlank() && it != "todos" }?.let { parameter("status", "eq.$it") }
             parameter("order", "created_at.desc")
