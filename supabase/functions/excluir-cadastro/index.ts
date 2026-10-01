@@ -92,6 +92,16 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    if (
+      profile.role === 'CADASTRO' &&
+      !['incompleto', 'adesoes_pendentes'].includes(String(cadastro.status || '').toLowerCase())
+    ) {
+      return new Response(
+        JSON.stringify({ error: 'A função Cadastro só pode excluir adesões pendentes' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { error: insertError } = await supabase
       .from('cadastros_excluidos')
       .insert({
