@@ -407,7 +407,11 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
     try {
       const { error: deleteError } = await supabase
         .from('cadastro_links')
-        .delete()
+        .update({
+          is_active: false,
+          deleted_at: new Date().toISOString(),
+          deleted_by: profile?.id || null,
+        })
         .eq('id', link.id);
 
       if (deleteError) throw deleteError;
