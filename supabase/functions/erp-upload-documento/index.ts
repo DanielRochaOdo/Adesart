@@ -113,6 +113,13 @@ Deno.serve(async (req: Request) => {
         Number(cadastro?.empresa_codigo || cadastro?.empresa_id || 0);
     }
 
+    if (targetCpf && empresaCodigo <= 0) {
+      return jsonResponse({
+        error: "Empresa do cadastro nao identificada para resolver o CPF principal",
+        code: "PRIMARY_DEPENDENT_NOT_FOUND",
+      }, 422);
+    }
+
     if (targetCpf && empresaCodigo > 0) {
       const resolved = await resolveCanonicalDependentId(
         supabase,
