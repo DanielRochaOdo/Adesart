@@ -3879,7 +3879,7 @@ class AppViewModel(
                                     .takeIf { value -> support.adesionistas.any { it.id == value } }
                                     ?: "",
                                 links = support.links,
-                                metricsByLinkId = support.linkMetricsByLinkId,
+                                metricsByLinkId = support.linkMetricsById,
                             ),
                         )
                     }
