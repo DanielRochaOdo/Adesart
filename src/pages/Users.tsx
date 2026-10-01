@@ -571,7 +571,7 @@ export function Users() {
             </div>
           )}
 
-          <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+          <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
             <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-sm font-semibold text-slate-800">Filtros</h2>
