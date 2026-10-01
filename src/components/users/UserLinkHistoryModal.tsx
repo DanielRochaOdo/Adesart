@@ -204,7 +204,7 @@ export function UserLinkHistoryModal({ user, onClose }: Props) {
             .select(
               'id, empresa_codigo, empresa_nome, adesionista_nome, vendedor_nome, vendedor_codigo, created_at, deleted_at, is_active',
             )
-            .eq('created_by', user.id)
+            .eq('vendedor_id', user.id)
             .order('empresa_codigo', { ascending: true })
             .order('created_at', { ascending: false })
             .range(offset, offset + 999);
@@ -489,12 +489,10 @@ export function UserLinkHistoryModal({ user, onClose }: Props) {
                                   </div>
 
                                   <div className="min-w-0 text-xs text-slate-500 dark:text-slate-400">
-                                    {link.adesionista_nome?.trim() ? (
+                                    {link.adesionista_nome?.trim() && (
                                       <span className="truncate">
                                         Adesionista: {link.adesionista_nome}
                                       </span>
-                                    ) : (
-                                      <span className="text-slate-400">Sem adesionista</span>
                                     )}
                                   </div>
 
