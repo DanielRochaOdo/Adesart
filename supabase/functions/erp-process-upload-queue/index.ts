@@ -3,6 +3,11 @@ import { corsHeaders, createServiceClient, jsonResponse } from "../_shared/publi
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
+const normalizeDigits = (value: unknown) =>
+  String(value ?? "").replace(/\D/g, "");
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 class UploadQueueError extends Error {
   statusCode: number | null;
   code: string;
@@ -97,6 +102,152 @@ const extractErpAcceptance = (result: any) => {
   };
 };
 
+const resolveCanonicalDependentId = async (supabase: any, item: any) => {
+  let targetCpf = normalizeDigits(item?.target_dependente_cpf);
+  let empresaCodigo = 0;
+
+  if (item?.cadastro_id) {
+    const { data: cadastro, error: cadastroError } = await supabase
+      .from("cadastros")
+      .select("cpf,empresa_codigo,empresa_id")
+      .eq("id", item.cadastro_id)
+      .maybeSingle();
+
+    if (cadastroError) {
+      console.warn(
+        "[erp-process-upload-queue] Falha ao carregar cadastro para resolver CPF principal:",
+        cadastroError.message,
+      );
+    } else if (cadastro) {
+      targetCpf = targetCpf || normalizeDigits(cadastro.cpf);
+      empresaCodigo = Number(cadastro.empresa_codigo || cadastro.empresa_id || 0);
+    }
+  }
+
+  // Itens legados sem CPF-alvo continuam usando o ID ja persistido.
+  if (!targetCpf) {
+    const legacyId = Number(item?.id_dependente || 0);
+    if (Number.isInteger(legacyId) && legacyId > 0) return legacyId;
+
+    throw new UploadQueueError(
+      "CPF principal do cadastro nao identificado para resolver o destino do anexo.",
+      "PRIMARY_DEPENDENT_NOT_FOUND",
+      422,
+    );
+  }
+
+  if (empresaCodigo <= 0) {
+    throw new UploadQueueError(
+      "Empresa do cadastro nao identificada para resolver o CPF principal do anexo.",
+      "PRIMARY_DEPENDENT_NOT_FOUND",
+      422,
+    );
+  }
+
+  const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
+  let ERP_ENDPOINT =
+    Deno.env.get("ERP_ENDPOINT") ||
+    Deno.env.get("ERP_BASE_URL") ||
+    "https://odontoart.s4e.com.br";
+
+  if (!ERP_TOKEN) {
+    throw new UploadQueueError("ERP_TOKEN not configured", "ERP_CONFIG", 500);
+  }
+
+  if (!/^https?:\/\//i.test(ERP_ENDPOINT)) {
+    ERP_ENDPOINT = `https://${ERP_ENDPOINT}`;
+  }
+  ERP_ENDPOINT = ERP_ENDPOINT.replace(/\/+$/, "");
+
+  const delays = [0, 750, 2_000];
+
+  for (const delay of delays) {
+    if (delay > 0) await sleep(delay);
+
+    try {
+      let pagina = 1;
+      let totalPaginas = 1;
+
+      do {
+        const params = new URLSearchParams({
+          token: ERP_TOKEN,
+          incluirAns: "true",
+          cpfDependente: targetCpf,
+          pagina: String(pagina),
+        });
+
+        const response = await fetch(
+          `${ERP_ENDPOINT}/v2/api/associados?${params.toString()}`,
+          {
+            headers: { Accept: "application/json" },
+            signal: AbortSignal.timeout(15_000),
+          },
+        );
+
+        if (!response.ok) break;
+
+        const payload = await response.json().catch(() => ({}));
+        const registros = Array.isArray(payload?.dados) ? payload.dados : [];
+
+        for (const associado of registros) {
+          if (
+            empresaCodigo > 0 &&
+            Number(associado?.codigoDaEmpresa || 0) !== empresaCodigo
+          ) {
+            continue;
+          }
+
+          const dependentes = Array.isArray(associado?.dependentes)
+            ? associado.dependentes
+            : [];
+
+          for (const dep of dependentes) {
+            const depCpf = normalizeDigits(
+              dep?.numeroCpfDependente ?? dep?.cpfDependente ?? dep?.cpf,
+            );
+            if (depCpf !== targetCpf) continue;
+
+            const resolvedId = Number(
+              dep?.codigoDependente ?? dep?.codigo ?? dep?.idDependente ?? 0,
+            );
+            if (Number.isInteger(resolvedId) && resolvedId > 0) {
+              if (Number(item?.id_dependente || 0) !== resolvedId) {
+                await supabase
+                  .from("erp_upload_queue")
+                  .update({
+                    id_dependente: resolvedId,
+                    target_dependente_cpf: targetCpf,
+                    last_error: null,
+                    last_error_code: null,
+                    last_status_code: null,
+                  })
+                  .eq("id", item.id);
+              }
+              item.id_dependente = resolvedId;
+              item.target_dependente_cpf = targetCpf;
+              return resolvedId;
+            }
+          }
+        }
+
+        totalPaginas = Math.max(1, Number(payload?.totalPaginas || 1));
+        pagina += 1;
+      } while (pagina <= totalPaginas && pagina <= 20);
+    } catch (error) {
+      console.warn(
+        "[erp-process-upload-queue] Falha ao consultar CPF principal no ERP:",
+        error,
+      );
+    }
+  }
+
+  throw new UploadQueueError(
+    `CPF principal ${targetCpf} nao localizado no ERP para a empresa do cadastro.`,
+    "PRIMARY_DEPENDENT_NOT_FOUND",
+    422,
+  );
+};
+
 const uploadItem = async (supabase: any, item: any) => {
   const { data, error } = await supabase.storage
     .from(item.bucket)
@@ -123,6 +274,9 @@ const uploadItem = async (supabase: any, item: any) => {
       413,
     );
   }
+
+  const canonicalDependenteId = await resolveCanonicalDependentId(supabase, item);
+  item.id_dependente = canonicalDependenteId;
 
   const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
   let ERP_ENDPOINT =

@@ -191,7 +191,7 @@ const resolveErpDependentId = async (cpf: string, empresaCodigo: number) => {
     if (delay > 0) await sleep(delay);
     try {
       const response = await fetch(
-        `${ERP_BASE_URL}/v2/api/associados?token=${encodeURIComponent(ERP_TOKEN)}&cpfAssociado=${normalizedCpf}&incluirAns=true`,
+        `${ERP_BASE_URL}/v2/api/associados?token=${encodeURIComponent(ERP_TOKEN)}&cpfDependente=${normalizedCpf}&incluirAns=true`,
         { headers: { Accept: "application/json" } },
       );
       if (!response.ok) {
@@ -201,15 +201,24 @@ const resolveErpDependentId = async (cpf: string, empresaCodigo: number) => {
 
       const result = await response.json();
       const records = Array.isArray(result?.dados) ? result.dados : [];
-      const associado = records.find((item: any) => Number(item?.codigoDaEmpresa) === Number(empresaCodigo)) || records[0];
+      const associado = records.find(
+        (item: any) => Number(item?.codigoDaEmpresa) === Number(empresaCodigo),
+      );
       if (!associado) {
         lastError = "ERP_ASSOCIADO_ID_NOT_FOUND";
         continue;
       }
 
       const deps = Array.isArray(associado?.dependentes) ? associado.dependentes : [];
-      const titular = deps.find((dep: any) => normalizeDigits(dep?.numeroCpfDependente) === normalizedCpf) || deps[0];
-      const idDependente = Number(titular?.codigoDependente || titular?.codigo || 0);
+      const titular = deps.find(
+        (dep: any) =>
+          normalizeDigits(
+            dep?.numeroCpfDependente ?? dep?.cpfDependente ?? dep?.cpf,
+          ) === normalizedCpf,
+      );
+      const idDependente = Number(
+        titular?.codigoDependente ?? titular?.codigo ?? titular?.idDependente ?? 0,
+      );
       if (idDependente > 0) return idDependente;
 
       lastError = "ERP_DEPENDENTE_ID_NOT_FOUND";
@@ -218,7 +227,11 @@ const resolveErpDependentId = async (cpf: string, empresaCodigo: number) => {
     }
   }
 
-  throw new Error(lastError);
+  throw new Error(
+    lastError === "ERP_DEPENDENTE_ID_NOT_FOUND"
+      ? `PRIMARY_DEPENDENT_NOT_FOUND:CPF ${normalizedCpf}`
+      : lastError,
+  );
 };
 
 const sendErpDocument = async (supabase: any, payload: any) => {
