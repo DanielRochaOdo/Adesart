@@ -176,6 +176,8 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
   const [salvando, setSalvando] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [pendingCompression, setPendingCompression] = useState<{ index: number; file: File } | null>(null);
+  const [compressingFile, setCompressingFile] = useState(false);
   const [lemmitLimitExceeded, setLemmitLimitExceeded] = useState<{
     limiteFormatado?: string;
     consumoFormatado?: string;
@@ -885,58 +887,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
     } finally {
       e.target.value = '';
     }
-    return;
 
-    setDependentesState(prev => prev.map((dep, idx) =>
-      idx === index ? { ...dep, uploadingFile: true } : dep
-    ));
-    setError('');
-
-    try {
-      if (!profile?.id) {
-        throw new Error('Usuário não autenticado');
-      }
-
-      const dependente = dependentesRef.current[index];
-      const cpfLimpo = removeCPFMask(dependente.cpf);
-      const cpfArquivo = cpfLimpo && cpfLimpo.trim() ? cpfLimpo : cadastro.id;
-      const prefix = `dependentes-continuar/${cpfArquivo}`;
-
-      const uploadedFile = await uploadToStorage(
-        file,
-        profile.id,
-        'cadastros-temp-files',
-        prefix
-      );
-
-      setDependentesState(prev => prev.map((dep, idx) => {
-        if (idx === index) {
-          return {
-            ...dep,
-            arquivo: uploadedFile,
-            uploadingFile: false
-          };
-        }
-        return dep;
-      }));
-      persistContinuarDraftSnapshot(
-        dependentesRef.current.map((dep, idx) =>
-          idx === index ? { ...dep, arquivo: uploadedFile, uploadingFile: false } : dep
-        )
-      );
-
-      setSuccess('Arquivo carregado com sucesso!');
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      console.error('Erro ao fazer upload:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Erro ao fazer upload do arquivo';
-      setError(errorMessage);
-      setDependentesState(prev => prev.map((dep, idx) =>
-        idx === index ? { ...dep, uploadingFile: false } : dep
-      ));
-    } finally {
-      e.target.value = '';
-    }
   };
 
   const adicionarDependente = () => {
@@ -975,7 +926,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
   };
 
   const handleCompressPendingFile = async () => {
-    if (!pendingCompression || compressingFile || uploadingFileIndex !== null) return;
+    if (!pendingCompression || compressingFile || dependentesRef.current.some((dep) => dep.uploadingFile)) return;
 
     setCompressingFile(true);
     setError('');
