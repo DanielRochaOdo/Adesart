@@ -68,7 +68,7 @@ export function Layout({ children }: LayoutProps) {
   const canViewTeams = profile?.role && ['ADMINISTRADOR', 'GERENTE', 'CADASTRO', 'SUPERVISOR', 'VENDEDOR', 'ADESIONISTA'].includes(profile.role);
   const canViewConfig = profile?.role === 'ADMINISTRADOR';
   const canViewAudit = profile?.role === 'ADMINISTRADOR';
-  const canViewUploadQueue = profile?.role === 'ADMINISTRADOR' || profile?.role === 'CADASTRO';
+  const canViewUploadQueue = ['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(profile?.role ?? '');
 
   const mainMenuItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, show: true },
