@@ -163,7 +163,24 @@ fun DashboardScreen(
     val isManagerial = profileRole in setOf("ADMINISTRADOR", "GERENTE")
     val supervisorTeamId = state.profile?.teamId?.takeIf { profileRole == "SUPERVISOR" }
     val teamNames = state.adminTeams.associate { it.id to it.name }
-    val teamOptions = currentUnfiltered
+
+    fun facetRecords(ignore: String): List<DashboardCadastro> =
+        currentUnfiltered.filter { cadastro ->
+            dashboardMatchesFilters(
+                cadastro = cadastro,
+                team = teamFilter,
+                company = companyFilter,
+                seller = sellerFilter,
+                adesionista = adesionistaFilter,
+                channel = channelFilter,
+                status = statusFilter,
+                search = search,
+                planos = state.planosMap,
+                ignore = ignore,
+            )
+        }
+
+    val teamOptions = facetRecords("team")
         .mapNotNull { cadastro ->
             cadastro.teamId?.takeIf { it.isNotBlank() }?.let { id ->
                 id to (teamNames[id] ?: "Equipe")
@@ -171,20 +188,30 @@ fun DashboardScreen(
         }
         .distinctBy { it.first }
         .sortedBy { it.second.lowercase(Locale.ROOT) }
-    val companyOptions = currentUnfiltered
+    val companyOptions = facetRecords("company")
         .map { dashboardCompanyKey(it) to dashboardCompanyLabel(it) }
         .distinctBy { it.first }
         .sortedBy { it.second.lowercase(Locale.ROOT) }
-    val sellerOptions = currentUnfiltered
+    val sellerOptions = facetRecords("seller")
         .map { dashboardSellerKey(it) to (it.vendedorNome ?: "Sem vendedor") }
         .distinctBy { it.first }
         .sortedBy { it.second.lowercase(Locale.ROOT) }
-    val adesionistaOptions = currentUnfiltered
+    val adesionistaOptions = facetRecords("adesionista")
         .mapNotNull {
             val key = dashboardAdesionistaKey(it)
             if (key == "sem-adesionista") null else key to (it.adesionistaNome ?: "Sem adesionista")
         }
         .distinctBy { it.first }
+        .sortedBy { it.second.lowercase(Locale.ROOT) }
+    val channelOptions = facetRecords("channel")
+        .map { dashboardChannelKey(it) }
+        .distinct()
+        .sorted()
+        .map { key -> key to if (key == "publico") "Link / QR Code" else "Interno" }
+    val statusOptions = facetRecords("status")
+        .map { it.status }
+        .distinct()
+        .map { it to dashboardStatusLabel(it) }
         .sortedBy { it.second.lowercase(Locale.ROOT) }
 
     val filteredWindow = if (range == null) {
@@ -376,19 +403,13 @@ fun DashboardScreen(
                             "publico" -> "Link / QR Code"
                             else -> "Todos"
                         },
-                        listOf("todos" to "Todos", "interno" to "Interno", "publico" to "Link / QR Code"),
+                        listOf("todos" to "Todos") + channelOptions,
                         onSelected = { channelFilter = it },
                     )
                     SelectionField(
                         "Situacao",
                         dashboardStatusLabel(statusFilter),
-                        listOf(
-                            "todos" to "Todas",
-                            "enviado" to "Enviado ao ERP",
-                            "incompleto" to "Incompleto",
-                            "adesoes_pendentes" to "Adesoes pendentes",
-                            "erro_envio" to "Erro de envio",
-                        ),
+                        listOf("todos" to "Todas") + statusOptions,
                         onSelected = { statusFilter = it },
                     )
                     OutlinedTextField(
@@ -398,6 +419,28 @@ fun DashboardScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    OutlinedButton(
+                        onClick = {
+                            teamFilter = "todos"
+                            companyFilter = "todos"
+                            sellerFilter = "todos"
+                            adesionistaFilter = "todos"
+                            channelFilter = "todos"
+                            statusFilter = "todos"
+                            search = ""
+                        },
+                        enabled =
+                            teamFilter != "todos" ||
+                                companyFilter != "todos" ||
+                                sellerFilter != "todos" ||
+                                adesionistaFilter != "todos" ||
+                                channelFilter != "todos" ||
+                                statusFilter != "todos" ||
+                                search.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Limpar filtros")
+                    }
                 }
             }
         }
@@ -848,13 +891,15 @@ private fun dashboardMatchesFilters(
     status: String,
     search: String,
     planos: List<PlanoMap>,
+    ignore: String? = null,
 ): Boolean {
-    if (team != "todos" && cadastro.teamId != team) return false
-    if (company != "todos" && dashboardCompanyKey(cadastro) != company) return false
-    if (seller != "todos" && dashboardSellerKey(cadastro) != seller) return false
-    if (adesionista != "todos" && dashboardAdesionistaKey(cadastro) != adesionista) return false
-    if (channel != "todos" && dashboardChannelKey(cadastro) != channel) return false
-    if (status != "todos" && cadastro.status != status) return false
+    if (ignore != "team" && team != "todos" && cadastro.teamId != team) return false
+    if (ignore != "company" && company != "todos" && dashboardCompanyKey(cadastro) != company) return false
+    if (ignore != "seller" && seller != "todos" && dashboardSellerKey(cadastro) != seller) return false
+    if (ignore != "adesionista" && adesionista != "todos" && dashboardAdesionistaKey(cadastro) != adesionista) return false
+    if (ignore != "channel" && channel != "todos" && dashboardChannelKey(cadastro) != channel) return false
+    if (ignore != "status" && status != "todos" && cadastro.status != status) return false
+    if (ignore == "search") return true
     val term = search.trim().lowercase(Locale("pt", "BR"))
     if (term.isBlank()) return true
     val direct = listOf(
