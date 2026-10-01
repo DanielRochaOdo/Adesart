@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
@@ -18,6 +19,10 @@ interface QueueHealth {
   claimable: number;
   stuck: number;
   missing_file_pending: number;
+  active_failures: number;
+  historical_failures: number;
+  resolved_failures: number;
+  active_missing_file_failures: number;
   oldest_pending_at: string | null;
   last_success_at: string | null;
   last_failure_at: string | null;
@@ -56,6 +61,7 @@ const ITEMS_PER_PAGE = 20;
 
 export function FilaUploadERP() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [items, setItems] = useState<QueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const { value: statusFilter, setValue: setStatusFilter } = usePersistentState<string>(
@@ -71,7 +77,6 @@ export function FilaUploadERP() {
   const [resettingStuck, setResettingStuck] = useState(false);
   const [processingCount, setProcessingCount] = useState(0);
   const [queueHealth, setQueueHealth] = useState<QueueHealth | null>(null);
-  const [reprocessingFailed, setReprocessingFailed] = useState(false);
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
   useEffect(() => {
@@ -246,32 +251,6 @@ export function FilaUploadERP() {
     }
   };
 
-  const handleReprocessFailed = async () => {
-    if (!window.confirm('Deseja reprocessar todos os itens com falha definitiva?')) return;
-
-    setReprocessingFailed(true);
-    try {
-      const { data, error } = await supabase.rpc('requeue_erp_upload_v1', {
-        p_id: null,
-        p_scope: 'failed',
-      });
-
-      if (error) {
-        alert(`Erro ao reprocessar falhas: ${error.message}`);
-        return;
-      }
-
-      const count = Number((data as any)?.requeued || 0);
-      alert(`${count} item(ns) devolvido(s) para a fila.`);
-      await fetchQueueItems();
-    } catch (error) {
-      console.error('Erro ao reprocessar falhas:', error);
-      alert('Erro ao reprocessar falhas.');
-    } finally {
-      setReprocessingFailed(false);
-    }
-  };
-
   const handleResetStuckItems = async () => {
     if (!window.confirm('Deseja resetar itens travados em "Processando"? Itens travados há mais de 15 minutos serão marcados como "queued".')) {
       return;
@@ -375,22 +354,16 @@ export function FilaUploadERP() {
           </div>
           <div className="flex items-center gap-3 flex-wrap justify-end">
             <Button
-              onClick={handleReprocessFailed}
-              disabled={reprocessingFailed || !queueHealth?.failed}
+              onClick={() => navigate('/fila-upload-erp/erros?scope=current')}
+              disabled={!queueHealth}
               variant="secondary"
               className="flex items-center gap-2"
             >
-              {reprocessingFailed ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Reprocessando...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="w-4 h-4" />
-                  Reprocessar Falhas
-                </>
-              )}
+              <AlertTriangle className="w-4 h-4" />
+              Ver Erros
+              {queueHealth && queueHealth.active_failures > 0
+                ? ` (${queueHealth.active_failures})`
+                : ''}
             </Button>
             <Button
               onClick={handleResetStuckItems}
@@ -431,21 +404,46 @@ export function FilaUploadERP() {
         </div>
 
         {queueHealth && (
-          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-9 gap-3">
             {[
-              ['Aguardando', queueHealth.queued],
-              ['Processando', queueHealth.processing],
-              ['Nova tentativa', queueHealth.retry_wait],
-              ['Falhas', queueHealth.failed],
-              ['Prontos agora', queueHealth.claimable],
-              ['Travados', queueHealth.stuck],
-              ['Sem arquivo', queueHealth.missing_file_pending],
-              ['Concluídos', queueHealth.success],
-            ].map(([label, value]) => (
-              <div key={String(label)} className="bg-white rounded-xl border border-slate-200 p-3">
-                <p className="text-xs text-slate-500">{label}</p>
-                <p className="text-xl font-bold text-slate-800 mt-1">{Number(value)}</p>
-              </div>
+              { label: 'Aguardando', value: queueHealth.queued },
+              { label: 'Processando', value: queueHealth.processing },
+              { label: 'Nova tentativa', value: queueHealth.retry_wait },
+              {
+                label: 'Falhas atuais',
+                value: queueHealth.active_failures,
+                onClick: () => navigate('/fila-upload-erp/erros?scope=current'),
+                alert: queueHealth.active_failures > 0,
+              },
+              {
+                label: 'Passivo histórico',
+                value: queueHealth.historical_failures,
+                onClick: () => navigate('/fila-upload-erp/erros?scope=historical'),
+              },
+              { label: 'Prontos agora', value: queueHealth.claimable },
+              { label: 'Travados', value: queueHealth.stuck, alert: queueHealth.stuck > 0 },
+              { label: 'Sem arquivo pendente', value: queueHealth.missing_file_pending, alert: queueHealth.missing_file_pending > 0 },
+              { label: 'Concluídos', value: queueHealth.success },
+            ].map((card) => (
+              <button
+                type="button"
+                key={card.label}
+                onClick={card.onClick}
+                disabled={!card.onClick}
+                className={`rounded-xl border p-3 text-left transition ${
+                  card.alert
+                    ? 'border-red-200 bg-red-50'
+                    : 'border-slate-200 bg-white'
+                } ${card.onClick ? 'cursor-pointer hover:border-slate-300 hover:shadow-sm' : 'cursor-default'}`}
+              >
+                <p className="text-xs text-slate-500">{card.label}</p>
+                <p className={`mt-1 text-xl font-bold ${card.alert ? 'text-red-700' : 'text-slate-800'}`}>
+                  {Number(card.value)}
+                </p>
+                {card.onClick && (
+                  <p className="mt-1 text-[11px] font-medium text-slate-400">Ver detalhes</p>
+                )}
+              </button>
             ))}
           </div>
         )}

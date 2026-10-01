@@ -13,6 +13,7 @@ import { Cadastro } from './pages/Cadastro';
 import { ConfiguracoesCadastro } from './pages/ConfiguracoesCadastro';
 import { AuditoriaLemmit } from './pages/AuditoriaLemmit';
 import { FilaUploadERP } from './pages/FilaUploadERP';
+import { ErrosUploadERP } from './pages/ErrosUploadERP';
 import { AdesoesExcluidas } from './pages/AdesoesExcluidas';
 import { PublicCadastroLink } from './pages/PublicCadastroLink';
 import { PublicCadastroLinkPreview } from './pages/PublicCadastroLinkPreview';
@@ -94,6 +95,14 @@ function AppRoutes() {
         element={
           <ProtectedRoute allowedRoles={['ADMINISTRADOR']}>
             <FilaUploadERP />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/fila-upload-erp/erros"
+        element={
+          <ProtectedRoute allowedRoles={['ADMINISTRADOR']}>
+            <ErrosUploadERP />
           </ProtectedRoute>
         }
       />

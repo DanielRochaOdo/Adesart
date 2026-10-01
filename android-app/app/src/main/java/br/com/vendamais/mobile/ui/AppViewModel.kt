@@ -28,6 +28,8 @@ import br.com.vendamais.mobile.data.models.DashboardCadastro
 import br.com.vendamais.mobile.data.models.CpfConsultInput
 import br.com.vendamais.mobile.data.models.ErpUploadQueueItem
 import br.com.vendamais.mobile.data.models.ErpUploadQueueHealth
+import br.com.vendamais.mobile.data.models.ErpUploadErrorItem
+import br.com.vendamais.mobile.data.models.ErpUploadErrorSearchResponse
 import br.com.vendamais.mobile.data.models.EmpresaResumo
 import br.com.vendamais.mobile.data.models.EmpresaSearchType
 import br.com.vendamais.mobile.data.models.MobileProfile
@@ -68,6 +70,7 @@ import br.com.vendamais.mobile.data.remote.InclusaoBuscaTipo
 import br.com.vendamais.mobile.data.remote.ResponsavelFinanceiroResumo
 import br.com.vendamais.mobile.data.remote.SupabaseRepository
 import br.com.vendamais.mobile.data.remote.UploadedTempFile
+import br.com.vendamais.mobile.util.ErpFileCompressor
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -220,6 +223,11 @@ data class AppUiState(
     val uploadQueuePageSize: Int = 20,
     val uploadQueueOperation: ProcessUploadQueueResponse? = null,
     val resetQueueResult: ResetStuckQueueResult? = null,
+    val uploadErrors: ErpUploadErrorSearchResponse = ErpUploadErrorSearchResponse(),
+    val uploadErrorsScope: String = "current",
+    val uploadErrorsCategory: String = "",
+    val uploadErrorsPage: Int = 1,
+    val uploadErrorsLoading: Boolean = false,
     val cadastrosExcluidos: List<CadastroExcluidoItem> = emptyList(),
     val adminFeatureLoading: Boolean = false,
     val publicToken: String? = null,
@@ -244,6 +252,7 @@ class AppViewModel(
     private val workflowRepository: CadastroWorkflowRepository,
     private val draftUxStateCache: DraftUxStateCache,
     private val appUpdateRepository: AppUpdateRepository,
+    private val appContextForCompression: Context? = null,
 ) : ViewModel() {
     private val logTag = "VendaMaisApp"
     private val _uiState = MutableStateFlow(AppUiState())
@@ -2834,6 +2843,258 @@ class AppViewModel(
             }
         }
     }
+
+    fun loadErpUploadErrors(
+        scope: String = _uiState.value.uploadErrorsScope,
+        category: String = _uiState.value.uploadErrorsCategory,
+        page: Int = _uiState.value.uploadErrorsPage,
+        pageSize: Int = 50,
+    ) {
+        val session = currentSession ?: return
+        val safeScope = scope.takeIf { it in setOf("current", "historical", "resolved", "all") } ?: "current"
+        val safePage = page.coerceAtLeast(1)
+        _uiState.update {
+            it.copy(
+                uploadErrorsScope = safeScope,
+                uploadErrorsCategory = category,
+                uploadErrorsPage = safePage,
+                uploadErrorsLoading = true,
+                errorMessage = null,
+            )
+        }
+        viewModelScope.launch {
+            runCatching {
+                val activeSession = ensureFreshSession(session)
+                repository.searchErpUploadErrors(
+                    session = activeSession,
+                    scope = safeScope,
+                    category = category.takeIf { it.isNotBlank() },
+                    page = safePage,
+                    pageSize = pageSize,
+                )
+            }.onSuccess { result ->
+                _uiState.update {
+                    it.copy(
+                        uploadErrors = result,
+                        uploadErrorsLoading = false,
+                    )
+                }
+            }.onFailure { throwable ->
+                _uiState.update {
+                    it.copy(
+                        uploadErrorsLoading = false,
+                        errorMessage = throwable.message ?: "Falha ao consultar erros da fila ERP.",
+                    )
+                }
+            }
+        }
+    }
+
+    fun reconcileErpUploadErrors(id: String? = null) {
+        val session = currentSession ?: return
+        val scope = _uiState.value.uploadErrorsScope
+        viewModelScope.launch {
+            _uiState.update { it.copy(uploadErrorsLoading = true, errorMessage = null) }
+            runCatching {
+                val activeSession = ensureFreshSession(session)
+                repository.reconcileErpUploadErrors(
+                    session = activeSession,
+                    id = id,
+                    scope = if (scope == "resolved") "all" else scope,
+                )
+            }.onSuccess { result ->
+                _uiState.update {
+                    it.copy(
+                        uploadErrorsLoading = false,
+                        noticeMessage = if (result.reconciled > 0) {
+                            "${result.reconciled} falha(s) reconciliada(s) com envio ja concluido."
+                        } else {
+                            "${result.checked} registro(s) verificado(s); nenhum sucesso equivalente encontrado."
+                        },
+                    )
+                }
+                loadErpUploadErrors()
+                loadUploadQueue()
+            }.onFailure { throwable ->
+                _uiState.update {
+                    it.copy(
+                        uploadErrorsLoading = false,
+                        errorMessage = throwable.message ?: "Falha ao sincronizar erros da fila ERP.",
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun repairErpUploadErrorWithBytes(
+        session: SavedSession,
+        item: ErpUploadErrorItem,
+        bytes: ByteArray,
+        fileName: String,
+        mimeType: String,
+    ) {
+        if (bytes.isEmpty()) throw IllegalStateException("Arquivo vazio.")
+        if (bytes.size > ErpFileCompressor.MAX_ERP_BYTES) {
+            throw IllegalStateException("O arquivo ainda excede o limite de 5 MB do ERP.")
+        }
+
+        val safeFileName = fileName
+            .trim()
+            .ifBlank { "documento" }
+            .replace(Regex("[^a-zA-Z0-9._-]"), "_")
+            .lowercase(Locale.ROOT)
+        val userId = _uiState.value.profile?.id
+            ?: throw IllegalStateException("Usuario nao identificado.")
+        val objectPath = "$userId/erp-repair/${item.id}/${System.currentTimeMillis()}_$safeFileName"
+
+        repository.uploadStorageObject(
+            session = session,
+            bucket = item.bucket,
+            objectPath = objectPath,
+            bytes = bytes,
+            mimeType = mimeType,
+        )
+        repository.repairErpUploadQueue(
+            session = session,
+            id = item.id,
+            bucket = item.bucket,
+            arquivoPath = objectPath,
+            arquivoNome = fileName,
+            fileSizeBytes = bytes.size.toLong(),
+            targetDependenteId = item.idDependente.takeIf { it > 0 },
+            targetDependenteCpf = item.targetDependenteCpf,
+            targetDependenteNome = item.targetDependenteNome,
+        )
+    }
+
+    fun replaceErpUploadErrorFile(
+        item: ErpUploadErrorItem,
+        bytes: ByteArray,
+        fileName: String,
+        mimeType: String,
+    ) {
+        val session = currentSession ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(uploadErrorsLoading = true, errorMessage = null) }
+            runCatching {
+                val activeSession = ensureFreshSession(session)
+                val prepared = withContext(Dispatchers.IO) {
+                    ErpFileCompressor.compress(
+                        context = appContextForCompression
+                            ?: throw IllegalStateException("Contexto indisponivel para preparar o arquivo."),
+                        bytes = bytes,
+                        fileName = fileName,
+                        mimeType = mimeType,
+                    )
+                }
+                repairErpUploadErrorWithBytes(
+                    session = activeSession,
+                    item = item,
+                    bytes = prepared.bytes,
+                    fileName = prepared.fileName,
+                    mimeType = prepared.mimeType,
+                )
+                prepared
+            }.onSuccess { prepared ->
+                _uiState.update {
+                    it.copy(
+                        uploadErrorsLoading = false,
+                        noticeMessage = if (prepared.bytes.size < bytes.size) {
+                            "Arquivo comprimido e devolvido para a fila do ERP."
+                        } else {
+                            "Novo arquivo enviado e devolvido para a fila do ERP."
+                        },
+                    )
+                }
+                loadErpUploadErrors()
+                loadUploadQueue()
+            }.onFailure { throwable ->
+                _uiState.update {
+                    it.copy(
+                        uploadErrorsLoading = false,
+                        errorMessage = throwable.message ?: "Falha ao substituir arquivo da fila ERP.",
+                    )
+                }
+            }
+        }
+    }
+
+    fun compressAndRequeueErpUploadError(item: ErpUploadErrorItem) {
+        val session = currentSession ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(uploadErrorsLoading = true, errorMessage = null) }
+            runCatching {
+                val activeSession = ensureFreshSession(session)
+                val original = withContext(Dispatchers.IO) {
+                    repository.downloadStorageObject(
+                        session = activeSession,
+                        bucket = item.bucket,
+                        objectPath = item.arquivoPath,
+                    )
+                }
+                val prepared = withContext(Dispatchers.IO) {
+                    ErpFileCompressor.compress(
+                        context = appContextForCompression
+                            ?: throw IllegalStateException("Contexto indisponivel para comprimir o arquivo."),
+                        bytes = original,
+                        fileName = item.arquivoNome.ifBlank { "documento.pdf" },
+                        mimeType = null,
+                    )
+                }
+                repairErpUploadErrorWithBytes(
+                    session = activeSession,
+                    item = item,
+                    bytes = prepared.bytes,
+                    fileName = prepared.fileName,
+                    mimeType = prepared.mimeType,
+                )
+                original.size to prepared.bytes.size
+            }.onSuccess { (before, after) ->
+                _uiState.update {
+                    it.copy(
+                        uploadErrorsLoading = false,
+                        noticeMessage = "Arquivo comprimido de ${before / 1024 / 1024.0} MB para ${after / 1024 / 1024.0} MB e reenfileirado.",
+                    )
+                }
+                loadErpUploadErrors()
+                loadUploadQueue()
+            }.onFailure { throwable ->
+                _uiState.update {
+                    it.copy(
+                        uploadErrorsLoading = false,
+                        errorMessage = throwable.message ?: "Falha ao comprimir arquivo.",
+                    )
+                }
+            }
+        }
+    }
+
+    fun reprocessErpUploadError(item: ErpUploadErrorItem) {
+        val session = currentSession ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(uploadErrorsLoading = true, errorMessage = null) }
+            runCatching {
+                val activeSession = ensureFreshSession(session)
+                repository.reprocessUploadQueueItem(activeSession, item.id)
+            }.onSuccess {
+                _uiState.update {
+                    it.copy(
+                        uploadErrorsLoading = false,
+                        noticeMessage = "Item marcado para nova tentativa.",
+                    )
+                }
+                loadErpUploadErrors()
+                loadUploadQueue()
+            }.onFailure { throwable ->
+                _uiState.update {
+                    it.copy(
+                        uploadErrorsLoading = false,
+                        errorMessage = throwable.message ?: "Falha ao reprocessar item.",
+                    )
+                }
+            }
+        }
+    }
     suspend fun updateCadastroRecord(id: String, payload: kotlinx.serialization.json.JsonObject): CadastroDetalhe {
         val traceId = "close-${id.take(8)}-${System.currentTimeMillis()}"
         return runCatching {
@@ -3935,6 +4196,7 @@ class AppViewModel(
                         workflowRepository = workflowRepository,
                         draftUxStateCache = draftUxStateCache,
                         appUpdateRepository = appUpdateRepository,
+                        appContextForCompression = appContext,
                     ) as T
                 }
             }
