@@ -136,6 +136,14 @@ const resolveCanonicalDependentId = async (supabase: any, item: any) => {
     );
   }
 
+  if (empresaCodigo <= 0) {
+    throw new UploadQueueError(
+      "Empresa do cadastro nao identificada para resolver o CPF principal do anexo.",
+      "PRIMARY_DEPENDENT_NOT_FOUND",
+      422,
+    );
+  }
+
   const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
   let ERP_ENDPOINT =
     Deno.env.get("ERP_ENDPOINT") ||
