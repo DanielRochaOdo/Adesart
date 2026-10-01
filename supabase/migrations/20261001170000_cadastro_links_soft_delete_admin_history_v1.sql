@@ -30,7 +30,7 @@ BEGIN
 
   IF OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL THEN
     NEW.is_active := false;
-    NEW.deleted_by := COALESCE(NEW.deleted_by, auth.uid());
+    NEW.deleted_by := COALESCE(auth.uid(), NEW.deleted_by);
     RETURN NEW;
   END IF;
 
