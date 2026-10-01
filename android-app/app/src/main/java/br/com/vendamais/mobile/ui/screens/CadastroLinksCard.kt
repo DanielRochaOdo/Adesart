@@ -1072,12 +1072,42 @@ private fun LinkHistoryDialog(
     onDismiss: () -> Unit,
 ) {
     var currentPage by remember(link.id) { mutableIntStateOf(1) }
-    val totalPages = maxOf(1, ceil(rows.size / HISTORY_PAGE_SIZE.toDouble()).toInt())
-    LaunchedEffect(rows.size, totalPages) {
+    var statusFilter by remember(link.id) { mutableStateOf("todos") }
+    var sortMode by remember(link.id) { mutableStateOf("recentes") }
+
+    val statusOptions = rows
+        .map { it.status }
+        .distinct()
+        .sortedBy { it.lowercase() }
+
+    val visibleRows = rows
+        .filter { statusFilter == "todos" || it.status == statusFilter }
+        .let { filtered ->
+            when (sortMode) {
+                "antigos" -> filtered.sortedBy { it.timestamp }
+                "status" -> filtered.sortedWith(
+                    compareBy<CadastroLinkHistoryRow> { it.status.lowercase() }
+                        .thenByDescending { it.timestamp },
+                )
+                "nome" -> filtered.sortedWith(
+                    compareBy<CadastroLinkHistoryRow> { it.nomeRf.orEmpty().lowercase() }
+                        .thenByDescending { it.timestamp },
+                )
+                "vendedor" -> filtered.sortedWith(
+                    compareBy<CadastroLinkHistoryRow> { it.vendedor.lowercase() }
+                        .thenByDescending { it.timestamp },
+                )
+                else -> filtered.sortedByDescending { it.timestamp }
+            }
+        }
+
+    val totalPages = maxOf(1, ceil(visibleRows.size / HISTORY_PAGE_SIZE.toDouble()).toInt())
+    LaunchedEffect(visibleRows.size, totalPages, statusFilter, sortMode) {
         if (currentPage > totalPages) currentPage = totalPages
+        if (statusFilter != "todos" || sortMode != "recentes") currentPage = 1
     }
     val pageStart = (currentPage - 1) * HISTORY_PAGE_SIZE
-    val pagedRows = rows.drop(pageStart).take(HISTORY_PAGE_SIZE)
+    val pagedRows = visibleRows.drop(pageStart).take(HISTORY_PAGE_SIZE)
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -1135,7 +1165,7 @@ private fun LinkHistoryDialog(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            HistorySummaryBox("Cliques", it.clickCount.toString(), Modifier.weight(1f))
+                            HistorySummaryBox("Visitas por sessão", it.clickCount.toString(), Modifier.weight(1f))
                             HistorySummaryBox("Identificados", it.identifiedAttempts.toString(), Modifier.weight(1f))
                             HistorySummaryBox("So abriu", it.anonymousDetailed.toString(), Modifier.weight(1f))
                         }
@@ -1145,6 +1175,39 @@ private fun LinkHistoryDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                }
+
+                HorizontalDivider()
+
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    SelectionField(
+                        label = "Status",
+                        value = if (statusFilter == "todos") "Todos os status" else statusFilter,
+                        options = listOf("todos" to "Todos os status") +
+                            statusOptions.map { it to it },
+                        onSelected = { statusFilter = it },
+                    )
+                    SelectionField(
+                        label = "Ordenar por",
+                        value = when (sortMode) {
+                            "antigos" -> "Mais antigos primeiro"
+                            "status" -> "Status (A-Z)"
+                            "nome" -> "Nome do RF (A-Z)"
+                            "vendedor" -> "Vendedor (A-Z)"
+                            else -> "Mais recentes primeiro"
+                        },
+                        options = listOf(
+                            "recentes" to "Mais recentes primeiro",
+                            "antigos" to "Mais antigos primeiro",
+                            "status" to "Status (A-Z)",
+                            "nome" to "Nome do RF (A-Z)",
+                            "vendedor" to "Vendedor (A-Z)",
+                        ),
+                        onSelected = { sortMode = it },
+                    )
                 }
 
                 HorizontalDivider()
@@ -1162,8 +1225,8 @@ private fun LinkHistoryDialog(
                             text = error,
                             color = MaterialTheme.colorScheme.error,
                         )
-                        rows.isEmpty() -> Text(
-                            "Nenhum registro de tentativa encontrado para este link ainda.",
+                        visibleRows.isEmpty() -> Text(
+                            "Nenhum registro encontrado para os filtros selecionados.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         else -> LazyColumn(
@@ -1176,14 +1239,14 @@ private fun LinkHistoryDialog(
                     }
                 }
 
-                if (!loading && error.isNullOrBlank() && rows.isNotEmpty()) {
+                if (!loading && error.isNullOrBlank() && visibleRows.isNotEmpty()) {
                     HorizontalDivider()
                     Column(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Text(
-                            text = "Mostrando ${pageStart + 1}-${minOf(pageStart + HISTORY_PAGE_SIZE, rows.size)} de ${rows.size} registros · 10 por pagina",
+                            text = "Mostrando ${pageStart + 1}-${minOf(pageStart + HISTORY_PAGE_SIZE, visibleRows.size)} de ${visibleRows.size} registros · 10 por pagina",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -1217,14 +1280,14 @@ private fun LinkHistoryDialog(
                 ) {
                     TextButton(
                         onClick = {
-                            val uri = LinkHistoryXlsxExporter.exportToDownloads(context, link, rows)
+                            val uri = LinkHistoryXlsxExporter.exportToDownloads(context, link, visibleRows)
                             Toast.makeText(
                                 context,
                                 if (uri != null) "Historico XLSX salvo com sucesso." else "Nao foi possivel exportar o historico.",
                                 Toast.LENGTH_SHORT,
                             ).show()
                         },
-                        enabled = !loading && rows.isNotEmpty(),
+                        enabled = !loading && visibleRows.isNotEmpty(),
                     ) {
                         Icon(
                             Icons.Rounded.FileDownload,
