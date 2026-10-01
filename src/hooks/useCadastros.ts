@@ -969,14 +969,48 @@ export function useCadastros() {
   };
 
   const deleteCadastro = async (id: string) => {
-    const { error } = await supabase.from('cadastros').delete().eq('id', id);
+    if (profile?.role === 'CADASTRO') {
+      const { data: cadastro, error: cadastroError } = await supabase
+        .from('cadastros')
+        .select('status')
+        .eq('id', id)
+        .maybeSingle();
 
-    if (error) throw error;
+      if (cadastroError) throw cadastroError;
+      if (!cadastro || !PENDING_CADASTRO_STATUSES.includes(cadastro.status as (typeof PENDING_CADASTRO_STATUSES)[number])) {
+        throw new Error('A função Cadastro só pode excluir adesões pendentes.');
+      }
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Sessão não encontrada.');
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/excluir-cadastro`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            cadastroId: id,
+            motivoExclusao: 'Exclusão de adesão pendente pela função Cadastro',
+          }),
+        },
+      );
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.error || 'Não foi possível excluir a adesão pendente.');
+      }
+    } else {
+      const { error } = await supabase.from('cadastros').delete().eq('id', id);
+      if (error) throw error;
+    }
 
     removeCadastroState(id);
   };
 
-  const canDelete = profile?.role === 'ADMINISTRADOR';
+  const canDelete = profile?.role === 'ADMINISTRADOR' || profile?.role === 'CADASTRO';
 
   // Carrega somente a lista solicitada e reaproveita o resultado ao trocar de aba.
   const loadCadastros = useCallback(async (listStatus: CadastroListStatus, force = false) => {
