@@ -348,16 +348,18 @@ export function UserLinkHistoryModal({ user, onClose }: Props) {
                         >
                           <Download className="h-4 w-4" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => void permanentlyDelete(link)}
-                          disabled={deleting || historyLoading}
-                          className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50 dark:hover:bg-red-950/30"
-                          title="Excluir definitivamente"
-                          aria-label={`Excluir definitivamente o link ${link.empresa_codigo}`}
-                        >
-                          {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                        </button>
+                        {link.deleted_at && (
+                          <button
+                            type="button"
+                            onClick={() => void permanentlyDelete(link)}
+                            disabled={deleting || historyLoading}
+                            className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50 dark:hover:bg-red-950/30"
+                            title="Excluir definitivamente"
+                            aria-label={`Excluir definitivamente o link ${link.empresa_codigo}`}
+                          >
+                            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                          </button>
+                        )}
                       </div>
                     </div>
 
