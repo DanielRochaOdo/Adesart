@@ -226,9 +226,7 @@ fun UsersScreen(
                             )
                         }
 
-                        val canEditThisUser = !isCadastroOperator ||
-                            normalizeRole(user.role) !in setOf("ADMINISTRADOR", "GERENTE", "GESTOR")
-                        if (canEditThisUser) OutlinedButton(
+                        OutlinedButton(
                             onClick = {
                                 userSubmitError = null
                                 userSubmitting = false
