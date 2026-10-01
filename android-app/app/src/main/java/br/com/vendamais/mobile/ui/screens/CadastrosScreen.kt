@@ -1595,7 +1595,7 @@ private fun parseCadastroDate(value: String): LocalDate? {
 }
 
 private fun canDeleteCadastroByRole(role: String?): Boolean {
-    return role in setOf("VENDEDOR", "ADESIONISTA")
+    return role in setOf("VENDEDOR", "ADESIONISTA", "CADASTRO")
 }
 
 private fun truncateLabelWithEllipsis(value: String?, maxChars: Int): String {
