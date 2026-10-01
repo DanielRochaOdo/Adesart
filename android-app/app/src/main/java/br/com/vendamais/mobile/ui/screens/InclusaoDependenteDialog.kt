@@ -92,8 +92,10 @@ import br.com.vendamais.mobile.ui.theme.EmeraldDark
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
 import br.com.vendamais.mobile.ui.theme.Red100
 import br.com.vendamais.mobile.ui.theme.Red500
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -1579,7 +1581,10 @@ fun InclusaoDependenteDialog(
             InclusaoMessageTone.SUCCESS -> "Sucesso"
         }
         AlertDialog(
-            onDismissRequest = { localError = null },
+            onDismissRequest = {
+                localError = null
+                pendingCompression = null
+            },
             title = {
                 Text(
                     title,
@@ -1642,7 +1647,14 @@ fun InclusaoDependenteDialog(
                     }
                 }
             },
-            confirmButton = { TextButton(onClick = { localError = null }) { Text("OK") } },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        localError = null
+                        pendingCompression = null
+                    },
+                ) { Text("OK") }
+            },
         )
     }
 
