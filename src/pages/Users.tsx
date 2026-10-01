@@ -79,6 +79,9 @@ export function Users() {
 
   const canCreate = profile?.role && ['ADMINISTRADOR', 'GERENTE', 'SUPERVISOR'].includes(profile.role);
   const canEditRole = profile?.role === 'ADMINISTRADOR';
+  const isCadastroRole = profile?.role === 'CADASTRO';
+  const canEditExternalId = !isCadastroRole;
+  const canEditLemmitLimit = !isCadastroRole;
 
   useEffect(() => {
     fetchUsers();
@@ -580,7 +583,7 @@ export function Users() {
         </Card>
       </div>
 
-      {showCreateModal && (
+      {showCreateModal && canCreate && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
           <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full my-8">
             <div className="flex items-center justify-between p-6 border-b border-slate-200">
