@@ -79,6 +79,9 @@ fun UsersScreen(
     }
     val canCreate = state.profile?.role in setOf("ADMINISTRADOR", "GERENTE", "SUPERVISOR")
     val canEditRole = state.profile?.role == "ADMINISTRADOR"
+    val isCadastroOperator = state.profile?.role == "CADASTRO"
+    val canEditExternalId = !isCadastroOperator
+    val canEditLemmitLimit = !isCadastroOperator
     val activeUsers = state.adminUsers.count { it.isActive }
     val commercialUsers = state.adminUsers.count {
         normalizeRole(it.role) in setOf("VENDEDOR", "ADESIONISTA", "SUPERVISOR")
@@ -223,7 +226,9 @@ fun UsersScreen(
                             )
                         }
 
-                        OutlinedButton(
+                        val canEditThisUser = !isCadastroOperator ||
+                            normalizeRole(user.role) !in setOf("ADMINISTRADOR", "GERENTE", "GESTOR")
+                        if (canEditThisUser) OutlinedButton(
                             onClick = {
                                 userSubmitError = null
                                 userSubmitting = false
@@ -271,6 +276,8 @@ fun UsersScreen(
             title = "Editar Usuario",
             teams = state.adminTeams,
             canEditRole = canEditRole,
+            canEditExternalId = canEditExternalId,
+            canEditLemmitLimit = canEditLemmitLimit,
             initialUser = user,
             submitError = userSubmitError,
             isSubmitting = userSubmitting,
@@ -283,7 +290,7 @@ fun UsersScreen(
                 scope.launch {
                     userSubmitError = null
                     userSubmitting = true
-                    runCatching { viewModel.updateUser(user.id, form.toUpdatePayload(canEditRole, user)) }
+                    runCatching { viewModel.updateUser(user.id, form.toUpdatePayload(canEditRole, canEditExternalId, canEditLemmitLimit, user)) }
                         .onSuccess { editingUser = null }
                         .onFailure { throwable ->
                             userSubmitError = throwable.message ?: "Falha ao atualizar usuario."
@@ -315,6 +322,8 @@ private fun UserEditorSheet(
     title: String,
     teams: List<AdminTeam>,
     canEditRole: Boolean,
+    canEditExternalId: Boolean = true,
+    canEditLemmitLimit: Boolean = true,
     initialUser: AdminUser? = null,
     submitError: String? = null,
     isSubmitting: Boolean = false,
@@ -408,6 +417,7 @@ private fun UserEditorSheet(
                         prefix = { Text("R$ ") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
+                        enabled = canEditLemmitLimit,
                     )
                 }
                 if (requiresTeam) {
@@ -432,6 +442,7 @@ private fun UserEditorSheet(
                             modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
                             label = { Text("ID Externo") },
                             singleLine = true,
+                            enabled = canEditExternalId,
                         )
                     }
                     item {
@@ -555,7 +566,12 @@ private data class UserFormState(
         }
     }
 
-    fun toUpdatePayload(canEditRole: Boolean, initialUser: AdminUser? = null) = buildJsonObject {
+    fun toUpdatePayload(
+        canEditRole: Boolean,
+        canEditExternalId: Boolean,
+        canEditLemmitLimit: Boolean,
+        initialUser: AdminUser? = null,
+    ) = buildJsonObject {
         val normalizedRole = normalizeRole(role)
         val initialRole = initialUser?.role?.let(::normalizeRole)
         val shouldClearTeamAndExternal = canEditRole &&
@@ -572,11 +588,13 @@ private data class UserFormState(
             put("telefone", normalizedPhone)
         }
         put("is_active", isActive)
-        val normalizedLimit = parseLemmitLimite(lemmitLimite)
-        if (lemmitLimite.isBlank()) {
-            put("lemmit_limite_consultas", JsonNull)
-        } else {
-            normalizedLimit?.let { put("lemmit_limite_consultas", it) }
+        if (canEditLemmitLimit) {
+            val normalizedLimit = parseLemmitLimite(lemmitLimite)
+            if (lemmitLimite.isBlank()) {
+                put("lemmit_limite_consultas", JsonNull)
+            } else {
+                normalizedLimit?.let { put("lemmit_limite_consultas", it) }
+            }
         }
         if (canEditRole) {
             put("role", normalizedRole)
@@ -584,10 +602,10 @@ private data class UserFormState(
         if (requiresTeamAndExternal(normalizedRole)) {
             val effectiveExternal = externalId.trim().ifBlank { initialUser?.externalId?.trim().orEmpty() }
             val effectiveTeamId = teamId?.takeIf { it.isNotBlank() } ?: initialUser?.teamId?.takeIf { it.isNotBlank() }
-            put("external_id", effectiveExternal)
+            if (canEditExternalId) put("external_id", effectiveExternal)
             effectiveTeamId?.let { put("team_id", it) } ?: put("team_id", JsonNull)
         } else if (shouldClearTeamAndExternal) {
-            put("external_id", JsonNull)
+            if (canEditExternalId) put("external_id", JsonNull)
             put("team_id", JsonNull)
         }
     }
