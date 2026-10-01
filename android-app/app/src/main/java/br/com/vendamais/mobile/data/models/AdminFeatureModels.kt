@@ -153,6 +153,10 @@ data class ErpUploadQueueCadastro(
     val cpf: String? = null,
     @SerialName("empresa_nome")
     val empresaNome: String? = null,
+    @SerialName("vendedor_nome")
+    val vendedorNome: String? = null,
+    @SerialName("adesionista_nome")
+    val adesionistaNome: String? = null,
 )
 
 data class ErpUploadQueuePage(
@@ -262,6 +266,10 @@ data class ErpUploadErrorItem(
     val clienteCpf: String? = null,
     @SerialName("empresa_nome")
     val empresaNome: String? = null,
+    @SerialName("vendedor_nome")
+    val vendedorNome: String? = null,
+    @SerialName("adesionista_nome")
+    val adesionistaNome: String? = null,
     @SerialName("arquivo_nome")
     val arquivoNome: String = "",
     @SerialName("arquivo_path")
