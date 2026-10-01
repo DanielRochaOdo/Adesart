@@ -20,7 +20,7 @@ type ProfileUpdateData = {
   email: string;
   telefone: string | null;
   is_active: boolean;
-  lemmit_limite_consultas: number | null;
+  lemmit_limite_consultas?: number | null;
   role?: Profile['role'];
   external_id?: string | null;
   team_id?: string | null;
