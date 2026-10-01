@@ -809,7 +809,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
     }
   };
 
-  const uploadDependenteFile = async (index: number, file: File) => {
+  const uploadDependenteFile = async (index: number, file: File): Promise<boolean> => {
     if (profile?.id) {
       try {
         await savePendingFile(profile.id, 'inclusao-dependente-modal', getPendingFileSlotKey(index), file);
@@ -870,6 +870,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
 
       setSuccess('Arquivo carregado com sucesso!');
       setTimeout(() => setSuccess(''), 3000);
+      return true;
     } catch (err) {
       console.error('Erro ao fazer upload do arquivo:', err);
       const errorMessage = err instanceof Error ? err.message : 'Erro ao fazer upload do arquivo';
@@ -879,6 +880,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
       );
       setDependentesState(dependentesComFalha);
       persistInclusaoDraftSnapshot(dependentesComFalha);
+      return false;
     } finally {
       setUploadingFileIndex(null);
     }
@@ -980,7 +982,10 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
     try {
       const originalSize = pendingCompression.file.size;
       const compressed = await compressFileForErp(pendingCompression.file);
-      await uploadDependenteFile(pendingCompression.index, compressed);
+      const uploaded = await uploadDependenteFile(pendingCompression.index, compressed);
+      if (!uploaded) {
+        throw new Error('O arquivo foi comprimido, mas não pôde ser anexado. Tente novamente.');
+      }
       setPendingCompression(null);
       setSuccess(
         `Arquivo comprimido de ${(originalSize / 1024 / 1024).toFixed(2)} MB para ${(compressed.size / 1024 / 1024).toFixed(2)} MB e anexado com sucesso!`,
