@@ -72,6 +72,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
+import br.com.vendamais.mobile.data.models.AdminTeam
 import br.com.vendamais.mobile.data.models.CadastroLinkAssociadoResumo
 import br.com.vendamais.mobile.data.models.CadastroLinkHistoryRow
 import br.com.vendamais.mobile.data.models.CadastroLinkHistorySummary
@@ -117,7 +118,11 @@ private data class AssociadosDialogState(
 @Composable
 fun CadastroLinksCard(
     workspace: LinkWorkspaceState,
+    profileRole: String = "",
+    vendedores: List<TeamMemberOption> = emptyList(),
+    teams: List<AdminTeam> = emptyList(),
     adesionistas: List<TeamMemberOption> = emptyList(),
+    onSelectedVendedorChange: (String) -> Unit = {},
     onSelectedAdesionistaChange: (String) -> Unit = {},
     invalidCompanyCodes: List<String> = emptyList(),
     onSearchTypeChange: (EmpresaSearchType) -> Unit,
@@ -142,6 +147,8 @@ fun CadastroLinksCard(
     var listSearchTerm by remember { mutableStateOf("") }
     var currentPage by remember { mutableIntStateOf(1) }
     val expandedGroups = remember { mutableStateMapOf<String, Boolean>() }
+    val isGerente = profileRole.uppercase() == "GERENTE"
+    val teamNames = remember(teams) { teams.associate { it.id to it.name } }
 
     val filteredLinks = workspace.links.filter { link ->
         val search = normalizeSearch(listSearchTerm)
@@ -309,6 +316,37 @@ fun CadastroLinksCard(
                             )
                         }
 
+                        if (isGerente) {
+                            SelectionField(
+                                label = "Vendedor",
+                                value = vendedores
+                                    .firstOrNull { it.id == workspace.selectedVendedorId }
+                                    ?.let { vendedor ->
+                                        val equipe = vendedor.teamId
+                                            ?.let { teamNames[it] }
+                                            ?.takeIf { it.isNotBlank() }
+                                            ?: "Sem equipe"
+                                        "${vendedor.name} · Equipe: $equipe · ID: ${vendedor.externalId.orEmpty()}"
+                                    }
+                                    ?: "Selecione um vendedor",
+                                options = vendedores
+                                    .filter {
+                                        !it.externalId.isNullOrBlank() &&
+                                            !it.teamId.isNullOrBlank()
+                                    }
+                                    .map { vendedor ->
+                                        val equipe = vendedor.teamId
+                                            ?.let { teamNames[it] }
+                                            ?.takeIf { it.isNotBlank() }
+                                            ?: "Sem equipe"
+                                        vendedor.id to
+                                            "${vendedor.name} · Equipe: $equipe · ID: ${vendedor.externalId.orEmpty()}"
+                                    },
+                                enabled = !workspace.operationLoading,
+                                onSelected = onSelectedVendedorChange,
+                            )
+                        }
+
                         SelectionField(
                             label = "Adesionista (Opcional)",
                             value = adesionistas.firstOrNull { it.id == workspace.selectedAdesionistaId }
@@ -324,6 +362,7 @@ fun CadastroLinksCard(
                         VendaButton(
                             label = "Gerar link publico",
                             onClick = onGenerateLink,
+                            enabled = !isGerente || workspace.selectedVendedorId.isNotBlank(),
                             loading = workspace.operationLoading,
                             leadingIcon = Icons.Rounded.Share,
                             modifier = Modifier.fillMaxWidth(),
@@ -664,7 +703,7 @@ private fun LinkEmpresaGroupCard(
     onRegenerate: (String) -> Unit,
     onDelete: (String) -> Unit,
 ) {
-    val clicks = group.links.sumOf { it.clickCount ?: 0 }
+    val visits = group.links.sumOf { it.uniqueVisitCount ?: 0 }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -712,8 +751,8 @@ private fun LinkEmpresaGroupCard(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         LinkMetricBox(
-                            label = "Cliques",
-                            value = clicks,
+                            label = "Visitas por sessão",
+                            value = visits,
                             modifier = Modifier.weight(1f),
                         )
                         LinkMetricBox(
@@ -839,7 +878,7 @@ private fun LinkListItem(
                         )
                     }
                     Text(
-                        text = "Código ${link.vendedorCodigo ?: "-"} · ${link.clickCount ?: 0} cliques · ${formatDateTime(link.createdAt)}",
+                        text = "Código ${link.vendedorCodigo ?: "-"} · ${link.uniqueVisitCount ?: 0} visitas por sessão · ${formatDateTime(link.createdAt)}",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
                     )
