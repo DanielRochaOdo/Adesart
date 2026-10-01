@@ -916,62 +916,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
     } finally {
       e.target.value = '';
     }
-    return;
 
-    try {
-      const dependente = dependentesRef.current[index];
-      if (dependente.arquivo?.path) {
-        try {
-          await supabase.storage
-            .from('cadastros-temp-files')
-            .remove([dependente.arquivo.path]);
-        } catch (err) {
-          console.error('Erro ao remover arquivo anterior:', err);
-        }
-      }
-
-      if (!profile?.id) {
-        throw new Error('Usuário não autenticado');
-      }
-
-      const cpfLimpo = removeCPFMask(dependente.cpf);
-      const cpfArquivo = cpfLimpo && cpfLimpo.trim() ? cpfLimpo : '0';
-      const prefix = `dependentes-temp/${cpfArquivo}`;
-
-      const uploadedFile = await uploadToStorage(
-        file,
-        profile.id,
-        'cadastros-temp-files',
-        prefix
-      );
-
-      const novosDependentes = [...dependentesRef.current];
-      novosDependentes[index] = {
-        ...novosDependentes[index],
-        arquivo: uploadedFile,
-        uploadingFile: false,
-      };
-      setDependentesState(novosDependentes);
-      persistInclusaoDraftSnapshot(novosDependentes);
-      if (profile?.id) {
-        await clearPendingFile(profile.id, 'inclusao-dependente-modal', getPendingFileSlotKey(index));
-      }
-
-      setSuccess('Arquivo carregado com sucesso!');
-      setTimeout(() => setSuccess(''), 3000);
-    } catch (err) {
-      console.error('Erro ao fazer upload do arquivo:', err);
-      const errorMessage = err instanceof Error ? err.message : 'Erro ao fazer upload do arquivo';
-      setError(errorMessage);
-      setDependentesState((prevDependentes) =>
-        prevDependentes.map((dep, depIndex) =>
-          depIndex === index ? { ...dep, uploadingFile: false } : dep
-        )
-      );
-    } finally {
-      setUploadingFileIndex(null);
-      e.target.value = '';
-    }
   };
 
   const handleCompressPendingFile = async () => {
