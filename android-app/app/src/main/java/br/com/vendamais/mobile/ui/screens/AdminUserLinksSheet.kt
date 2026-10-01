@@ -193,12 +193,16 @@ fun AdminUserLinksSheet(
                                             )
                                         }
                                         Text(
-                                            text = if (link.deletedAt.isNullOrBlank()) "Ativo" else "Excluido",
+                                            text = when {
+                                                !link.deletedAt.isNullOrBlank() -> "Excluido"
+                                                link.isActive -> "Disponivel"
+                                                else -> "Inativo"
+                                            },
                                             style = MaterialTheme.typography.labelMedium,
-                                            color = if (link.deletedAt.isNullOrBlank()) {
-                                                MaterialTheme.colorScheme.primary
-                                            } else {
-                                                MaterialTheme.colorScheme.error
+                                            color = when {
+                                                !link.deletedAt.isNullOrBlank() -> MaterialTheme.colorScheme.error
+                                                link.isActive -> MaterialTheme.colorScheme.primary
+                                                else -> MaterialTheme.colorScheme.onSurfaceVariant
                                             },
                                         )
                                     }
