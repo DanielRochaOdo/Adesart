@@ -75,10 +75,6 @@ Deno.serve(async (req: Request) => {
     }
 
     const isCadastroOperator = requestingProfile.role === 'CADASTRO';
-    if (isCadastroOperator && ['ADMINISTRADOR', 'GERENTE', 'GESTOR'].includes(targetProfile.role)) {
-      throw new Error('Cadastro cannot edit privileged users');
-    }
-
     const effectiveRole = isCadastroOperator ? targetProfile.role : (role ?? targetProfile.role);
     const nextExternalId = isCadastroOperator
       ? targetProfile.external_id ?? null
