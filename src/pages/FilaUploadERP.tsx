@@ -80,7 +80,7 @@ export function FilaUploadERP() {
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
   useEffect(() => {
-    if (profile?.role === 'ADMINISTRADOR') {
+    if (['ADMINISTRADOR', 'CADASTRO'].includes(profile?.role ?? '')) {
       fetchQueueItems();
       const unsubscribe = subscribeToQueueChanges();
       return unsubscribe;
@@ -284,13 +284,13 @@ export function FilaUploadERP() {
     }
   };
 
-  if (profile?.role !== 'ADMINISTRADOR') {
+  if (!['ADMINISTRADOR', 'CADASTRO'].includes(profile?.role ?? '')) {
     return (
       <Layout>
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12">
           <div className="text-center">
             <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-3" />
-            <p className="text-slate-600">Acesso restrito para administradores</p>
+            <p className="text-slate-600">Acesso restrito para Administrador e Cadastro</p>
           </div>
         </div>
       </Layout>
