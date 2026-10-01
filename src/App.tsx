@@ -93,7 +93,7 @@ function AppRoutes() {
       <Route
         path="/fila-upload-erp"
         element={
-          <ProtectedRoute allowedRoles={['ADMINISTRADOR', 'CADASTRO']}>
+          <ProtectedRoute allowedRoles={['ADMINISTRADOR', 'CADASTRO', 'GERENTE']}>
             <FilaUploadERP />
           </ProtectedRoute>
         }
@@ -101,7 +101,7 @@ function AppRoutes() {
       <Route
         path="/fila-upload-erp/erros"
         element={
-          <ProtectedRoute allowedRoles={['ADMINISTRADOR', 'CADASTRO']}>
+          <ProtectedRoute allowedRoles={['ADMINISTRADOR', 'CADASTRO', 'GERENTE']}>
             <ErrosUploadERP />
           </ProtectedRoute>
         }
