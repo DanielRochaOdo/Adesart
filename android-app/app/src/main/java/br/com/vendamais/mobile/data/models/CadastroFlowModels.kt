@@ -413,6 +413,10 @@ data class CadastroLinkItem(
     val createdAt: String,
     @SerialName("updated_at")
     val updatedAt: String? = null,
+    @SerialName("deleted_at")
+    val deletedAt: String? = null,
+    @SerialName("deleted_by")
+    val deletedBy: String? = null,
 )
 
 data class CadastroLinkAssociadoResumo(
