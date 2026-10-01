@@ -22,6 +22,15 @@ interface Empresa {
   raw: any;
 }
 
+interface VendedorLink {
+  id: string;
+  name: string | null;
+  email: string | null;
+  external_id: string | null;
+  team_id: string | null;
+  team_name: string | null;
+}
+
 interface Adesionista {
   id: string;
   name: string | null;
@@ -42,6 +51,10 @@ interface LinkCadastroCardProps {
 export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
   const { profile } = useAuth();
   const [selectedEmpresa, setSelectedEmpresa] = useState<Empresa | null>(null);
+  const [vendedores, setVendedores] = useState<VendedorLink[]>([]);
+  const [selectedVendedor, setSelectedVendedor] = useState('');
+  const [loadingVendedores, setLoadingVendedores] = useState(false);
+  const [vendedorError, setVendedorError] = useState('');
   const [adesionistas, setAdesionistas] = useState<Adesionista[]>([]);
   const [selectedAdesionista, setSelectedAdesionista] = useState('');
   const [loadingAdesionistas, setLoadingAdesionistas] = useState(false);
@@ -54,6 +67,64 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
   const [showAuthorizationModal, setShowAuthorizationModal] = useState(false);
   const [requiresAuthorization, setRequiresAuthorization] = useState<boolean | null>(null);
   const resolvedVendedorCodigo = profile?.external_id?.trim() || '0';
+  const isGerente = profile?.role === 'GERENTE';
+
+  useEffect(() => {
+    if (!profile?.id || !isGerente) {
+      setVendedores([]);
+      setSelectedVendedor('');
+      setVendedorError('');
+      return;
+    }
+
+    let active = true;
+    setLoadingVendedores(true);
+    setVendedorError('');
+
+    void (async () => {
+      try {
+        const [{ data: vendedoresData, error: vendedoresError }, { data: teamsData, error: teamsError }] =
+          await Promise.all([
+            supabase
+              .from('profiles')
+              .select('id, name, email, external_id, team_id')
+              .eq('role', 'VENDEDOR')
+              .eq('is_active', true)
+              .not('external_id', 'is', null)
+              .order('name'),
+            supabase.from('teams').select('id, name').eq('is_active', true).order('name'),
+          ]);
+
+        if (vendedoresError) throw vendedoresError;
+        if (teamsError) throw teamsError;
+        if (!active) return;
+
+        const teamNameById = new Map(
+          (teamsData || []).map((team) => [String(team.id), String(team.name || '')]),
+        );
+
+        setVendedores(
+          (vendedoresData || [])
+            .filter((item) => String(item.external_id || '').trim() !== '')
+            .map((item) => ({
+              ...item,
+              team_name: item.team_id ? teamNameById.get(String(item.team_id)) || 'Sem equipe' : 'Sem equipe',
+            })),
+        );
+      } catch (err) {
+        if (!active) return;
+        console.error('Error loading sellers for manager link:', err);
+        setVendedores([]);
+        setVendedorError('Não foi possível carregar os vendedores. Atualize a página e tente novamente.');
+      } finally {
+        if (active) setLoadingVendedores(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [profile?.id, isGerente]);
 
   // Reutiliza a mesma fonte e os mesmos critérios do seletor em +Adesão.
   useEffect(() => {
@@ -82,6 +153,7 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
 
   const handleEmpresaSelected = (empresa: Empresa | null) => {
     setSelectedEmpresa(empresa);
+    setSelectedVendedor('');
     setSelectedAdesionista('');
     setGeneratedLink(null);
     setSuccess('');
@@ -130,6 +202,15 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
       return;
     }
 
+    const vendedor = isGerente
+      ? vendedores.find((item) => item.id === selectedVendedor)
+      : null;
+
+    if (isGerente && !vendedor) {
+      setError('Selecione um vendedor antes de gerar o link');
+      return;
+    }
+
     const adesionista = selectedAdesionista
       ? adesionistas.find(item => item.id === selectedAdesionista)
       : null;
@@ -145,9 +226,14 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
       const tokenHash = await hashCadastroLinkToken(rawToken);
       const url = buildPublicAdesaoUrl(rawToken);
 
+      const vendedorId = vendedor?.id || profile.id;
+      const vendedorCodigo = vendedor?.external_id?.trim() || resolvedVendedorCodigo;
+      const vendedorNome = vendedor?.name || vendedor?.email || profile.name || profile.email;
+      const vendedorTeamId = vendedor?.team_id || profile.team_id;
+
       const payload = {
         created_by: profile.id,
-        team_id: profile.team_id,
+        team_id: vendedorTeamId,
         token_hash: tokenHash,
         link_url: url,
         empresa_codigo: selectedEmpresa.id,
@@ -156,9 +242,9 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
         empresa_raw: selectedEmpresa.raw || selectedEmpresa,
         empresa_exige_matricula: selectedEmpresa.exigeMatricula || 0,
         planos_raw: selectedEmpresa.precoPlano || [],
-        vendedor_id: profile.id,
-        vendedor_codigo: resolvedVendedorCodigo,
-        vendedor_nome: profile.name || profile.email,
+        vendedor_id: vendedorId,
+        vendedor_codigo: vendedorCodigo,
+        vendedor_nome: vendedorNome,
         // O banco confirma e preenche codigo/nome canonicos ao inserir o link.
         adesionista_id: adesionista?.id || null,
       };
@@ -249,10 +335,12 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
 
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
-                Código de Vendedor
+                {isGerente ? 'Vendedor do Link' : 'Código de Vendedor'}
               </p>
               <p className="text-sm font-medium text-slate-800">
-                {profile?.external_id || 'Não configurado - será usado o código 0'}
+                {isGerente
+                  ? (vendedores.find((item) => item.id === selectedVendedor)?.name || 'Selecione um vendedor abaixo')
+                  : (profile?.external_id || 'Não configurado - será usado o código 0')}
               </p>
             </div>
           </div>
@@ -284,7 +372,37 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
           )}
 
           {selectedEmpresa && requiresAuthorization === false && (
-            <div className="mt-6">
+            <div className="mt-6 space-y-4">
+              {isGerente && (
+                <div>
+                  <Select
+                    label="Vendedor"
+                    value={selectedVendedor}
+                    onChange={(event) => setSelectedVendedor(event.target.value)}
+                    disabled={loading || loadingVendedores || Boolean(vendedorError)}
+                    required
+                  >
+                    <option value="">Selecione um vendedor</option>
+                    {vendedores.map((vendedor) => (
+                      <option key={vendedor.id} value={vendedor.id}>
+                        {vendedor.name || vendedor.email || 'Vendedor sem nome'} — Equipe: {vendedor.team_name || 'Sem equipe'} — ID Externo: {vendedor.external_id}
+                      </option>
+                    ))}
+                  </Select>
+                  {loadingVendedores && (
+                    <p className="mt-2 text-sm text-slate-500">Carregando vendedores...</p>
+                  )}
+                  {vendedorError && (
+                    <p className="mt-2 text-sm text-red-700">{vendedorError}</p>
+                  )}
+                  {!loadingVendedores && !vendedorError && vendedores.length === 0 && (
+                    <p className="mt-2 text-sm text-amber-700">
+                      Nenhum vendedor ativo com ID Externo está disponível.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <Select
                 label="Adesionista (Opcional)"
                 value={selectedAdesionista}
@@ -305,7 +423,12 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
           <div className="mt-6 flex justify-end">
             <Button
               onClick={handleGenerateLink}
-              disabled={loading || !selectedEmpresa || requiresAuthorization !== false}
+              disabled={
+                loading ||
+                !selectedEmpresa ||
+                requiresAuthorization !== false ||
+                (isGerente && (!selectedVendedor || loadingVendedores || Boolean(vendedorError)))
+              }
             >
               {loading ? (
                 <>
