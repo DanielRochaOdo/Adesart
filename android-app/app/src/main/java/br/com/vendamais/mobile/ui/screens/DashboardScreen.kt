@@ -214,6 +214,49 @@ fun DashboardScreen(
         .map { it to dashboardStatusLabel(it) }
         .sortedBy { it.second.lowercase(Locale.ROOT) }
 
+    fun applyFacetFilter(facet: String, value: String) {
+        var nextTeam = if (facet == "team") value else teamFilter
+        var nextCompany = if (facet == "company") value else companyFilter
+        var nextSeller = if (facet == "seller") value else sellerFilter
+        var nextAdesionista = if (facet == "adesionista") value else adesionistaFilter
+        var nextChannel = if (facet == "channel") value else channelFilter
+        var nextStatus = if (facet == "status") value else statusFilter
+
+        fun hasMatch(): Boolean = currentUnfiltered.any { cadastro ->
+            dashboardMatchesFilters(
+                cadastro = cadastro,
+                team = nextTeam,
+                company = nextCompany,
+                seller = nextSeller,
+                adesionista = nextAdesionista,
+                channel = nextChannel,
+                status = nextStatus,
+                search = search,
+                planos = state.planosMap,
+            )
+        }
+
+        val otherFacets = listOf("team", "company", "seller", "adesionista", "channel", "status")
+        otherFacets.forEach { other ->
+            if (other == facet) return@forEach
+            when (other) {
+                "team" -> if (nextTeam != "todos" && !hasMatch()) nextTeam = "todos"
+                "company" -> if (nextCompany != "todos" && !hasMatch()) nextCompany = "todos"
+                "seller" -> if (nextSeller != "todos" && !hasMatch()) nextSeller = "todos"
+                "adesionista" -> if (nextAdesionista != "todos" && !hasMatch()) nextAdesionista = "todos"
+                "channel" -> if (nextChannel != "todos" && !hasMatch()) nextChannel = "todos"
+                "status" -> if (nextStatus != "todos" && !hasMatch()) nextStatus = "todos"
+            }
+        }
+
+        teamFilter = nextTeam
+        companyFilter = nextCompany
+        sellerFilter = nextSeller
+        adesionistaFilter = nextAdesionista
+        channelFilter = nextChannel
+        statusFilter = nextStatus
+    }
+
     val filteredWindow = if (range == null) {
         emptyList()
     } else {
@@ -368,7 +411,7 @@ fun DashboardScreen(
                             "Equipe",
                             dashboardSelectedLabel(teamFilter, teamOptions, "Todas as equipes"),
                             listOf("todos" to "Todas as equipes") + teamOptions,
-                            onSelected = { teamFilter = it },
+                            onSelected = { applyFacetFilter("team", it) },
                         )
                     } else {
                         DashboardReadOnlyFilter(
@@ -382,19 +425,19 @@ fun DashboardScreen(
                         "Empresa",
                         dashboardSelectedLabel(companyFilter, companyOptions, "Todas as empresas"),
                         listOf("todos" to "Todas as empresas") + companyOptions,
-                        onSelected = { companyFilter = it },
+                        onSelected = { applyFacetFilter("company", it) },
                     )
                     SelectionField(
                         "Vendedor",
                         dashboardSelectedLabel(sellerFilter, sellerOptions, "Todos os vendedores"),
                         listOf("todos" to "Todos os vendedores") + sellerOptions,
-                        onSelected = { sellerFilter = it },
+                        onSelected = { applyFacetFilter("seller", it) },
                     )
                     SelectionField(
                         "Adesionista",
                         dashboardSelectedLabel(adesionistaFilter, adesionistaOptions, "Todos os adesionistas"),
                         listOf("todos" to "Todos os adesionistas") + adesionistaOptions,
-                        onSelected = { adesionistaFilter = it },
+                        onSelected = { applyFacetFilter("adesionista", it) },
                     )
                     SelectionField(
                         "Canal",
@@ -404,13 +447,13 @@ fun DashboardScreen(
                             else -> "Todos"
                         },
                         listOf("todos" to "Todos") + channelOptions,
-                        onSelected = { channelFilter = it },
+                        onSelected = { applyFacetFilter("channel", it) },
                     )
                     SelectionField(
                         "Situacao",
                         dashboardStatusLabel(statusFilter),
                         listOf("todos" to "Todas") + statusOptions,
-                        onSelected = { statusFilter = it },
+                        onSelected = { applyFacetFilter("status", it) },
                     )
                     OutlinedTextField(
                         value = search,
