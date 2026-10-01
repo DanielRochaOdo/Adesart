@@ -820,7 +820,8 @@ private fun resolveNavigationGroups(roleRaw: String?): List<AppNavGroupItem> {
 
     return when (role) {
         "ADMINISTRADOR", "ADMIN" -> listOf(inicio, operacao, pessoasCompleto, administracao, conta)
-        "GERENTE", "SUPERVISOR" -> listOf(inicio, operacao, pessoasCompleto, conta)
+        "GERENTE" -> listOf(inicio, operacao, pessoasCompleto, administracaoCadastro, conta)
+        "SUPERVISOR" -> listOf(inicio, operacao, pessoasCompleto, conta)
         "CADASTRO" -> listOf(inicio, operacao, pessoasCompleto, administracaoCadastro, conta)
         "VENDEDOR", "ADESIONISTA" -> {
             val groups = mutableListOf(inicio, operacao)
