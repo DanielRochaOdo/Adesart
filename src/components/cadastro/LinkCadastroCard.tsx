@@ -91,6 +91,7 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
               .eq('role', 'VENDEDOR')
               .eq('is_active', true)
               .not('external_id', 'is', null)
+              .not('team_id', 'is', null)
               .order('name'),
             supabase.from('teams').select('id, name').eq('is_active', true).order('name'),
           ]);
@@ -318,7 +319,9 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
             <div>
               <h3 className="text-lg font-semibold text-slate-800">Gerar Link de Adesão</h3>
               <p className="text-sm text-slate-600 mt-1">
-                O link será vinculado a esta empresa e ao código de vendedor do usuário logado.
+                {isGerente
+                  ? 'Selecione a empresa e o vendedor responsável pelo link público.'
+                  : 'O link será vinculado a esta empresa e ao código de vendedor do usuário logado.'}
               </p>
             </div>
           </div>
