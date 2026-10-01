@@ -114,25 +114,37 @@ export function UserLinkHistoryModal({ user, onClose }: Props) {
     void (async () => {
       setLoading(true);
       setError('');
-      const { data, error: linksError } = await supabase
-        .from('cadastro_links')
-        .select(
-          'id, empresa_codigo, empresa_nome, vendedor_nome, vendedor_codigo, created_at, deleted_at, is_active',
-        )
-        .eq('created_by', user.id)
-        .order('empresa_codigo', { ascending: true })
-        .order('created_at', { ascending: false });
 
-      if (!active) return;
+      try {
+        const allLinks: UserCadastroLink[] = [];
 
-      if (linksError) {
-        setError(linksError.message || 'Não foi possível carregar os links deste usuário.');
+        for (let offset = 0; offset < 50_000; offset += 1000) {
+          const { data, error: linksError } = await supabase
+            .from('cadastro_links')
+            .select(
+              'id, empresa_codigo, empresa_nome, vendedor_nome, vendedor_codigo, created_at, deleted_at, is_active',
+            )
+            .eq('created_by', user.id)
+            .order('empresa_codigo', { ascending: true })
+            .order('created_at', { ascending: false })
+            .range(offset, offset + 999);
+
+          if (linksError) throw linksError;
+
+          const batch = (data || []) as UserCadastroLink[];
+          allLinks.push(...batch);
+          if (batch.length < 1000) break;
+        }
+
+        if (!active) return;
+        setLinks(allLinks);
+      } catch (err) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : 'Não foi possível carregar os links deste usuário.');
         setLinks([]);
-      } else {
-        setLinks((data || []) as UserCadastroLink[]);
+      } finally {
+        if (active) setLoading(false);
       }
-
-      setLoading(false);
     })();
 
     return () => {
