@@ -14,7 +14,8 @@ import { EmpresaSearchCard } from './EmpresaSearchCard';
 import { LemmitLimitModal } from './LemmitLimitModal';
 import { SelectStatusModal } from './SelectStatusModal';
 import { EmpresaNaoIdentificadaModal } from './EmpresaNaoIdentificadaModal';
-import { uploadToStorage, UploadedFile, validateFile } from '../../utils/uploadFile';
+import { ERP_MAX_FILE_SIZE, uploadToStorage, UploadedFile, validateFile } from '../../utils/uploadFile';
+import { compressFileForErp } from '../../utils/compressErpFile';
 import { clearDraft, loadDraft, saveBeforeFilePicker, saveDraft } from '../../utils/draftStorage';
 import { clearPendingFile, loadPendingFile, savePendingFile } from '../../utils/pendingFileStore';
 
@@ -867,11 +868,18 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
 
     const validation = validateFile(file);
     if (!validation.valid) {
-      setError(validation.error || 'Arquivo inválido');
+      if (file.size > ERP_MAX_FILE_SIZE) {
+        setPendingCompression({ index, file });
+        setError('O arquivo excede o limite de 5 MB aceito pelo ERP.');
+      } else {
+        setPendingCompression(null);
+        setError(validation.error || 'Arquivo inválido');
+      }
       e.target.value = '';
       return;
     }
 
+    setPendingCompression(null);
     try {
       await uploadDependenteFile(index, file);
     } finally {
@@ -964,6 +972,26 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
     setDependentesState(prev => prev.map((dep, idx) =>
       idx === index ? { ...dep, [field]: value } : dep
     ));
+  };
+
+  const handleCompressPendingFile = async () => {
+    if (!pendingCompression || compressingFile || uploadingFileIndex !== null) return;
+
+    setCompressingFile(true);
+    setError('');
+    try {
+      const originalSize = pendingCompression.file.size;
+      const compressed = await compressFileForErp(pendingCompression.file);
+      await uploadDependenteFile(pendingCompression.index, compressed);
+      setPendingCompression(null);
+      setSuccess(
+        `Arquivo comprimido de ${(originalSize / 1024 / 1024).toFixed(2)} MB para ${(compressed.size / 1024 / 1024).toFixed(2)} MB e anexado com sucesso!`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível comprimir o arquivo.');
+    } finally {
+      setCompressingFile(false);
+    }
   };
 
   const validateStepOne = () => {
@@ -1908,7 +1936,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
                         className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                       />
                       <p className="text-xs text-slate-500 mt-1">
-                        Formatos aceitos: PDF, JPG, PNG. Tamanho máximo: 10MB.
+                        Formatos aceitos: PDF, JPG, PNG. Tamanho máximo: 5MB.
                       </p>
                       {dep.uploadingFile && (
                         <div className="flex items-center gap-2 mt-2">
