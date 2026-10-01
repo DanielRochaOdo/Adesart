@@ -80,7 +80,7 @@ export function FilaUploadERP() {
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
   useEffect(() => {
-    if (['ADMINISTRADOR', 'CADASTRO'].includes(profile?.role ?? '')) {
+    if (['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(profile?.role ?? '')) {
       fetchQueueItems();
       const unsubscribe = subscribeToQueueChanges();
       return unsubscribe;
@@ -284,7 +284,7 @@ export function FilaUploadERP() {
     }
   };
 
-  if (!['ADMINISTRADOR', 'CADASTRO'].includes(profile?.role ?? '')) {
+  if (!['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(profile?.role ?? '')) {
     return (
       <Layout>
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12">
