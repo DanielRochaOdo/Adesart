@@ -240,7 +240,7 @@ export function ErrosUploadERP() {
   };
 
   useEffect(() => {
-    if (['ADMINISTRADOR', 'CADASTRO'].includes(profile?.role ?? '')) {
+    if (['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(profile?.role ?? '')) {
       loadErrors(1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -433,11 +433,11 @@ export function ErrosUploadERP() {
     [response.summary],
   );
 
-  if (!['ADMINISTRADOR', 'CADASTRO'].includes(profile?.role ?? '')) {
+  if (!['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(profile?.role ?? '')) {
     return (
       <Layout>
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-8 text-center text-amber-800">
-          Acesso restrito para Administrador e Cadastro.
+          Acesso permitido para Administrador, Cadastro e Gerente.
         </div>
       </Layout>
     );

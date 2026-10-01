@@ -158,6 +158,7 @@ data class CadastroWorkspaceState(
 )
 
 data class LinkWorkspaceState(
+    val selectedVendedorId: String = "",
     val selectedAdesionistaId: String = "",
     val empresaSearchType: EmpresaSearchType = EmpresaSearchType.CODIGO,
     val empresaSearchValue: String = "",
@@ -399,11 +400,18 @@ class AppViewModel(
             it.copy(
                 linkWorkspace = it.linkWorkspace.copy(
                     selectedEmpresa = empresa,
+                    selectedVendedorId = "",
                     selectedAdesionistaId = "",
                     empresaSearchResults = emptyList(),
                     empresaSearchValue = "",
                 ),
             )
+        }
+    }
+
+    fun updateLinkVendedor(value: String) {
+        _uiState.update {
+            it.copy(linkWorkspace = it.linkWorkspace.copy(selectedVendedorId = value))
         }
     }
 
@@ -418,6 +426,7 @@ class AppViewModel(
             it.copy(
                 linkWorkspace = it.linkWorkspace.copy(
                     selectedEmpresa = null,
+                    selectedVendedorId = "",
                     selectedAdesionistaId = "",
                     empresaSearchResults = emptyList(),
                     empresaSearchValue = "",
@@ -856,9 +865,21 @@ class AppViewModel(
         val session = currentSession ?: return
         val profile = _uiState.value.profile ?: return
         val empresa = _uiState.value.linkWorkspace.selectedEmpresa
+        val selectedVendedorId = _uiState.value.linkWorkspace.selectedVendedorId
+        val vendedor = if (selectedVendedorId.isBlank()) null
+            else _uiState.value.vendedores.firstOrNull { it.id == selectedVendedorId }
         val selectedAdesionistaId = _uiState.value.linkWorkspace.selectedAdesionistaId
         val adesionista = if (selectedAdesionistaId.isBlank()) null
             else _uiState.value.adesionistas.firstOrNull { it.id == selectedAdesionistaId }
+
+        if (profile.role == "GERENTE" && vendedor == null) {
+            _uiState.update { it.copy(errorMessage = "Selecione um vendedor antes de gerar o link.") }
+            return
+        }
+        if (selectedVendedorId.isNotBlank() && vendedor == null) {
+            _uiState.update { it.copy(errorMessage = "Vendedor indisponível. Atualize a lista e selecione novamente.") }
+            return
+        }
         if (selectedAdesionistaId.isNotBlank() && adesionista == null) {
             _uiState.update { it.copy(errorMessage = "Adesionista indisponível. Atualize a lista e selecione novamente.") }
             return
@@ -878,7 +899,13 @@ class AppViewModel(
 
             runCatching {
                 val activeSession = ensureFreshSession(session)
-                workflowRepository.createCadastroLink(activeSession, profile, empresa, adesionista)
+                workflowRepository.createCadastroLink(
+                    activeSession,
+                    profile,
+                    empresa,
+                    vendedor = vendedor,
+                    adesionista = adesionista,
+                )
                 loadLinkWorkspaceData(activeSession)
             }.onSuccess { linkData ->
                 _uiState.update {
@@ -888,6 +915,7 @@ class AppViewModel(
                             links = linkData.links,
                             metricsByLinkId = linkData.metricsByLinkId,
                             selectedEmpresa = null,
+                            selectedVendedorId = "",
                             selectedAdesionistaId = "",
                             empresaSearchResults = emptyList(),
                         ),
@@ -3828,6 +3856,7 @@ class AppViewModel(
                         current.copy(
                             cadastroSupportLoading = false,
                             cadastroSupportLoaded = true,
+                            adminTeams = if (support.teams.isNotEmpty()) support.teams else current.adminTeams,
                             vendedores = support.vendedores,
                             adesionistas = support.adesionistas,
                             planosMap = support.planos,
@@ -3843,6 +3872,12 @@ class AppViewModel(
                                     ?: "",
                             ),
                             linkWorkspace = current.linkWorkspace.copy(
+                                selectedVendedorId = current.linkWorkspace.selectedVendedorId
+                                    .takeIf { value -> support.vendedores.any { it.id == value } }
+                                    ?: "",
+                                selectedAdesionistaId = current.linkWorkspace.selectedAdesionistaId
+                                    .takeIf { value -> support.adesionistas.any { it.id == value } }
+                                    ?: "",
                                 links = support.links,
                                 metricsByLinkId = support.linkMetricsById,
                             ),
@@ -3906,6 +3941,9 @@ class AppViewModel(
 
         return coroutineScope {
             val configDeferred = async { workflowRepository.fetchCadastroConfig(activeSession) }
+            val teamsDeferred = async {
+                if (profile.role == "GERENTE") repository.fetchTeamsAdmin(activeSession) else emptyList()
+            }
             val vendedoresDeferred = async {
                 if (profile.role != "VENDEDOR") {
                     workflowRepository.fetchProfilesByRole(activeSession, "VENDEDOR")
@@ -3928,6 +3966,7 @@ class AppViewModel(
             val linkData = linkDataDeferred.await()
             CadastroSupportData(
                 config = configDeferred.await(),
+                teams = teamsDeferred.await(),
                 vendedores = vendedoresDeferred.await(),
                 adesionistas = adesionistasDeferred.await(),
                 links = linkData.links,
@@ -4243,6 +4282,7 @@ private data class LinkWorkspaceData(
 
 private data class CadastroSupportData(
     val config: CadastroConfig?,
+    val teams: List<AdminTeam>,
     val vendedores: List<TeamMemberOption>,
     val adesionistas: List<TeamMemberOption>,
     val links: List<CadastroLinkItem>,

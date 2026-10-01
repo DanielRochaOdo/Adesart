@@ -16,6 +16,7 @@ type HistoryStatus =
 type AccessEvent = {
   id: string;
   ip_hash: string | null;
+  visit_id: string;
   accessed_at: string;
 };
 
@@ -154,15 +155,20 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Sem permissao para visualizar este historico" }, 403);
     }
 
-    const { data: attemptsData, error: attemptsError } = await supabase
-      .from("public_adesao_attempts")
-      .select("id, ip_hash, status, profile_snapshot, lemmit_checked_at, authenticated_at, completed_at, created_at, updated_at")
-      .eq("link_id", linkId)
-      .order("created_at", { ascending: false })
-      .limit(1000);
+    const attempts: AttemptRow[] = [];
+    for (let offset = 0; offset < 50_000; offset += 1000) {
+      const { data: attemptsData, error: attemptsError } = await supabase
+        .from("public_adesao_attempts")
+        .select("id, ip_hash, status, profile_snapshot, lemmit_checked_at, authenticated_at, completed_at, created_at, updated_at")
+        .eq("link_id", linkId)
+        .order("created_at", { ascending: false })
+        .range(offset, offset + 999);
 
-    if (attemptsError) throw attemptsError;
-    const attempts = (attemptsData || []) as AttemptRow[];
+      if (attemptsError) throw attemptsError;
+      const batch = (attemptsData || []) as AttemptRow[];
+      attempts.push(...batch);
+      if (batch.length < 1000) break;
+    }
 
     const attemptIds = attempts.map((item) => item.id);
     let sessions: SessionRow[] = [];
@@ -176,66 +182,71 @@ Deno.serve(async (req: Request) => {
       sessions = (sessionsData || []) as SessionRow[];
     }
 
-    let accessEvents: AccessEvent[] = [];
-    const { data: accessData, error: accessError } = await supabase
-      .from("cadastro_link_access_events")
-      .select("id, ip_hash, accessed_at")
-      .eq("link_id", linkId)
-      .order("accessed_at", { ascending: false })
-      .limit(1500);
+    const accessEvents: AccessEvent[] = [];
+    for (let offset = 0; offset < 50_000; offset += 1000) {
+      const { data: accessData, error: accessError } = await supabase
+        .from("cadastro_link_access_events")
+        .select("id, ip_hash, visit_id, accessed_at")
+        .eq("link_id", linkId)
+        .not("visit_id", "is", null)
+        .order("accessed_at", { ascending: false })
+        .range(offset, offset + 999);
 
-    if (accessError) {
-      // Compatibilidade com ambientes em que a migracao ainda nao foi aplicada.
-      console.warn("[cadastro-link-history] historico de cliques ainda indisponivel", accessError.message);
-    } else {
-      accessEvents = (accessData || []) as AccessEvent[];
+      if (accessError) {
+        // Compatibilidade com ambientes em que a migracao ainda nao foi aplicada.
+        console.warn("[cadastro-link-history] historico de visitas ainda indisponivel", accessError.message);
+        break;
+      }
+
+      const batch = (accessData || []) as AccessEvent[];
+      accessEvents.push(...batch);
+      if (batch.length < 1000) break;
     }
 
     const sessionByAttempt = latestSessionsByAttempt(sessions);
     const availableEventIds = new Set(accessEvents.map((event) => event.id));
 
-    const identifiedRows = attempts.map((attempt) => {
-      const session = sessionByAttempt.get(attempt.id);
+    const attemptByEventId = new Map<string, AttemptRow>();
+    for (const attempt of attempts) {
       const accessEvent = findMatchingAccessEvent(attempt, accessEvents, availableEventIds);
-      const cadastro = session?.snapshot?.cadastro || {};
-      const profile = attempt.profile_snapshot || {};
-      const dependentes = Array.isArray(cadastro?.dependentes)
-        ? cadastro.dependentes
-            .map((item: any) => String(item?.nome || "").trim())
-            .filter(Boolean)
-        : [];
+      if (accessEvent) attemptByEventId.set(accessEvent.id, attempt);
+    }
 
-      return {
-        id: `attempt:${attempt.id}`,
-        timestamp: accessEvent?.accessed_at || attempt.created_at,
-        nomeRf: String(cadastro?.nome || profile?.nome || "").trim() || null,
-        dependentes,
-        telefone: pickPhone(cadastro?.contatos, profile?.contatos),
-        status: classifyAttempt(attempt, session),
-        vendedor: String(link.vendedor_nome || ""),
-        vendedorCodigo: String(link.vendedor_codigo || ""),
-        empresaNome: String(link.empresa_nome || ""),
-        empresaCodigo: Number(link.empresa_codigo || 0),
-      };
-    });
+    // Uma linha do historico corresponde exatamente a uma visita por sessao.
+    // Tentativas sem evento de visita valido nao criam uma segunda linha.
+    const rows = accessEvents
+      .map((event) => {
+        const attempt = attemptByEventId.get(event.id);
+        const session = attempt ? sessionByAttempt.get(attempt.id) : undefined;
+        const cadastro = session?.snapshot?.cadastro || {};
+        const profile = attempt?.profile_snapshot || {};
+        const dependentes = Array.isArray(cadastro?.dependentes)
+          ? cadastro.dependentes
+              .map((item: any) => String(item?.nome || "").trim())
+              .filter(Boolean)
+          : [];
 
-    const anonymousRows = accessEvents
-      .filter((event) => availableEventIds.has(event.id))
-      .map((event) => ({
-        id: `access:${event.id}`,
-        timestamp: event.accessed_at,
-        nomeRf: null,
-        dependentes: [],
-        telefone: null,
-        status: "Apenas abriu o link" as HistoryStatus,
-        vendedor: String(link.vendedor_nome || ""),
-        vendedorCodigo: String(link.vendedor_codigo || ""),
-        empresaNome: String(link.empresa_nome || ""),
-        empresaCodigo: Number(link.empresa_codigo || 0),
-      }));
-
-    const rows = [...identifiedRows, ...anonymousRows]
+        return {
+          id: `visit:${event.id}`,
+          timestamp: event.accessed_at,
+          nomeRf: attempt
+            ? String(cadastro?.nome || profile?.nome || "").trim() || null
+            : null,
+          dependentes,
+          telefone: attempt ? pickPhone(cadastro?.contatos, profile?.contatos) : null,
+          status: attempt
+            ? classifyAttempt(attempt, session)
+            : "Apenas abriu o link" as HistoryStatus,
+          vendedor: String(link.vendedor_nome || ""),
+          vendedorCodigo: String(link.vendedor_codigo || ""),
+          empresaNome: String(link.empresa_nome || ""),
+          empresaCodigo: Number(link.empresa_codigo || 0),
+        };
+      })
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    const identifiedRows = rows.filter((row) => row.status !== "Apenas abriu o link");
+    const anonymousRows = rows.filter((row) => row.status === "Apenas abriu o link");
 
     return jsonResponse({
       ok: true,
@@ -247,13 +258,13 @@ Deno.serve(async (req: Request) => {
         vendedorCodigo: String(link.vendedor_codigo || ""),
       },
       summary: {
-        clickCount: Number(link.unique_visit_count || 0),
+        clickCount: accessEvents.length,
         legacyClickCount: Number(link.click_count || 0),
         visitsStartedAt: link.unique_visits_started_at || null,
         identifiedAttempts: attempts.length,
         anonymousDetailed: anonymousRows.length,
         detailedAccessEvents: accessEvents.length,
-        lastClickedAt: link.last_unique_visit_at || null,
+        lastClickedAt: rows[0]?.timestamp || link.last_unique_visit_at || null,
       },
       rows,
     });
