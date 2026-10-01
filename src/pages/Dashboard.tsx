@@ -1234,7 +1234,7 @@ export function Dashboard() {
           desabilitado={!gerencial}
           escolhas={equipeRestrita
             ? [{ value: equipeRestrita, label: equipes.find((e) => e.id === equipeRestrita)?.name || 'Minha equipe' }]
-            : gerencial ? [{ value: 'todos', label: 'Todas as equipes' }, ...opcoes.equipes.map((e) => ({ value: e.id, label: e.name }))].filter((e) => e.value !== 'todos')
+            : gerencial ? opcoes.equipes
               : [{ value: 'todos', label: 'Escopo do meu perfil' }]} />
         <CampoFiltro nome="empresa" titulo="Empresa" escolhas={opcoes.empresas} />
         <CampoFiltro nome="vendedor" titulo="Vendedor" escolhas={opcoes.vendedores} />
