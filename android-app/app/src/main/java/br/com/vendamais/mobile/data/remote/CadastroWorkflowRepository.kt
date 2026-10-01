@@ -188,7 +188,7 @@ class CadastroWorkflowRepository(
                     "select",
                     "id,empresa_codigo,empresa_nome,empresa_cnpj,vendedor_nome,vendedor_codigo,adesionista_id,adesionista_nome,adesionista_codigo,link_url,is_active,click_count,unique_visit_count,unique_visits_started_at,last_unique_visit_at,last_clicked_at,used_at,used_cpf,created_at,updated_at,deleted_at,deleted_by"
                 )
-                parameter("created_by", "eq.$userId")
+                parameter("vendedor_id", "eq.$userId")
                 parameter("order", "empresa_codigo.asc,created_at.desc")
             },
         )
