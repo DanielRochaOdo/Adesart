@@ -6,8 +6,9 @@ import { Input } from '../components/Input';
 import { Select } from '../components/Select';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Profile, Team } from '../lib/supabase';
-import { Plus, X, Edit, UserCheck, UserX, Download, ArrowLeft, ArrowRight, KeyRound, FilterX, SlidersHorizontal } from 'lucide-react';
+import { Plus, X, Edit, UserCheck, UserX, Download, ArrowLeft, ArrowRight, KeyRound, FilterX, SlidersHorizontal, History } from 'lucide-react';
 import { EditUserModal } from '../components/users/EditUserModal';
+import { UserLinkHistoryModal } from '../components/users/UserLinkHistoryModal';
 import { usePersistentState } from '../hooks/usePersistentState';
 
 type UserWithTeam = Profile & { team_name?: string };
@@ -65,6 +66,7 @@ export function Users() {
   const [createLoading, setCreateLoading] = useState(false);
   const [error, setError] = useState('');
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
+  const [linksHistoryUser, setLinksHistoryUser] = useState<Profile | null>(null);
   const [resetPasswordUser, setResetPasswordUser] = useState<Profile | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
@@ -322,7 +324,7 @@ export function Users() {
             App mobile: Não identificado
           </span>
           {user.last_app_seen_at && platform && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               Plataforma registrada: {appPlatformLabels[platform] || platform}
             </p>
           )}
@@ -341,7 +343,7 @@ export function Users() {
         </span>
         <p className="text-xs text-slate-600">Plataforma: {appPlatformLabels[platform] || platform}</p>
         {version && <p className="text-xs text-slate-600">{version}</p>}
-        <p className="text-xs text-slate-500">Último uso: {formatAppSeenAt(user.last_app_seen_at)}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400">Último uso: {formatAppSeenAt(user.last_app_seen_at)}</p>
       </div>
     );
   };
@@ -566,20 +568,20 @@ export function Users() {
 
         <Card>
           {passwordResetNotice && (
-            <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200">
               {passwordResetNotice}
             </div>
           )}
 
-          <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+          <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/70">
             <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-slate-800">Filtros</h2>
-                <p className="text-xs text-slate-500">
+                <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Filtros</h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   Combine os campos abaixo para localizar usuários com mais precisão.
                 </p>
               </div>
-              <span className="text-xs font-medium text-slate-500">
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
                 {filteredUsers.length} de {users.length} usuário(s)
               </span>
             </div>
@@ -655,30 +657,30 @@ export function Users() {
             )}
           </div>
 
-          <details className="mb-6 rounded-lg border border-slate-200 bg-white">
-            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50">
+          <details className="mb-6 rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800">
               <SlidersHorizontal className="h-4 w-4" />
               Personalizar tabela
-              <span className="ml-1 text-xs font-normal text-slate-500">
+              <span className="ml-1 text-xs font-normal text-slate-500 dark:text-slate-400">
                 ordem das colunas e exportação
               </span>
             </summary>
-            <div className="border-t border-slate-200 bg-slate-50 p-4">
-              <p className="mb-3 text-xs text-slate-500">
+            <div className="border-t border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/40">
+              <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
                 Use as setas para mover as colunas para a esquerda ou para a direita. A exportação segue a mesma ordem.
               </p>
               <div className="flex flex-wrap gap-2">
                 {userColumns.map((column, index) => (
                   <div
                     key={column.key}
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1"
+                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"
                   >
-                    <span className="text-xs font-medium text-slate-700">{column.label}</span>
+                    <span className="text-xs font-medium text-slate-700 dark:text-slate-200">{column.label}</span>
                     <button
                       type="button"
                       onClick={() => moveColumn(index, -1)}
                       disabled={index === 0}
-                      className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-30"
+                      className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-30 dark:text-slate-400 dark:hover:text-slate-100"
                       aria-label={`Mover ${column.label} para a esquerda`}
                     >
                       <ArrowLeft className="h-3.5 w-3.5" />
@@ -687,7 +689,7 @@ export function Users() {
                       type="button"
                       onClick={() => moveColumn(index, 1)}
                       disabled={index === userColumns.length - 1}
-                      className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-30"
+                      className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-30 dark:text-slate-400 dark:hover:text-slate-100"
                       aria-label={`Mover ${column.label} para a direita`}
                     >
                       <ArrowRight className="h-3.5 w-3.5" />
@@ -717,6 +719,9 @@ export function Users() {
                           {column.label}
                         </th>
                       ))}
+                      {profile?.role === 'ADMINISTRADOR' && (
+                        <th className="text-center py-3 px-4 text-sm font-semibold text-slate-600">Link</th>
+                      )}
                       <th className="text-center py-3 px-4 text-sm font-semibold text-slate-600">Ações</th>
                     </tr>
                   </thead>
@@ -728,6 +733,19 @@ export function Users() {
                             {renderCell(user, column.key)}
                           </td>
                         ))}
+                        {profile?.role === 'ADMINISTRADOR' && (
+                          <td className="py-3 px-4 text-center">
+                            <button
+                              type="button"
+                              onClick={() => setLinksHistoryUser(user)}
+                              className="inline-flex items-center justify-center rounded-lg p-2 text-sky-600 transition-colors hover:bg-sky-50 dark:hover:bg-sky-950/30"
+                              title="Histórico de links"
+                              aria-label={`Histórico de links de ${user.name}`}
+                            >
+                              <History className="h-4 w-4" />
+                            </button>
+                          </td>
+                        )}
                         <td className="py-3 px-4 text-center">
                           <div className="inline-flex items-center gap-1">
                             <button
@@ -778,6 +796,17 @@ export function Users() {
                         >
                           <Edit className="h-4 w-4" />
                         </button>
+                        {profile?.role === 'ADMINISTRADOR' && (
+                          <button
+                            type="button"
+                            onClick={() => setLinksHistoryUser(user)}
+                            className="rounded-lg p-1 text-sky-600 transition-colors hover:bg-sky-50 dark:hover:bg-sky-950/30"
+                            title="Histórico de links"
+                            aria-label={`Histórico de links de ${user.name}`}
+                          >
+                            <History className="h-4 w-4" />
+                          </button>
+                        )}
                         {canResetPasswordFor(user) && (
                           <button
                             onClick={() => openPasswordReset(user)}
@@ -929,6 +958,13 @@ export function Users() {
         />
       )}
 
+      {linksHistoryUser && profile?.role === 'ADMINISTRADOR' && (
+        <UserLinkHistoryModal
+          user={linksHistoryUser}
+          onClose={() => setLinksHistoryUser(null)}
+        />
+      )}
+
       {resetPasswordUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black bg-opacity-50 p-4">
           <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
@@ -969,7 +1005,7 @@ export function Users() {
                 required
                 autoComplete="new-password"
               />
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 A senha deve possuir pelo menos 6 caracteres.
               </p>
 
