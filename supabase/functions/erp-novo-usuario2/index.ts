@@ -33,6 +33,8 @@ const positiveInt = (...values: unknown[]) => {
 const normalizeDigits = (value: unknown) =>
   String(value ?? "").replace(/\D/g, "");
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const dependenteFromPayloadByCpf = (payload: any, targetCpf: string) => {
   const normalizedTarget = normalizeDigits(targetCpf);
   if (!normalizedTarget) return null;
@@ -98,73 +100,78 @@ const resolvePrimaryDependente = async (
     };
   }
 
-  try {
-    let pagina = 1;
-    let totalPaginas = 1;
+  const delays = [0, 800, 1_600, 3_000, 5_000];
 
-    do {
-      const params = new URLSearchParams({
-        token: erpToken,
-        incluirAns: "true",
-        cpfDependente: normalizedCpf,
-        pagina: String(pagina),
-      });
-      const response = await fetch(
-        `${erpBaseUrl}/v2/api/associados?${params.toString()}`,
-        {
-          method: "GET",
-          headers: { Accept: "application/json" },
-          signal: AbortSignal.timeout(15_000),
-        },
-      );
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) break;
+  for (const delay of delays) {
+    if (delay > 0) await sleep(delay);
 
-      const registros = Array.isArray(payload?.dados) ? payload.dados : [];
-      for (const associado of registros) {
-        if (
-          empresaCodigo > 0 &&
-          Number(associado?.codigoDaEmpresa || 0) > 0 &&
-          Number(associado?.codigoDaEmpresa) !== Number(empresaCodigo)
-        ) {
-          continue;
-        }
+    try {
+      let pagina = 1;
+      let totalPaginas = 1;
 
-        const dependentes = Array.isArray(associado?.dependentes)
-          ? associado.dependentes
-          : [];
-        for (const dep of dependentes) {
+      do {
+        const params = new URLSearchParams({
+          token: erpToken,
+          incluirAns: "true",
+          cpfDependente: normalizedCpf,
+          pagina: String(pagina),
+        });
+        const response = await fetch(
+          `${erpBaseUrl}/v2/api/associados?${params.toString()}`,
+          {
+            method: "GET",
+            headers: { Accept: "application/json" },
+            signal: AbortSignal.timeout(15_000),
+          },
+        );
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) break;
+
+        const registros = Array.isArray(payload?.dados) ? payload.dados : [];
+        for (const associado of registros) {
           if (
-            normalizeDigits(
-              dep?.numeroCpfDependente ?? dep?.cpfDependente ?? dep?.cpf,
-            ) !== normalizedCpf
+            empresaCodigo > 0 &&
+            Number(associado?.codigoDaEmpresa || 0) !== Number(empresaCodigo)
           ) {
             continue;
           }
 
-          const idDependente = positiveInt(
-            dep?.codigoDependente,
-            dep?.codigo,
-            dep?.idDependente,
-          );
-          if (idDependente) {
-            return {
-              idDependente,
-              cpf: normalizedCpf,
-              nome: textValue(dep?.nomeDependente, dep?.nome, targetNome),
-            };
+          const dependentes = Array.isArray(associado?.dependentes)
+            ? associado.dependentes
+            : [];
+          for (const dep of dependentes) {
+            if (
+              normalizeDigits(
+                dep?.numeroCpfDependente ?? dep?.cpfDependente ?? dep?.cpf,
+              ) !== normalizedCpf
+            ) {
+              continue;
+            }
+
+            const idDependente = positiveInt(
+              dep?.codigoDependente,
+              dep?.codigo,
+              dep?.idDependente,
+            );
+            if (idDependente) {
+              return {
+                idDependente,
+                cpf: normalizedCpf,
+                nome: textValue(dep?.nomeDependente, dep?.nome, targetNome),
+              };
+            }
           }
         }
-      }
 
-      totalPaginas = Math.max(1, Number(payload?.totalPaginas || 1));
-      pagina += 1;
-    } while (pagina <= totalPaginas && pagina <= 20);
-  } catch (error) {
-    console.warn(
-      "[erp-novo-usuario2] Falha ao resolver dependente principal pelo CPF:",
-      error,
-    );
+        totalPaginas = Math.max(1, Number(payload?.totalPaginas || 1));
+        pagina += 1;
+      } while (pagina <= totalPaginas && pagina <= 20);
+    } catch (error) {
+      console.warn(
+        "[erp-novo-usuario2] Falha ao resolver CPF principal no ERP:",
+        error,
+      );
+    }
   }
 
   return null;
@@ -347,16 +354,14 @@ const enqueueAttachment = async (
 
   const fileSize = storageFile.size || null;
 
-  if (!idFuncionario || !idDependente) {
-    const failureCode = !idDependente
-      ? "PRIMARY_DEPENDENT_NOT_FOUND"
-      : "ERP_FUNCIONARIO_ID_NOT_FOUND";
+  if (!idFuncionario) {
+    const failureCode = "ERP_FUNCIONARIO_ID_NOT_FOUND";
     const { data: failureRow, error: failureError } = await supabase
       .from("erp_upload_queue")
       .insert({
         cadastro_id: cadastroId,
         created_by: createdBy,
-        id_funcionario: idFuncionario || 0,
+        id_funcionario: 0,
         id_dependente: idDependente || 0,
         arquivo_path: normalizedPath,
         arquivo_nome: arquivoNome || normalizedPath.split("/").pop() || "documento.pdf",
@@ -366,9 +371,7 @@ const enqueueAttachment = async (
         attempts: 0,
         next_attempt_at: null,
         finished_at: new Date().toISOString(),
-        last_error: !idDependente
-          ? "Nao foi possivel identificar com seguranca o dependente principal no ERP."
-          : "Codigo do funcionario responsavel nao encontrado.",
+        last_error: "Codigo do funcionario responsavel nao encontrado.",
         last_error_code: failureCode,
         last_status_code: 422,
         file_size_bytes: fileSize,
@@ -383,11 +386,7 @@ const enqueueAttachment = async (
       .single();
 
     if (failureError) {
-      return {
-        queued: false,
-        reason: failureCode,
-        details: failureError.message,
-      };
+      return { queued: false, reason: failureCode, details: failureError.message };
     }
 
     return {
@@ -396,6 +395,59 @@ const enqueueAttachment = async (
       queue_id: failureRow.id,
       idFuncionario,
       idDependente,
+    };
+  }
+
+  if (!idDependente) {
+    // O ERP pode levar alguns segundos para expor o novo dependente na consulta.
+    // Mantemos o item processavel usando o CPF principal como chave canonica.
+    const { data: pendingRow, error: pendingError } = await supabase
+      .from("erp_upload_queue")
+      .insert({
+        cadastro_id: cadastroId,
+        created_by: createdBy,
+        id_funcionario: idFuncionario,
+        id_dependente: 0,
+        arquivo_path: normalizedPath,
+        arquivo_nome: arquivoNome || normalizedPath.split("/").pop() || "documento.pdf",
+        bucket,
+        tipo: "titular",
+        status: "queued",
+        attempts: 0,
+        next_attempt_at: new Date().toISOString(),
+        finished_at: null,
+        last_error: targetDependenteCpf
+          ? `Aguardando o CPF principal ${targetDependenteCpf} ficar disponivel no ERP.`
+          : "CPF principal nao identificado para resolver o destino do anexo.",
+        last_error_code: "PRIMARY_DEPENDENT_NOT_FOUND",
+        last_status_code: 422,
+        file_size_bytes: fileSize,
+        worker_source: "cadastro-finalize",
+        cliente_nome: clienteNome,
+        cliente_cpf: clienteCpf,
+        empresa_nome: empresaNome,
+        target_dependente_cpf: targetDependenteCpf,
+        target_dependente_nome: targetDependenteNome,
+      })
+      .select("id")
+      .single();
+
+    if (pendingError) {
+      return {
+        queued: false,
+        reason: "PRIMARY_DEPENDENT_NOT_FOUND",
+        details: pendingError.message,
+      };
+    }
+
+    return {
+      queued: true,
+      pending_resolution: true,
+      reason: "PRIMARY_DEPENDENT_NOT_FOUND",
+      queue_id: pendingRow.id,
+      idFuncionario,
+      idDependente: null,
+      targetDependenteCpf,
     };
   }
 
@@ -680,8 +732,11 @@ Deno.serve(async (req: Request) => {
               .maybeSingle()).data?.external_id,
           );
           const principalPayload = dependentesPayload?.[0] || {};
+          // O destino do anexo e sempre o primeiro CPF do fluxo, persistido em cadastros.cpf.
+          // Nunca escolhemos o primeiro registro devolvido pelo ERP.
           const principalCpf = normalizeDigits(
-            principalPayload?.cpf ??
+            existing?.cpf ??
+              principalPayload?.cpf ??
               principalPayload?.numeroCpfDependente ??
               responsavel?.cpf,
           );
