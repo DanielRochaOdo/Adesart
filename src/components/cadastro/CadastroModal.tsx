@@ -1870,7 +1870,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
           )}
 
           <div className="flex flex-col sm:flex-row gap-3 pt-4">
-            {canDelete && (
+            {canDelete && (profile?.role !== 'CADASTRO' || ['incompleto', 'adesoes_pendentes'].includes(cadastroAtual.status)) && (
               <Button
                 variant="secondary"
                 onClick={handleDelete}
