@@ -74,9 +74,9 @@ Deno.serve(async (req: Request) => {
       throw new Error('Supervisors can only update users in their own team');
     }
 
-    const isCadastroOperator = requestingProfile.role === 'CADASTRO';
-    const effectiveRole = isCadastroOperator ? targetProfile.role : (role ?? targetProfile.role);
-    const nextExternalId = isCadastroOperator
+    const isRestrictedOperator = ['CADASTRO', 'GERENTE'].includes(requestingProfile.role);
+    const effectiveRole = isRestrictedOperator ? targetProfile.role : (role ?? targetProfile.role);
+    const nextExternalId = isRestrictedOperator
       ? targetProfile.external_id ?? null
       : (requiresTeamAndExternal(effectiveRole) ? external_id ?? null : null);
     const nextTeamId = requiresTeamAndExternal(effectiveRole)
@@ -105,7 +105,7 @@ Deno.serve(async (req: Request) => {
       email,
       telefone: telefone ?? null,
       is_active,
-      lemmit_limite_consultas: isCadastroOperator
+      lemmit_limite_consultas: isRestrictedOperator
         ? targetProfile.lemmit_limite_consultas ?? null
         : lemmit_limite_consultas ?? null,
       ...(requestingProfile.role === 'ADMINISTRADOR' ? { role: role ?? targetProfile.role } : {}),
