@@ -122,7 +122,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   ERP_INVALID_RESPONSE: 'Resposta inválida do ERP',
   ERP_CONFIG: 'Configuração do ERP',
   QUEUE_INTERNAL: 'Falha interna da fila',
-  PRIMARY_DEPENDENT_NOT_FOUND: 'Dependente principal não identificado',
+  PRIMARY_DEPENDENT_NOT_FOUND: 'CPF principal não localizado',
   ERP_FUNCIONARIO_ID_NOT_FOUND: 'Funcionário ERP não identificado',
   LEGACY_UNCLASSIFIED: 'Erro legado não classificado',
 };

@@ -725,12 +725,9 @@ class CadastroWorkflowRepository(
                     ?.jsonPrimitive
                     ?.booleanOrNull == true
             }.getOrDefault(false)
-            val firstDependenteId = CadastroPayloadBuilder.firstDependenteCodigo(response)
-
             if (
                 !cadastro.arquivoPath.isNullOrBlank() &&
                 !attachmentQueuedByEdge &&
-                firstDependenteId != null &&
                 funcionarioCadastroId != null
             ) {
                 runCatching {
@@ -738,19 +735,18 @@ class CadastroWorkflowRepository(
                         session = session,
                         cadastro = cadastro,
                         funcionarioCadastroId = funcionarioCadastroId,
-                        dependenteId = firstDependenteId,
                     )
                 }.onFailure { throwable ->
                     Log.e(
                         logTag,
-                        "ERP confirmou cadastro $targetCadastroId; fallback de enqueue do anexo falhou sem reabrir a adesao.",
+                        "ERP confirmou cadastro $targetCadastroId; fallback de enqueue do anexo pelo CPF principal falhou sem reabrir a adesao.",
                         throwable,
                     )
                 }
             } else if (!cadastro.arquivoPath.isNullOrBlank() && !attachmentQueuedByEdge) {
                 Log.w(
                     logTag,
-                    "ERP confirmou cadastro $targetCadastroId, mas nao foi possivel montar fallback local do anexo. A adesao permanece enviada.",
+                    "ERP confirmou cadastro $targetCadastroId, mas nao foi possivel enfileirar o anexo pelo CPF principal. A adesao permanece enviada.",
                 )
             }
 
@@ -1536,7 +1532,6 @@ class CadastroWorkflowRepository(
         session: SavedSession,
         cadastro: CadastroDetalhe,
         funcionarioCadastroId: Int,
-        dependenteId: Int,
     ) {
         client.safePost<JsonElement>(
             url = "${AppConfig.supabaseUrl}/functions/v1/erp-enqueue-upload",
@@ -1544,7 +1539,7 @@ class CadastroWorkflowRepository(
             body = buildJsonObject {
                 put("cadastroId", cadastro.id)
                 put("idFuncionario", funcionarioCadastroId)
-                put("idDependente", dependenteId)
+                put("targetCpf", CadastroPayloadBuilder.normalizeDigits(cadastro.cpf))
                 put("arquivoPath", cadastro.arquivoPath)
                 put("arquivoNome", cadastro.arquivoNome ?: cadastro.arquivoPath?.substringAfterLast('/'))
                 put("tipo", "titular")

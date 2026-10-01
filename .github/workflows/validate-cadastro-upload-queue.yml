@@ -14,6 +14,7 @@ on:
       - 'supabase/functions/erp-novo-usuario2/**'
       - 'supabase/functions/erp-enqueue-upload/**'
       - 'supabase/functions/erp-process-upload-queue/**'
+      - 'supabase/functions/erp-upload-documento/**'
       - 'supabase/migrations/*upload_queue*'
       - 'supabase/migrations/*upload_error*'
       - 'supabase/migrations/*cadastro_metadata*'
@@ -51,7 +52,8 @@ jobs:
           deno check --node-modules-dir=auto \
             supabase/functions/erp-novo-usuario2/index.ts \
             supabase/functions/erp-enqueue-upload/index.ts \
-            supabase/functions/erp-process-upload-queue/index.ts
+            supabase/functions/erp-process-upload-queue/index.ts \
+            supabase/functions/erp-upload-documento/index.ts
 
   parity:
     runs-on: ubuntu-latest

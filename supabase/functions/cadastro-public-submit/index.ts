@@ -312,27 +312,65 @@ async function reconcile(snapshot: any) {
 }
 
 function extractTitularErpId(erpResult: any, cpf: string, empresaCodigo: number) {
-  const direct = [
-    erpResult?.data?.dados?.dependentes?.[0]?.codigo,
-    erpResult?.dados?.dependentes?.[0]?.codigo,
-    erpResult?.data?.dados?.dependente?.[0]?.codigo,
-    erpResult?.dados?.dependente?.[0]?.codigo,
-    erpResult?.titularCodigo,
-  ]
-    .map((value) => Number(value || 0))
-    .find((value) => value > 0);
-
-  if (direct) return direct;
-
   const normalizedCpf = normalizeDigits(cpf);
+  if (!normalizedCpf) return null;
+
+  // titularCodigo so e aceito quando veio da reconciliacao por CPF exato.
+  const reconciled = Number(erpResult?.titularCodigo || 0);
+  if (reconciled > 0 && erpResult?.reconciled === true) return reconciled;
+
+  const roots = [
+    erpResult?.dados,
+    erpResult?.data?.dados,
+    erpResult?.data?.data?.dados,
+  ].filter(Boolean);
+
+  for (const root of roots) {
+    const candidates = Array.isArray(root) ? root : [root];
+    for (const candidate of candidates) {
+      if (
+        candidate?.codigoDaEmpresa != null &&
+        Number(candidate.codigoDaEmpresa) !== Number(empresaCodigo)
+      ) {
+        continue;
+      }
+
+      const deps = Array.isArray(candidate?.dependentes)
+        ? candidate.dependentes
+        : Array.isArray(candidate?.dependente)
+          ? candidate.dependente
+          : [];
+
+      for (const dep of deps) {
+        if (
+          normalizeDigits(
+            dep?.numeroCpfDependente ?? dep?.cpfDependente ?? dep?.cpf,
+          ) !== normalizedCpf
+        ) {
+          continue;
+        }
+
+        const id = Number(
+          dep?.codigoDependente ?? dep?.codigo ?? dep?.idDependente ?? 0,
+        );
+        if (Number.isInteger(id) && id > 0) return id;
+      }
+    }
+  }
+
   const records = Array.isArray(erpResult?.source?.dados) ? erpResult.source.dados : [];
-  const associado = records.find((item: any) => Number(item?.codigoDaEmpresa) === Number(empresaCodigo)) || records[0];
+  const associado = records.find(
+    (item: any) => Number(item?.codigoDaEmpresa) === Number(empresaCodigo),
+  );
   const deps = Array.isArray(associado?.dependentes) ? associado.dependentes : [];
   const titular = deps.find(
-    (dep: any) => normalizeDigits(dep?.numeroCpfDependente) === normalizedCpf && isActiveErpStatus(dep),
-  ) || deps.find((dep: any) => normalizeDigits(dep?.numeroCpfDependente) === normalizedCpf) || deps[0];
-  const fallback = Number(titular?.codigoDependente || titular?.codigo || 0);
-  return fallback > 0 ? fallback : null;
+    (dep: any) =>
+      normalizeDigits(
+        dep?.numeroCpfDependente ?? dep?.cpfDependente ?? dep?.cpf,
+      ) === normalizedCpf,
+  );
+  const id = Number(titular?.codigoDependente ?? titular?.codigo ?? titular?.idDependente ?? 0);
+  return Number.isInteger(id) && id > 0 ? id : null;
 }
 
 async function syncCadastroEnviado(supabase: any, cadastroId: string, erpResult: any) {
