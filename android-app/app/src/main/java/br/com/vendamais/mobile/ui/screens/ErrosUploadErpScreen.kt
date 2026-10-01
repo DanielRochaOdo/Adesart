@@ -61,7 +61,7 @@ private val errorCategoryLabels = mapOf(
     "ERP_INVALID_RESPONSE" to "Resposta invalida do ERP",
     "ERP_CONFIG" to "Configuracao do ERP",
     "QUEUE_INTERNAL" to "Falha interna da fila",
-    "PRIMARY_DEPENDENT_NOT_FOUND" to "Dependente principal nao identificado",
+    "PRIMARY_DEPENDENT_NOT_FOUND" to "CPF principal nao localizado",
     "ERP_FUNCIONARIO_ID_NOT_FOUND" to "Funcionario ERP nao identificado",
     "LEGACY_UNCLASSIFIED" to "Erro legado nao classificado",
 )
