@@ -377,6 +377,26 @@ fun FilaUploadErpScreen(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
+                                    item.cadastro?.vendedorNome
+                                        ?.trim()
+                                        ?.takeIf { it.isNotBlank() }
+                                        ?.let { vendedor ->
+                                            Text(
+                                                text = "Vendedor: $vendedor",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
+                                    item.cadastro?.adesionistaNome
+                                        ?.trim()
+                                        ?.takeIf { it.isNotBlank() }
+                                        ?.let { adesionista ->
+                                            Text(
+                                                text = "Adesionista: $adesionista",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            )
+                                        }
                                 }
                             }
                         } else {
