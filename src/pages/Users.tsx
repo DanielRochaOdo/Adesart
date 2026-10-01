@@ -95,14 +95,15 @@ export function Users() {
     }
   );
 
-  const canCreate = profile?.role && ['ADMINISTRADOR', 'GERENTE', 'SUPERVISOR'].includes(profile.role);
+  const canCreate = profile?.role && ['ADMINISTRADOR', 'SUPERVISOR'].includes(profile.role);
   const canEditRole = profile?.role === 'ADMINISTRADOR';
-  const isCadastroRole = profile?.role === 'CADASTRO';
-  const canEditExternalId = !isCadastroRole;
-  const canEditLemmitLimit = !isCadastroRole;
+  const isRestrictedUserOperator = profile?.role === 'CADASTRO' || profile?.role === 'GERENTE';
+  const canEditExternalId = !isRestrictedUserOperator;
+  const canEditLemmitLimit = !isRestrictedUserOperator;
   const canResetPasswordFor = (targetUser: Profile) =>
     profile?.role === 'ADMINISTRADOR' ||
-    (profile?.role === 'CADASTRO' && targetUser.role !== 'ADMINISTRADOR');
+    (['CADASTRO', 'GERENTE'].includes(profile?.role ?? '') &&
+      targetUser.role !== 'ADMINISTRADOR');
 
   useEffect(() => {
     fetchUsers();
@@ -570,7 +571,7 @@ export function Users() {
             </div>
           )}
 
-          <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-900/70">
+          <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/70">
             <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Filtros</h2>

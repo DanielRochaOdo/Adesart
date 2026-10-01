@@ -103,6 +103,13 @@ interface LinksGeradosListProps {
 const PAGE_SIZE = 5;
 const HISTORY_PAGE_SIZE = 10;
 
+type HistorySort =
+  | 'recentes'
+  | 'antigos'
+  | 'status'
+  | 'nome'
+  | 'vendedor';
+
 const formatDateTime = (value: string) => {
   try {
     return new Date(value).toLocaleString('pt-BR');
@@ -221,6 +228,8 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
   const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<string>('todos');
+  const [historySort, setHistorySort] = useState<HistorySort>('recentes');
 
   const loadLinks = async () => {
     setLoading(true);
@@ -318,9 +327,42 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
   const pagedLinks = filteredLinks.slice(pageStart, pageStart + PAGE_SIZE);
   const groupedLinks = useMemo(() => groupLinksByEmpresa(pagedLinks), [pagedLinks]);
 
-  const historyTotalPages = Math.max(1, Math.ceil(historyRows.length / HISTORY_PAGE_SIZE));
+  const historyStatusOptions = useMemo(
+    () => Array.from(new Set(historyRows.map((row) => row.status)))
+      .sort((a, b) => a.localeCompare(b, 'pt-BR')),
+    [historyRows],
+  );
+
+  const visibleHistoryRows = useMemo(() => {
+    const filtered = historyStatusFilter === 'todos'
+      ? [...historyRows]
+      : historyRows.filter((row) => row.status === historyStatusFilter);
+
+    return filtered.sort((a, b) => {
+      switch (historySort) {
+        case 'antigos':
+          return new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+        case 'status':
+          return a.status.localeCompare(b.status, 'pt-BR') ||
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+        case 'nome':
+          return (a.nomeRf || '').localeCompare(b.nomeRf || '', 'pt-BR') ||
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+        case 'vendedor':
+          return a.vendedor.localeCompare(b.vendedor, 'pt-BR') ||
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+        default:
+          return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+      }
+    });
+  }, [historyRows, historyStatusFilter, historySort]);
+
+  const historyTotalPages = Math.max(1, Math.ceil(visibleHistoryRows.length / HISTORY_PAGE_SIZE));
   const historyPageStart = (historyCurrentPage - 1) * HISTORY_PAGE_SIZE;
-  const pagedHistoryRows = historyRows.slice(historyPageStart, historyPageStart + HISTORY_PAGE_SIZE);
+  const pagedHistoryRows = visibleHistoryRows.slice(
+    historyPageStart,
+    historyPageStart + HISTORY_PAGE_SIZE,
+  );
 
   useEffect(() => {
     loadLinks();
@@ -337,6 +379,10 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
   useEffect(() => {
     if (historyCurrentPage > historyTotalPages) setHistoryCurrentPage(historyTotalPages);
   }, [historyCurrentPage, historyTotalPages]);
+
+  useEffect(() => {
+    setHistoryCurrentPage(1);
+  }, [historyStatusFilter, historySort]);
 
   const handleCopyLink = async (link: CadastroLinkRow) => {
     if (!link.link_url) return;
@@ -421,6 +467,8 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
     setHistorySummary(null);
     setHistoryError('');
     setHistoryCurrentPage(1);
+    setHistoryStatusFilter('todos');
+    setHistorySort('recentes');
     setHistoryLoading(true);
 
     try {
@@ -442,9 +490,9 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
   };
 
   const handleExportHistory = () => {
-    if (!selectedHistoryLink || historyRows.length === 0) return;
+    if (!selectedHistoryLink || visibleHistoryRows.length === 0) return;
 
-    const exportRows = historyRows.map((row) => ({
+    const exportRows = visibleHistoryRows.map((row) => ({
       Data: formatDate(row.timestamp),
       Horario: formatTime(row.timestamp),
       'Nome do RF': row.nomeRf || '',
@@ -771,7 +819,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                 <button
                   type="button"
                   onClick={handleExportHistory}
-                  disabled={historyLoading || historyRows.length === 0}
+                  disabled={historyLoading || visibleHistoryRows.length === 0}
                   className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-600 bg-emerald-600 px-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Download className="h-4 w-4" />
@@ -811,6 +859,37 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
               </div>
             )}
 
+            <div className="grid gap-3 border-b border-slate-200 bg-white px-5 py-3 sm:grid-cols-2">
+              <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+                Status
+                <select
+                  value={historyStatusFilter}
+                  onChange={(event) => setHistoryStatusFilter(event.target.value)}
+                  className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-500"
+                >
+                  <option value="todos">Todos os status</option>
+                  {historyStatusOptions.map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+                Ordenar por
+                <select
+                  value={historySort}
+                  onChange={(event) => setHistorySort(event.target.value as HistorySort)}
+                  className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-500"
+                >
+                  <option value="recentes">Mais recentes primeiro</option>
+                  <option value="antigos">Mais antigos primeiro</option>
+                  <option value="status">Status (A-Z)</option>
+                  <option value="nome">Nome do RF (A-Z)</option>
+                  <option value="vendedor">Vendedor (A-Z)</option>
+                </select>
+              </label>
+            </div>
+
             <div className="min-h-0 flex-1 overflow-auto">
               {historyLoading ? (
                 <div className="flex min-h-56 items-center justify-center">
@@ -820,9 +899,9 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                 <div className="m-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                   {historyError}
                 </div>
-              ) : historyRows.length === 0 ? (
+              ) : visibleHistoryRows.length === 0 ? (
                 <div className="m-5 rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">
-                  Nenhum registro de tentativa encontrado para este link ainda.
+                  Nenhum registro encontrado para os filtros selecionados.
                 </div>
               ) : (
                 <table className="min-w-[1180px] w-full border-collapse text-left text-xs">
@@ -866,10 +945,10 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
               )}
             </div>
 
-            {!historyLoading && !historyError && historyRows.length > 0 && (
+            {!historyLoading && !historyError && visibleHistoryRows.length > 0 && (
               <div className="flex flex-col gap-3 border-t border-slate-200 bg-white px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-xs text-slate-500">
-                  Mostrando {historyPageStart + 1}-{Math.min(historyPageStart + HISTORY_PAGE_SIZE, historyRows.length)} de {historyRows.length} registros • 10 por pagina
+                  Mostrando {historyPageStart + 1}-{Math.min(historyPageStart + HISTORY_PAGE_SIZE, visibleHistoryRows.length)} de {visibleHistoryRows.length} registros • 10 por pagina
                 </p>
                 <div className="flex items-center gap-2">
                   <button
@@ -896,7 +975,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
             )}
 
             <div className="border-t border-slate-200 bg-slate-50 px-5 py-3 text-xs leading-5 text-slate-500">
-              Visitas são contabilizadas uma vez por link e por sessão do navegador ou aplicativo desde {historySummary?.visitsStartedAt ? formatDateTime(historySummary.visitsStartedAt) : 'a atualização da métrica'}. Retornar à tela inicial ou atualizar a página não aumenta a contagem. O histórico anterior ({historySummary?.legacyClickCount ?? 0} aberturas, sem deduplicação) foi preservado separadamente e não é somado às novas visitas. Os registros detalhados antigos ainda podem conter acessos repetidos.
+              Visitas são contabilizadas uma vez por link e por sessão do navegador ou aplicativo desde {historySummary?.visitsStartedAt ? formatDateTime(historySummary.visitsStartedAt) : 'a atualização da métrica'}. Retornar à tela inicial ou atualizar a página não aumenta a contagem. O histórico anterior ({historySummary?.legacyClickCount ?? 0} aberturas, sem deduplicação) permanece preservado separadamente e não é somado nem exibido como visita por sessão.
             </div>
           </div>
         </div>

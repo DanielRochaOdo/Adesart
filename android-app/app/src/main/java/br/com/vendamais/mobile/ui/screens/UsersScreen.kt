@@ -102,11 +102,11 @@ fun UsersScreen(
             matchesSearch && matchesRole && matchesTeam && matchesStatus
         }
     }
-    val canCreate = state.profile?.role in setOf("ADMINISTRADOR", "GERENTE", "SUPERVISOR")
+    val canCreate = state.profile?.role in setOf("ADMINISTRADOR", "SUPERVISOR")
     val canEditRole = state.profile?.role == "ADMINISTRADOR"
-    val isCadastroOperator = state.profile?.role == "CADASTRO"
-    val canEditExternalId = !isCadastroOperator
-    val canEditLemmitLimit = !isCadastroOperator
+    val isRestrictedUserOperator = state.profile?.role in setOf("CADASTRO", "GERENTE")
+    val canEditExternalId = !isRestrictedUserOperator
+    val canEditLemmitLimit = !isRestrictedUserOperator
     val hasActiveFilters =
         searchTerm.isNotBlank() ||
             selectedRole.isNotBlank() ||
@@ -773,7 +773,7 @@ private fun userRoleFilterOptions(): List<Pair<String, String>> = listOf(
 private fun canResetPassword(actorRole: String?, targetRole: String): Boolean {
     val actor = normalizeRole(actorRole.orEmpty())
     val target = normalizeRole(targetRole)
-    return actor == "ADMINISTRADOR" || (actor == "CADASTRO" && target != "ADMINISTRADOR")
+    return actor == "ADMINISTRADOR" || (actor in setOf("CADASTRO", "GERENTE") && target != "ADMINISTRADOR")
 }
 
 private data class UserFormState(

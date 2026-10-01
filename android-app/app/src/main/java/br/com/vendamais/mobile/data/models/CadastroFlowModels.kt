@@ -74,6 +74,8 @@ data class TeamMemberOption(
     val email: String? = null,
     @SerialName("external_id")
     val externalId: String? = null,
+    @SerialName("team_id")
+    val teamId: String? = null,
 )
 
 @Serializable
@@ -395,6 +397,12 @@ data class CadastroLinkItem(
     val isActive: Boolean = true,
     @SerialName("click_count")
     val clickCount: Int? = null,
+    @SerialName("unique_visit_count")
+    val uniqueVisitCount: Int? = null,
+    @SerialName("unique_visits_started_at")
+    val uniqueVisitsStartedAt: String? = null,
+    @SerialName("last_unique_visit_at")
+    val lastUniqueVisitAt: String? = null,
     @SerialName("last_clicked_at")
     val lastClickedAt: String? = null,
     @SerialName("used_at")
@@ -439,6 +447,8 @@ data class CadastroLinkHistoryInfo(
 @Serializable
 data class CadastroLinkHistorySummary(
     val clickCount: Int = 0,
+    val legacyClickCount: Int = 0,
+    val visitsStartedAt: String? = null,
     val identifiedAttempts: Int = 0,
     val anonymousDetailed: Int = 0,
     val detailedAccessEvents: Int = 0,

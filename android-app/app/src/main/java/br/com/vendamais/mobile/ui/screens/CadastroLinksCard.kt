@@ -72,6 +72,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.core.content.FileProvider
+import br.com.vendamais.mobile.data.models.AdminTeam
 import br.com.vendamais.mobile.data.models.CadastroLinkAssociadoResumo
 import br.com.vendamais.mobile.data.models.CadastroLinkHistoryRow
 import br.com.vendamais.mobile.data.models.CadastroLinkHistorySummary
@@ -117,7 +118,11 @@ private data class AssociadosDialogState(
 @Composable
 fun CadastroLinksCard(
     workspace: LinkWorkspaceState,
+    profileRole: String = "",
+    vendedores: List<TeamMemberOption> = emptyList(),
+    teams: List<AdminTeam> = emptyList(),
     adesionistas: List<TeamMemberOption> = emptyList(),
+    onSelectedVendedorChange: (String) -> Unit = {},
     onSelectedAdesionistaChange: (String) -> Unit = {},
     invalidCompanyCodes: List<String> = emptyList(),
     onSearchTypeChange: (EmpresaSearchType) -> Unit,
@@ -142,6 +147,8 @@ fun CadastroLinksCard(
     var listSearchTerm by remember { mutableStateOf("") }
     var currentPage by remember { mutableIntStateOf(1) }
     val expandedGroups = remember { mutableStateMapOf<String, Boolean>() }
+    val isGerente = profileRole.uppercase() == "GERENTE"
+    val teamNames = remember(teams) { teams.associate { it.id to it.name } }
 
     val filteredLinks = workspace.links.filter { link ->
         val search = normalizeSearch(listSearchTerm)
@@ -309,6 +316,37 @@ fun CadastroLinksCard(
                             )
                         }
 
+                        if (isGerente) {
+                            SelectionField(
+                                label = "Vendedor",
+                                value = vendedores
+                                    .firstOrNull { it.id == workspace.selectedVendedorId }
+                                    ?.let { vendedor ->
+                                        val equipe = vendedor.teamId
+                                            ?.let { teamNames[it] }
+                                            ?.takeIf { it.isNotBlank() }
+                                            ?: "Sem equipe"
+                                        "${vendedor.name} · Equipe: $equipe · ID: ${vendedor.externalId.orEmpty()}"
+                                    }
+                                    ?: "Selecione um vendedor",
+                                options = vendedores
+                                    .filter {
+                                        !it.externalId.isNullOrBlank() &&
+                                            !it.teamId.isNullOrBlank()
+                                    }
+                                    .map { vendedor ->
+                                        val equipe = vendedor.teamId
+                                            ?.let { teamNames[it] }
+                                            ?.takeIf { it.isNotBlank() }
+                                            ?: "Sem equipe"
+                                        vendedor.id to
+                                            "${vendedor.name} · Equipe: $equipe · ID: ${vendedor.externalId.orEmpty()}"
+                                    },
+                                enabled = !workspace.operationLoading,
+                                onSelected = onSelectedVendedorChange,
+                            )
+                        }
+
                         SelectionField(
                             label = "Adesionista (Opcional)",
                             value = adesionistas.firstOrNull { it.id == workspace.selectedAdesionistaId }
@@ -324,6 +362,7 @@ fun CadastroLinksCard(
                         VendaButton(
                             label = "Gerar link publico",
                             onClick = onGenerateLink,
+                            enabled = !isGerente || workspace.selectedVendedorId.isNotBlank(),
                             loading = workspace.operationLoading,
                             leadingIcon = Icons.Rounded.Share,
                             modifier = Modifier.fillMaxWidth(),
@@ -664,7 +703,7 @@ private fun LinkEmpresaGroupCard(
     onRegenerate: (String) -> Unit,
     onDelete: (String) -> Unit,
 ) {
-    val clicks = group.links.sumOf { it.clickCount ?: 0 }
+    val visits = group.links.sumOf { it.uniqueVisitCount ?: 0 }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -712,8 +751,8 @@ private fun LinkEmpresaGroupCard(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         LinkMetricBox(
-                            label = "Cliques",
-                            value = clicks,
+                            label = "Visitas por sessão",
+                            value = visits,
                             modifier = Modifier.weight(1f),
                         )
                         LinkMetricBox(
@@ -839,7 +878,7 @@ private fun LinkListItem(
                         )
                     }
                     Text(
-                        text = "Código ${link.vendedorCodigo ?: "-"} · ${link.clickCount ?: 0} cliques · ${formatDateTime(link.createdAt)}",
+                        text = "Código ${link.vendedorCodigo ?: "-"} · ${link.uniqueVisitCount ?: 0} visitas por sessão · ${formatDateTime(link.createdAt)}",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall,
                     )
@@ -1033,12 +1072,42 @@ private fun LinkHistoryDialog(
     onDismiss: () -> Unit,
 ) {
     var currentPage by remember(link.id) { mutableIntStateOf(1) }
-    val totalPages = maxOf(1, ceil(rows.size / HISTORY_PAGE_SIZE.toDouble()).toInt())
-    LaunchedEffect(rows.size, totalPages) {
+    var statusFilter by remember(link.id) { mutableStateOf("todos") }
+    var sortMode by remember(link.id) { mutableStateOf("recentes") }
+
+    val statusOptions = rows
+        .map { it.status }
+        .distinct()
+        .sortedBy { it.lowercase() }
+
+    val visibleRows = rows
+        .filter { statusFilter == "todos" || it.status == statusFilter }
+        .let { filtered ->
+            when (sortMode) {
+                "antigos" -> filtered.sortedBy { it.timestamp }
+                "status" -> filtered.sortedWith(
+                    compareBy<CadastroLinkHistoryRow> { it.status.lowercase() }
+                        .thenByDescending { it.timestamp },
+                )
+                "nome" -> filtered.sortedWith(
+                    compareBy<CadastroLinkHistoryRow> { it.nomeRf.orEmpty().lowercase() }
+                        .thenByDescending { it.timestamp },
+                )
+                "vendedor" -> filtered.sortedWith(
+                    compareBy<CadastroLinkHistoryRow> { it.vendedor.lowercase() }
+                        .thenByDescending { it.timestamp },
+                )
+                else -> filtered.sortedByDescending { it.timestamp }
+            }
+        }
+
+    val totalPages = maxOf(1, ceil(visibleRows.size / HISTORY_PAGE_SIZE.toDouble()).toInt())
+    LaunchedEffect(visibleRows.size, totalPages, statusFilter, sortMode) {
         if (currentPage > totalPages) currentPage = totalPages
+        if (statusFilter != "todos" || sortMode != "recentes") currentPage = 1
     }
     val pageStart = (currentPage - 1) * HISTORY_PAGE_SIZE
-    val pagedRows = rows.drop(pageStart).take(HISTORY_PAGE_SIZE)
+    val pagedRows = visibleRows.drop(pageStart).take(HISTORY_PAGE_SIZE)
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(
@@ -1096,7 +1165,7 @@ private fun LinkHistoryDialog(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            HistorySummaryBox("Cliques", it.clickCount.toString(), Modifier.weight(1f))
+                            HistorySummaryBox("Visitas por sessão", it.clickCount.toString(), Modifier.weight(1f))
                             HistorySummaryBox("Identificados", it.identifiedAttempts.toString(), Modifier.weight(1f))
                             HistorySummaryBox("So abriu", it.anonymousDetailed.toString(), Modifier.weight(1f))
                         }
@@ -1106,6 +1175,39 @@ private fun LinkHistoryDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                }
+
+                HorizontalDivider()
+
+                Column(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    SelectionField(
+                        label = "Status",
+                        value = if (statusFilter == "todos") "Todos os status" else statusFilter,
+                        options = listOf("todos" to "Todos os status") +
+                            statusOptions.map { it to it },
+                        onSelected = { statusFilter = it },
+                    )
+                    SelectionField(
+                        label = "Ordenar por",
+                        value = when (sortMode) {
+                            "antigos" -> "Mais antigos primeiro"
+                            "status" -> "Status (A-Z)"
+                            "nome" -> "Nome do RF (A-Z)"
+                            "vendedor" -> "Vendedor (A-Z)"
+                            else -> "Mais recentes primeiro"
+                        },
+                        options = listOf(
+                            "recentes" to "Mais recentes primeiro",
+                            "antigos" to "Mais antigos primeiro",
+                            "status" to "Status (A-Z)",
+                            "nome" to "Nome do RF (A-Z)",
+                            "vendedor" to "Vendedor (A-Z)",
+                        ),
+                        onSelected = { sortMode = it },
+                    )
                 }
 
                 HorizontalDivider()
@@ -1123,8 +1225,8 @@ private fun LinkHistoryDialog(
                             text = error,
                             color = MaterialTheme.colorScheme.error,
                         )
-                        rows.isEmpty() -> Text(
-                            "Nenhum registro de tentativa encontrado para este link ainda.",
+                        visibleRows.isEmpty() -> Text(
+                            "Nenhum registro encontrado para os filtros selecionados.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         else -> LazyColumn(
@@ -1137,14 +1239,14 @@ private fun LinkHistoryDialog(
                     }
                 }
 
-                if (!loading && error.isNullOrBlank() && rows.isNotEmpty()) {
+                if (!loading && error.isNullOrBlank() && visibleRows.isNotEmpty()) {
                     HorizontalDivider()
                     Column(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Text(
-                            text = "Mostrando ${pageStart + 1}-${minOf(pageStart + HISTORY_PAGE_SIZE, rows.size)} de ${rows.size} registros · 10 por pagina",
+                            text = "Mostrando ${pageStart + 1}-${minOf(pageStart + HISTORY_PAGE_SIZE, visibleRows.size)} de ${visibleRows.size} registros · 10 por pagina",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -1178,14 +1280,14 @@ private fun LinkHistoryDialog(
                 ) {
                     TextButton(
                         onClick = {
-                            val uri = LinkHistoryXlsxExporter.exportToDownloads(context, link, rows)
+                            val uri = LinkHistoryXlsxExporter.exportToDownloads(context, link, visibleRows)
                             Toast.makeText(
                                 context,
                                 if (uri != null) "Historico XLSX salvo com sucesso." else "Nao foi possivel exportar o historico.",
                                 Toast.LENGTH_SHORT,
                             ).show()
                         },
-                        enabled = !loading && rows.isNotEmpty(),
+                        enabled = !loading && visibleRows.isNotEmpty(),
                     ) {
                         Icon(
                             Icons.Rounded.FileDownload,

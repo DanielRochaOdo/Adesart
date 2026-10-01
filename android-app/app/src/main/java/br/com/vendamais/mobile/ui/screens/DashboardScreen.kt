@@ -26,6 +26,7 @@ import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.TrendingUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -163,7 +164,24 @@ fun DashboardScreen(
     val isManagerial = profileRole in setOf("ADMINISTRADOR", "GERENTE")
     val supervisorTeamId = state.profile?.teamId?.takeIf { profileRole == "SUPERVISOR" }
     val teamNames = state.adminTeams.associate { it.id to it.name }
-    val teamOptions = currentUnfiltered
+
+    fun facetRecords(ignore: String): List<DashboardCadastro> =
+        currentUnfiltered.filter { cadastro ->
+            dashboardMatchesFilters(
+                cadastro = cadastro,
+                team = teamFilter,
+                company = companyFilter,
+                seller = sellerFilter,
+                adesionista = adesionistaFilter,
+                channel = channelFilter,
+                status = statusFilter,
+                search = search,
+                planos = state.planosMap,
+                ignore = ignore,
+            )
+        }
+
+    val teamOptions = facetRecords("team")
         .mapNotNull { cadastro ->
             cadastro.teamId?.takeIf { it.isNotBlank() }?.let { id ->
                 id to (teamNames[id] ?: "Equipe")
@@ -171,21 +189,74 @@ fun DashboardScreen(
         }
         .distinctBy { it.first }
         .sortedBy { it.second.lowercase(Locale.ROOT) }
-    val companyOptions = currentUnfiltered
+    val companyOptions = facetRecords("company")
         .map { dashboardCompanyKey(it) to dashboardCompanyLabel(it) }
         .distinctBy { it.first }
         .sortedBy { it.second.lowercase(Locale.ROOT) }
-    val sellerOptions = currentUnfiltered
+    val sellerOptions = facetRecords("seller")
         .map { dashboardSellerKey(it) to (it.vendedorNome ?: "Sem vendedor") }
         .distinctBy { it.first }
         .sortedBy { it.second.lowercase(Locale.ROOT) }
-    val adesionistaOptions = currentUnfiltered
+    val adesionistaOptions = facetRecords("adesionista")
         .mapNotNull {
             val key = dashboardAdesionistaKey(it)
             if (key == "sem-adesionista") null else key to (it.adesionistaNome ?: "Sem adesionista")
         }
         .distinctBy { it.first }
         .sortedBy { it.second.lowercase(Locale.ROOT) }
+    val channelOptions = facetRecords("channel")
+        .map { dashboardChannelKey(it) }
+        .distinct()
+        .sorted()
+        .map { key -> key to if (key == "publico") "Link / QR Code" else "Interno" }
+    val statusOptions = facetRecords("status")
+        .map { it.status }
+        .distinct()
+        .map { it to dashboardStatusLabel(it) }
+        .sortedBy { it.second.lowercase(Locale.ROOT) }
+
+    fun applyFacetFilter(facet: String, value: String) {
+        var nextTeam = if (facet == "team") value else teamFilter
+        var nextCompany = if (facet == "company") value else companyFilter
+        var nextSeller = if (facet == "seller") value else sellerFilter
+        var nextAdesionista = if (facet == "adesionista") value else adesionistaFilter
+        var nextChannel = if (facet == "channel") value else channelFilter
+        var nextStatus = if (facet == "status") value else statusFilter
+
+        fun hasMatch(): Boolean = currentUnfiltered.any { cadastro ->
+            dashboardMatchesFilters(
+                cadastro = cadastro,
+                team = nextTeam,
+                company = nextCompany,
+                seller = nextSeller,
+                adesionista = nextAdesionista,
+                channel = nextChannel,
+                status = nextStatus,
+                search = search,
+                planos = state.planosMap,
+            )
+        }
+
+        val otherFacets = listOf("team", "company", "seller", "adesionista", "channel", "status")
+        otherFacets.forEach { other ->
+            if (other == facet) return@forEach
+            when (other) {
+                "team" -> if (nextTeam != "todos" && !hasMatch()) nextTeam = "todos"
+                "company" -> if (nextCompany != "todos" && !hasMatch()) nextCompany = "todos"
+                "seller" -> if (nextSeller != "todos" && !hasMatch()) nextSeller = "todos"
+                "adesionista" -> if (nextAdesionista != "todos" && !hasMatch()) nextAdesionista = "todos"
+                "channel" -> if (nextChannel != "todos" && !hasMatch()) nextChannel = "todos"
+                "status" -> if (nextStatus != "todos" && !hasMatch()) nextStatus = "todos"
+            }
+        }
+
+        teamFilter = nextTeam
+        companyFilter = nextCompany
+        sellerFilter = nextSeller
+        adesionistaFilter = nextAdesionista
+        channelFilter = nextChannel
+        statusFilter = nextStatus
+    }
 
     val filteredWindow = if (range == null) {
         emptyList()
@@ -341,7 +412,7 @@ fun DashboardScreen(
                             "Equipe",
                             dashboardSelectedLabel(teamFilter, teamOptions, "Todas as equipes"),
                             listOf("todos" to "Todas as equipes") + teamOptions,
-                            onSelected = { teamFilter = it },
+                            onSelected = { applyFacetFilter("team", it) },
                         )
                     } else {
                         DashboardReadOnlyFilter(
@@ -355,19 +426,19 @@ fun DashboardScreen(
                         "Empresa",
                         dashboardSelectedLabel(companyFilter, companyOptions, "Todas as empresas"),
                         listOf("todos" to "Todas as empresas") + companyOptions,
-                        onSelected = { companyFilter = it },
+                        onSelected = { applyFacetFilter("company", it) },
                     )
                     SelectionField(
                         "Vendedor",
                         dashboardSelectedLabel(sellerFilter, sellerOptions, "Todos os vendedores"),
                         listOf("todos" to "Todos os vendedores") + sellerOptions,
-                        onSelected = { sellerFilter = it },
+                        onSelected = { applyFacetFilter("seller", it) },
                     )
                     SelectionField(
                         "Adesionista",
                         dashboardSelectedLabel(adesionistaFilter, adesionistaOptions, "Todos os adesionistas"),
                         listOf("todos" to "Todos os adesionistas") + adesionistaOptions,
-                        onSelected = { adesionistaFilter = it },
+                        onSelected = { applyFacetFilter("adesionista", it) },
                     )
                     SelectionField(
                         "Canal",
@@ -376,20 +447,14 @@ fun DashboardScreen(
                             "publico" -> "Link / QR Code"
                             else -> "Todos"
                         },
-                        listOf("todos" to "Todos", "interno" to "Interno", "publico" to "Link / QR Code"),
-                        onSelected = { channelFilter = it },
+                        listOf("todos" to "Todos") + channelOptions,
+                        onSelected = { applyFacetFilter("channel", it) },
                     )
                     SelectionField(
                         "Situacao",
                         dashboardStatusLabel(statusFilter),
-                        listOf(
-                            "todos" to "Todas",
-                            "enviado" to "Enviado ao ERP",
-                            "incompleto" to "Incompleto",
-                            "adesoes_pendentes" to "Adesoes pendentes",
-                            "erro_envio" to "Erro de envio",
-                        ),
-                        onSelected = { statusFilter = it },
+                        listOf("todos" to "Todas") + statusOptions,
+                        onSelected = { applyFacetFilter("status", it) },
                     )
                     OutlinedTextField(
                         value = search,
@@ -398,6 +463,28 @@ fun DashboardScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                     )
+                    OutlinedButton(
+                        onClick = {
+                            teamFilter = "todos"
+                            companyFilter = "todos"
+                            sellerFilter = "todos"
+                            adesionistaFilter = "todos"
+                            channelFilter = "todos"
+                            statusFilter = "todos"
+                            search = ""
+                        },
+                        enabled =
+                            teamFilter != "todos" ||
+                                companyFilter != "todos" ||
+                                sellerFilter != "todos" ||
+                                adesionistaFilter != "todos" ||
+                                channelFilter != "todos" ||
+                                statusFilter != "todos" ||
+                                search.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Limpar filtros")
+                    }
                 }
             }
         }
@@ -848,13 +935,15 @@ private fun dashboardMatchesFilters(
     status: String,
     search: String,
     planos: List<PlanoMap>,
+    ignore: String? = null,
 ): Boolean {
-    if (team != "todos" && cadastro.teamId != team) return false
-    if (company != "todos" && dashboardCompanyKey(cadastro) != company) return false
-    if (seller != "todos" && dashboardSellerKey(cadastro) != seller) return false
-    if (adesionista != "todos" && dashboardAdesionistaKey(cadastro) != adesionista) return false
-    if (channel != "todos" && dashboardChannelKey(cadastro) != channel) return false
-    if (status != "todos" && cadastro.status != status) return false
+    if (ignore != "team" && team != "todos" && cadastro.teamId != team) return false
+    if (ignore != "company" && company != "todos" && dashboardCompanyKey(cadastro) != company) return false
+    if (ignore != "seller" && seller != "todos" && dashboardSellerKey(cadastro) != seller) return false
+    if (ignore != "adesionista" && adesionista != "todos" && dashboardAdesionistaKey(cadastro) != adesionista) return false
+    if (ignore != "channel" && channel != "todos" && dashboardChannelKey(cadastro) != channel) return false
+    if (ignore != "status" && status != "todos" && cadastro.status != status) return false
+    if (ignore == "search") return true
     val term = search.trim().lowercase(Locale("pt", "BR"))
     if (term.isBlank()) return true
     val direct = listOf(
