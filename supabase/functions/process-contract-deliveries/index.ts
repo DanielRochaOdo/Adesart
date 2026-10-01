@@ -191,7 +191,7 @@ const resolveErpDependentId = async (cpf: string, empresaCodigo: number) => {
     if (delay > 0) await sleep(delay);
     try {
       const response = await fetch(
-        `${ERP_BASE_URL}/v2/api/associados?token=${encodeURIComponent(ERP_TOKEN)}&cpfAssociado=${normalizedCpf}&incluirAns=true`,
+        `${ERP_BASE_URL}/v2/api/associados?token=${encodeURIComponent(ERP_TOKEN)}&cpfDependente=${normalizedCpf}&incluirAns=true`,
         { headers: { Accept: "application/json" } },
       );
       if (!response.ok) {
