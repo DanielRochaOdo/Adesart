@@ -19,6 +19,9 @@ import br.com.vendamais.mobile.data.models.ErpUploadQueueItem
 import br.com.vendamais.mobile.data.models.RequeueUploadQueueResult
 import br.com.vendamais.mobile.data.models.ErpUploadQueueHealth
 import br.com.vendamais.mobile.data.models.ErpUploadQueuePage
+import br.com.vendamais.mobile.data.models.ErpUploadErrorSearchResponse
+import br.com.vendamais.mobile.data.models.ReconcileErpUploadErrorsResult
+import br.com.vendamais.mobile.data.models.RepairErpUploadQueueResult
 import br.com.vendamais.mobile.data.models.MobileProfile
 import br.com.vendamais.mobile.data.models.MobileTeam
 import br.com.vendamais.mobile.data.models.ProcessUploadQueueResponse
@@ -40,6 +43,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
+import io.ktor.http.content.ByteArrayContent
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
@@ -434,6 +438,134 @@ class SupabaseRepository(
             body = buildJsonObject {
                 if (id.isNullOrBlank()) put("p_id", JsonNull) else put("p_id", id)
                 put("p_scope", scope)
+            },
+        ) {
+            applyAuthHeaders(session)
+        }
+    }
+
+    suspend fun searchErpUploadErrors(
+        session: SavedSession,
+        scope: String = "current",
+        category: String? = null,
+        cpf: String? = null,
+        empresa: String? = null,
+        dataInicio: String? = null,
+        dataFimExclusiva: String? = null,
+        page: Int = 1,
+        pageSize: Int = 50,
+    ): ErpUploadErrorSearchResponse {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/rest/v1/rpc/search_erp_upload_errors_v1",
+            json = json,
+            body = buildJsonObject {
+                put("p_scope", scope)
+                if (category.isNullOrBlank()) put("p_category", JsonNull) else put("p_category", category)
+                if (cpf.isNullOrBlank()) put("p_cpf", JsonNull) else put("p_cpf", cpf)
+                if (empresa.isNullOrBlank()) put("p_empresa", JsonNull) else put("p_empresa", empresa)
+                if (dataInicio.isNullOrBlank()) put("p_data_inicio", JsonNull) else put("p_data_inicio", dataInicio)
+                if (dataFimExclusiva.isNullOrBlank()) put("p_data_fim_exclusiva", JsonNull) else put("p_data_fim_exclusiva", dataFimExclusiva)
+                put("p_page", page.coerceAtLeast(1))
+                put("p_page_size", pageSize.coerceIn(1, 100))
+            },
+        ) {
+            applyAuthHeaders(session)
+        }
+    }
+
+    suspend fun reconcileErpUploadErrors(
+        session: SavedSession,
+        id: String? = null,
+        scope: String = "current",
+    ): ReconcileErpUploadErrorsResult {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/rest/v1/rpc/reconcile_erp_upload_failures_v1",
+            json = json,
+            body = buildJsonObject {
+                if (id.isNullOrBlank()) put("p_id", JsonNull) else put("p_id", id)
+                put("p_scope", scope)
+            },
+        ) {
+            applyAuthHeaders(session)
+        }
+    }
+
+    suspend fun downloadStorageObject(
+        session: SavedSession,
+        bucket: String,
+        objectPath: String,
+    ): ByteArray {
+        val safeBucket = java.net.URLEncoder.encode(bucket, Charsets.UTF_8.name()).replace("+", "%20")
+        val safePath = objectPath
+            .split('/')
+            .filter { it.isNotBlank() }
+            .joinToString("/") { segment ->
+                java.net.URLEncoder.encode(segment, Charsets.UTF_8.name()).replace("+", "%20")
+            }
+        if (safePath.isBlank()) throw IllegalStateException("Caminho do arquivo nao informado.")
+
+        val response = client.get("${AppConfig.supabaseUrl}/storage/v1/object/$safeBucket/$safePath") {
+            applyAuthHeaders(session)
+        }
+        if (!response.status.isSuccess()) {
+            throw IllegalStateException("Arquivo nao disponivel no Storage (HTTP ${response.status.value}).")
+        }
+        return response.body()
+    }
+
+    suspend fun uploadStorageObject(
+        session: SavedSession,
+        bucket: String,
+        objectPath: String,
+        bytes: ByteArray,
+        mimeType: String,
+    ) {
+        if (bytes.isEmpty()) throw IllegalStateException("Arquivo vazio.")
+        val safeBucket = java.net.URLEncoder.encode(bucket, Charsets.UTF_8.name()).replace("+", "%20")
+        val safePath = objectPath
+            .split('/')
+            .filter { it.isNotBlank() }
+            .joinToString("/") { segment ->
+                java.net.URLEncoder.encode(segment, Charsets.UTF_8.name()).replace("+", "%20")
+            }
+        if (safePath.isBlank()) throw IllegalStateException("Caminho do arquivo nao informado.")
+
+        val response = client.post("${AppConfig.supabaseUrl}/storage/v1/object/$safeBucket/$safePath") {
+            applyAuthHeaders(session)
+            header("x-upsert", "false")
+            setBody(ByteArrayContent(bytes, ContentType.parse(mimeType.ifBlank { "application/octet-stream" })))
+        }
+        if (!response.status.isSuccess()) {
+            throw IllegalStateException("Falha ao enviar arquivo de substituicao para o Storage (HTTP ${response.status.value}).")
+        }
+    }
+
+    suspend fun repairErpUploadQueue(
+        session: SavedSession,
+        id: String,
+        bucket: String,
+        arquivoPath: String,
+        arquivoNome: String,
+        fileSizeBytes: Long,
+        targetDependenteId: Int?,
+        targetDependenteCpf: String?,
+        targetDependenteNome: String?,
+    ): RepairErpUploadQueueResult {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/rest/v1/rpc/repair_erp_upload_queue_v1",
+            json = json,
+            body = buildJsonObject {
+                put("p_id", id)
+                put("p_bucket", bucket)
+                put("p_arquivo_path", arquivoPath)
+                put("p_arquivo_nome", arquivoNome)
+                put("p_file_size_bytes", fileSizeBytes)
+                if (targetDependenteId == null || targetDependenteId <= 0) put("p_target_dependente_id", JsonNull)
+                else put("p_target_dependente_id", targetDependenteId)
+                if (targetDependenteCpf.isNullOrBlank()) put("p_target_dependente_cpf", JsonNull)
+                else put("p_target_dependente_cpf", targetDependenteCpf)
+                if (targetDependenteNome.isNullOrBlank()) put("p_target_dependente_nome", JsonNull)
+                else put("p_target_dependente_nome", targetDependenteNome)
             },
         ) {
             applyAuthHeaders(session)

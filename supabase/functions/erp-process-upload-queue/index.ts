@@ -270,7 +270,36 @@ Deno.serve(async (req: Request) => {
     requestBody.source || authorization.source || "worker",
   );
 
+  let workerLockToken: string | null = null;
+
   try {
+    const { data: lockToken, error: lockError } = await supabase.rpc(
+      "acquire_erp_upload_worker_lock_v1",
+      { p_source: source, p_lease_seconds: 600 },
+    );
+
+    if (lockError) {
+      throw new Error(`Falha ao adquirir lock global do worker: ${lockError.message}`);
+    }
+
+    workerLockToken = typeof lockToken === "string" && lockToken.trim()
+      ? lockToken.trim()
+      : null;
+
+    if (!workerLockToken) {
+      return jsonResponse({
+        ok: true,
+        skipped: true,
+        code: "WORKER_ALREADY_RUNNING",
+        message: "A fila ja esta sendo processada por outro worker.",
+        processed: 0,
+        success: 0,
+        retry_wait: 0,
+        failed: 0,
+        source,
+      }, 202);
+    }
+
     const { error: resetError } = await supabase.rpc(
       "reset_stuck_queue_items_v3",
       { stuck_threshold_minutes: 10 },
@@ -326,6 +355,16 @@ Deno.serve(async (req: Request) => {
             last_error_code: null,
             file_size_bytes: uploaded.fileSize,
             worker_source: source,
+            error_resolution:
+              Number(item.replacement_count || 0) > 0 ||
+                Number(item.manual_reprocess_count || 0) > 0
+                ? "REPROCESSED_SUCCESS"
+                : null,
+            resolved_at:
+              Number(item.replacement_count || 0) > 0 ||
+                Number(item.manual_reprocess_count || 0) > 0
+                ? now
+                : null,
           })
           .eq("id", item.id)
           .eq("processing_token", processingToken)
@@ -394,6 +433,15 @@ Deno.serve(async (req: Request) => {
             last_error_code: errorCode,
             last_status_code: statusCode,
             worker_source: source,
+            error_resolution:
+              finalFailure &&
+                (
+                  Number(item.replacement_count || 0) > 0 ||
+                  Number(item.manual_reprocess_count || 0) > 0
+                )
+                ? "REPROCESS_FAILED"
+                : null,
+            resolved_at: null,
           })
           .eq("id", item.id)
           .eq("processing_token", processingToken)
@@ -484,5 +532,18 @@ Deno.serve(async (req: Request) => {
       },
       500,
     );
+  } finally {
+    if (workerLockToken) {
+      const { error: releaseError } = await supabase.rpc(
+        "release_erp_upload_worker_lock_v1",
+        { p_token: workerLockToken },
+      );
+      if (releaseError) {
+        console.warn(
+          "[erp-process-upload-queue] Falha ao liberar lock global:",
+          releaseError.message,
+        );
+      }
+    }
   }
 });

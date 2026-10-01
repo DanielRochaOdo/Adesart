@@ -7,8 +7,13 @@ ANDROID = ROOT / "android-app"
 
 errors: list[str] = []
 
-erp_upload_migration = ROOT / "supabase/migrations/20260930191500_fix_erp_upload_worker_delivery.sql"
-if erp_upload_migration.exists():
+erp_upload_migrations = [
+    ROOT / "supabase/migrations/20260930191500_fix_erp_upload_worker_delivery.sql",
+    ROOT / "supabase/migrations/20260930203000_erp_upload_error_center_v1.sql",
+]
+for erp_upload_migration in erp_upload_migrations:
+    if not erp_upload_migration.exists():
+        continue
     migration_text = erp_upload_migration.read_text(encoding="utf-8")
     malformed_lines = [
         line.strip()
@@ -17,7 +22,8 @@ if erp_upload_migration.exists():
     ]
     if malformed_lines:
         errors.append(
-            "Migration ERP contém delimitador dollar-quote inválido (AS $ / $;)."
+            f"Migration ERP {erp_upload_migration.name} contém delimitador "
+            "dollar-quote inválido (AS $ / $;)."
         )
 
 if not ANDROID.is_dir():
@@ -143,6 +149,9 @@ if erp_finalize.exists():
         "empresa_nome",
         "vendedor_codigo",
         "erp_upload_queue",
+        "resolvePrimaryDependente",
+        "target_dependente_cpf",
+        "PRIMARY_DEPENDENT_NOT_FOUND",
     ):
         if required not in finalize_text:
             errors.append(f"Finalização canônica ERP incompleta: {required} ausente.")
@@ -161,6 +170,8 @@ if queue_worker.exists():
         "FILE_TOO_LARGE",
         "erpCode === 1",
         "last_error_code",
+        "acquire_erp_upload_worker_lock_v1",
+        "release_erp_upload_worker_lock_v1",
     ):
         if required not in worker_text:
             errors.append(f"Worker canônico da fila ERP incompleto: {required} ausente.")
@@ -194,6 +205,73 @@ else:
     ):
         if required not in migration_text:
             errors.append(f"Migration definitiva da fila ERP incompleta: {required} ausente.")
+
+error_center_migration = (
+    ROOT / "supabase/migrations/20260930203000_erp_upload_error_center_v1.sql"
+)
+if not error_center_migration.exists():
+    errors.append("Migration da central de erros ERP não encontrada.")
+else:
+    error_center_text = error_center_migration.read_text(encoding="utf-8")
+    for required in (
+        "search_erp_upload_errors_v1",
+        "reconcile_erp_upload_failures_v1",
+        "repair_erp_upload_queue_v1",
+        "erp_upload_queue_events",
+        "active_failures",
+        "historical_failures",
+        "erp_upload_worker_lock",
+        "PRIMARY_DEPENDENT_NOT_FOUND",
+    ):
+        if required not in error_center_text:
+            errors.append(f"Central canônica de erros ERP incompleta: {required} ausente.")
+
+web_error_center = ROOT / "src/pages/ErrosUploadERP.tsx"
+if not web_error_center.exists():
+    errors.append("Central de erros ERP Web não encontrada.")
+else:
+    error_page_text = web_error_center.read_text(encoding="utf-8")
+    for required in (
+        "search_erp_upload_errors_v1",
+        "reconcile_erp_upload_failures_v1",
+        "repair_erp_upload_queue_v1",
+        "compressFileForErp",
+    ):
+        if required not in error_page_text:
+            errors.append(f"Central de erros ERP Web incompleta: {required} ausente.")
+
+android_error_center = (
+    ANDROID
+    / "app/src/main/java/br/com/vendamais/mobile/ui/screens/ErrosUploadErpScreen.kt"
+)
+if not android_error_center.exists():
+    errors.append("Central de erros ERP Android não encontrada.")
+else:
+    android_error_text = android_error_center.read_text(encoding="utf-8")
+    for required in (
+        "loadErpUploadErrors",
+        "reconcileErpUploadErrors",
+        "replaceErpUploadErrorFile",
+        "compressAndRequeueErpUploadError",
+    ):
+        if required not in android_error_text:
+            errors.append(f"Central de erros ERP Android incompleta: {required} ausente.")
+
+if dashboard_repository.exists():
+    repository_text = dashboard_repository.read_text(encoding="utf-8")
+    for required in (
+        "search_erp_upload_errors_v1",
+        "reconcile_erp_upload_failures_v1",
+        "repair_erp_upload_queue_v1",
+    ):
+        if required not in repository_text:
+            errors.append(f"Android não consome RPC canônica da central ERP: {required}")
+
+web_upload_util = ROOT / "src/utils/uploadFile.ts"
+if web_upload_util.exists():
+    upload_text = web_upload_util.read_text(encoding="utf-8")
+    if "ERP_MAX_FILE_SIZE = 5 * 1024 * 1024" not in upload_text:
+        errors.append("Web voltou a aceitar anexos acima do limite canônico de 5 MB.")
 
 status_rules = (
     ANDROID

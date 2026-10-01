@@ -2,6 +2,7 @@ package br.com.vendamais.mobile.ui.screens
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -58,6 +59,19 @@ fun FilaUploadErpScreen(
     state: AppUiState,
     viewModel: AppViewModel,
 ) {
+    var showErrorCenter by rememberSaveable { mutableStateOf(false) }
+    var errorScope by rememberSaveable { mutableStateOf("current") }
+
+    if (showErrorCenter) {
+        ErrosUploadErpScreen(
+            state = state,
+            viewModel = viewModel,
+            initialScope = errorScope,
+            onBack = { showErrorCenter = false },
+        )
+        return
+    }
+
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var selectedFilter by rememberSaveable { mutableStateOf("todos") }
@@ -111,11 +125,15 @@ fun FilaUploadErpScreen(
                         modifier = Modifier.weight(1f),
                     )
                     QueueMetric(
-                        label = "Falhas",
-                        value = state.uploadQueueHealth.failed,
+                        label = "Falhas atuais",
+                        value = state.uploadQueueHealth.activeFailures,
                         container = Red100,
                         content = Red500,
                         modifier = Modifier.weight(1f),
+                        onClick = {
+                            errorScope = "current"
+                            showErrorCenter = true
+                        },
                     )
                 }
                 Row(
@@ -137,11 +155,15 @@ fun FilaUploadErpScreen(
                         modifier = Modifier.weight(1f),
                     )
                     QueueMetric(
-                        label = "Sem arquivo",
-                        value = state.uploadQueueHealth.missingFilePending,
-                        container = Red100,
-                        content = Red500,
+                        label = "Passivo",
+                        value = state.uploadQueueHealth.historicalFailures,
+                        container = Slate100,
+                        content = Slate500,
                         modifier = Modifier.weight(1f),
+                        onClick = {
+                            errorScope = "historical"
+                            showErrorCenter = true
+                        },
                     )
                 }
                 Row(
@@ -208,10 +230,13 @@ fun FilaUploadErpScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
                         TextButton(
-                            onClick = { viewModel.reprocessFailedUploadQueue() },
-                            enabled = !state.adminFeatureLoading && state.uploadQueueHealth.failed > 0,
+                            onClick = {
+                                errorScope = "current"
+                                showErrorCenter = true
+                            },
+                            enabled = !state.adminFeatureLoading,
                         ) {
-                            Text("Reprocessar falhas")
+                            Text("Ver erros")
                         }
                         TextButton(
                             onClick = { viewModel.resetStuckQueue() },
@@ -465,11 +490,12 @@ private fun QueueMetric(
     container: androidx.compose.ui.graphics.Color,
     content: androidx.compose.ui.graphics.Color,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
 ) {
     VendaMetricCard(
         label = label,
         value = value.toString(),
-        modifier = modifier,
+        modifier = if (onClick != null) modifier.clickable(onClick = onClick) else modifier,
         containerColor = container,
         contentColor = content,
     )
