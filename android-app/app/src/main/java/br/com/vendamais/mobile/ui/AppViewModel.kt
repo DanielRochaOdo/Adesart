@@ -18,6 +18,7 @@ import br.com.vendamais.mobile.data.models.CadastroConfig
 import br.com.vendamais.mobile.data.models.CadastroDetalhe
 import br.com.vendamais.mobile.data.models.CadastroEndereco
 import br.com.vendamais.mobile.data.models.CadastroExcluidoItem
+import br.com.vendamais.mobile.data.models.CadastroLinkHistoryResponse
 import br.com.vendamais.mobile.data.models.CadastroLinkHistoryRow
 import br.com.vendamais.mobile.data.models.CadastroLinkHistorySummary
 import br.com.vendamais.mobile.data.models.CadastroLinkItem
@@ -2596,6 +2597,33 @@ class AppViewModel(
         val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
         val activeSession = ensureFreshSession(session)
         repository.resetUserPassword(activeSession, id, newPassword)
+    }
+
+    suspend fun fetchAdminUserCadastroLinks(userId: String): List<CadastroLinkItem> {
+        if (_uiState.value.profile?.role != "ADMINISTRADOR") {
+            throw IllegalStateException("Acesso restrito ao administrador.")
+        }
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        return workflowRepository.fetchUserCadastroLinks(activeSession, userId)
+    }
+
+    suspend fun fetchAdminUserCadastroLinkHistory(linkId: String): CadastroLinkHistoryResponse {
+        if (_uiState.value.profile?.role != "ADMINISTRADOR") {
+            throw IllegalStateException("Acesso restrito ao administrador.")
+        }
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        return workflowRepository.fetchCadastroLinkHistory(activeSession, linkId)
+    }
+
+    suspend fun permanentlyDeleteAdminCadastroLink(linkId: String) {
+        if (_uiState.value.profile?.role != "ADMINISTRADOR") {
+            throw IllegalStateException("Acesso restrito ao administrador.")
+        }
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        workflowRepository.permanentlyDeleteCadastroLink(activeSession, linkId)
     }
 
     suspend fun updateUser(id: String, payload: JsonObject): AdminUser {
