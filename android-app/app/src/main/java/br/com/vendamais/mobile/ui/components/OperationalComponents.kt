@@ -313,16 +313,33 @@ fun VendaInlineFeedback(
     technicalActionLabel: String? = null,
     onTechnicalAction: (() -> Unit)? = null,
 ) {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val palette = when (tone) {
-        VendaFeedbackTone.SUCCESS -> Triple(EmeraldSoft, EmeraldDark, Icons.Rounded.CheckCircle)
-        VendaFeedbackTone.WARNING -> Triple(Amber100, Amber500, Icons.Rounded.WarningAmber)
-        VendaFeedbackTone.ERROR -> Triple(Red100, Red500, Icons.Rounded.ErrorOutline)
-        VendaFeedbackTone.INFO -> Triple(Blue100, Blue500, Icons.Rounded.Info)
+        VendaFeedbackTone.SUCCESS -> if (dark) {
+            Triple(Color(0xFF123F33), Color(0xFF6EE7B7), Icons.Rounded.CheckCircle)
+        } else {
+            Triple(EmeraldSoft, EmeraldDark, Icons.Rounded.CheckCircle)
+        }
+        VendaFeedbackTone.WARNING -> if (dark) {
+            Triple(Color(0xFF4A3212), Color(0xFFFBBF24), Icons.Rounded.WarningAmber)
+        } else {
+            Triple(Amber100, Amber500, Icons.Rounded.WarningAmber)
+        }
+        VendaFeedbackTone.ERROR -> if (dark) {
+            Triple(Color(0xFF4A1D1B), Color(0xFFFF8A84), Icons.Rounded.ErrorOutline)
+        } else {
+            Triple(Red100, Red500, Icons.Rounded.ErrorOutline)
+        }
+        VendaFeedbackTone.INFO -> if (dark) {
+            Triple(Color(0xFF1E335F), Color(0xFF8FB0FF), Icons.Rounded.Info)
+        } else {
+            Triple(Blue100, Blue500, Icons.Rounded.Info)
+        }
     }
     Surface(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(VendaRadius.lg),
-        color = palette.first,
+        color = palette.first.copy(alpha = if (dark) 0.82f else 0.94f),
         border = BorderStroke(1.dp, palette.second.copy(alpha = 0.18f)),
     ) {
         Row(
