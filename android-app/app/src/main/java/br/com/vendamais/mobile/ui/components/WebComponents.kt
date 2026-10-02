@@ -27,6 +27,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.ui.theme.VendaRadius
 import br.com.vendamais.mobile.ui.theme.VendaSpacing
+import br.com.vendamais.mobile.ui.theme.LiquidGlassDark
+import br.com.vendamais.mobile.ui.theme.LiquidGlassDarkStrong
+import br.com.vendamais.mobile.ui.theme.LiquidGlassLight
+import br.com.vendamais.mobile.ui.theme.LiquidGlassLightStrong
+import br.com.vendamais.mobile.ui.theme.LiquidGreenGlow
+import br.com.vendamais.mobile.ui.theme.LiquidCyanGlow
+import br.com.vendamais.mobile.ui.theme.LiquidSpecularDark
+import br.com.vendamais.mobile.ui.theme.LiquidSpecularLight
 
 @Composable
 fun ScreenBackground(content: @Composable () -> Unit) {
@@ -34,35 +42,27 @@ fun ScreenBackground(content: @Composable () -> Unit) {
     val backgroundBrush = if (dark) {
         Brush.verticalGradient(
             listOf(
-                Color(0xFF08111F),
-                Color(0xFF0A1524),
-                Color(0xFF07101D),
+                Color(0xFF06101D),
+                Color(0xFF0A1525),
+                Color(0xFF07111F),
             ),
         )
     } else {
         Brush.verticalGradient(
             listOf(
                 Color(0xFFDCE8E2),
-                Color(0xFFE7EEEB),
-                Color(0xFFEAF1ED),
+                Color(0xFFE8F0EC),
+                Color(0xFFDFEAE4),
             ),
         )
     }
-    val glowBrush = if (dark) {
-        Brush.radialGradient(
-            colors = listOf(
-                Color(0xFF10B981).copy(alpha = 0.16f),
-                Color.Transparent,
-            ),
-        )
-    } else {
-        Brush.radialGradient(
-            colors = listOf(
-                Color(0xFF10B981).copy(alpha = 0.13f),
-                Color.Transparent,
-            ),
-        )
-    }
+    val glowBrush = Brush.radialGradient(
+        colors = listOf(
+            if (dark) LiquidGreenGlow.copy(alpha = 0.52f) else LiquidGreenGlow.copy(alpha = 0.72f),
+            LiquidCyanGlow.copy(alpha = if (dark) 0.34f else 0.46f),
+            Color.Transparent,
+        ),
+    )
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -90,31 +90,30 @@ fun WebCard(
 ) {
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val shape = RoundedCornerShape(VendaRadius.xl)
-    val surfaceBrush = if (dark) {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFF172338).copy(alpha = 0.84f),
-                Color(0xFF0F1A2C).copy(alpha = 0.72f),
-            ),
-        )
-    } else {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFFF8FBF9).copy(alpha = 0.90f),
-                Color(0xFFEFF6F2).copy(alpha = 0.76f),
-            ),
-        )
-    }
+    val surfaceBrush = Brush.verticalGradient(
+        listOf(
+            if (dark) LiquidGlassDarkStrong else LiquidGlassLightStrong,
+            if (dark) LiquidGlassDark else LiquidGlassLight,
+        ),
+    )
     val glowBrush = Brush.radialGradient(
         colors = listOf(
-            MaterialTheme.colorScheme.primary.copy(alpha = if (dark) 0.10f else 0.09f),
+            MaterialTheme.colorScheme.primary.copy(alpha = if (dark) 0.13f else 0.16f),
+            LiquidCyanGlow.copy(alpha = if (dark) 0.20f else 0.30f),
+            Color.Transparent,
+        ),
+    )
+    val specularBrush = Brush.linearGradient(
+        colors = listOf(
+            Color.Transparent,
+            if (dark) LiquidSpecularDark else LiquidSpecularLight.copy(alpha = 0.62f),
             Color.Transparent,
         ),
     )
     Box(
         modifier = modifier
             .shadow(
-                elevation = if (dark) 14.dp else 10.dp,
+                elevation = if (dark) 18.dp else 14.dp,
                 shape = shape,
                 ambientColor = if (dark) Color.Black.copy(alpha = 0.38f) else Color(0xFF0F172A).copy(alpha = 0.13f),
                 spotColor = if (dark) Color.Black.copy(alpha = 0.42f) else Color(0xFF0F172A).copy(alpha = 0.10f),
@@ -122,7 +121,7 @@ fun WebCard(
             .background(surfaceBrush, shape)
             .border(
                 1.dp,
-                if (dark) Color.White.copy(alpha = 0.09f) else Color(0xFF334155).copy(alpha = 0.14f),
+                if (dark) Color.White.copy(alpha = 0.13f) else Color.White.copy(alpha = 0.62f),
                 shape,
             ),
     ) {
@@ -130,6 +129,11 @@ fun WebCard(
             modifier = Modifier
                 .fillMaxSize()
                 .background(glowBrush, shape),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(specularBrush, shape),
         )
         Column {
             if (title != null) {
@@ -162,24 +166,23 @@ fun ScreenHeading(
 ) {
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val shape = RoundedCornerShape(VendaRadius.xxl)
-    val heroBrush = if (dark) {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFF183047).copy(alpha = 0.94f),
-                Color(0xFF0F1A2C).copy(alpha = 0.82f),
-            ),
-        )
-    } else {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFFE1F2E9).copy(alpha = 0.95f),
-                Color(0xFFF4F8F6).copy(alpha = 0.84f),
-            ),
-        )
-    }
+    val heroBrush = Brush.verticalGradient(
+        listOf(
+            if (dark) LiquidGlassDarkStrong.copy(alpha = 0.90f) else LiquidGlassLightStrong.copy(alpha = 0.92f),
+            if (dark) LiquidGlassDark.copy(alpha = 0.82f) else LiquidGlassLight.copy(alpha = 0.80f),
+        ),
+    )
     val heroGlow = Brush.radialGradient(
         colors = listOf(
-            MaterialTheme.colorScheme.primary.copy(alpha = if (dark) 0.18f else 0.16f),
+            MaterialTheme.colorScheme.primary.copy(alpha = if (dark) 0.22f else 0.24f),
+            LiquidCyanGlow.copy(alpha = if (dark) 0.22f else 0.34f),
+            Color.Transparent,
+        ),
+    )
+    val heroSpecular = Brush.linearGradient(
+        colors = listOf(
+            Color.Transparent,
+            if (dark) LiquidSpecularDark else LiquidSpecularLight.copy(alpha = 0.58f),
             Color.Transparent,
         ),
     )
@@ -187,7 +190,7 @@ fun ScreenHeading(
         modifier = modifier
             .fillMaxWidth()
             .shadow(
-                elevation = if (dark) 15.dp else 11.dp,
+                elevation = if (dark) 20.dp else 15.dp,
                 shape = shape,
                 ambientColor = if (dark) Color.Black.copy(alpha = 0.40f) else Color(0xFF0F172A).copy(alpha = 0.13f),
                 spotColor = if (dark) Color.Black.copy(alpha = 0.42f) else Color(0xFF0F172A).copy(alpha = 0.10f),
@@ -195,7 +198,7 @@ fun ScreenHeading(
             .background(heroBrush, shape)
             .border(
                 1.dp,
-                if (dark) Color.White.copy(alpha = 0.09f) else Color(0xFF059669).copy(alpha = 0.20f),
+                if (dark) Color.White.copy(alpha = 0.13f) else Color.White.copy(alpha = 0.66f),
                 shape,
             ),
     ) {
@@ -203,6 +206,11 @@ fun ScreenHeading(
             modifier = Modifier
                 .fillMaxSize()
                 .background(heroGlow, shape),
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(heroSpecular, shape),
         )
         Column(
             modifier = Modifier.padding(horizontal = VendaSpacing.x5, vertical = VendaSpacing.x5),
