@@ -324,7 +324,7 @@ export function Users() {
             App mobile: Não identificado
           </span>
           {user.last_app_seen_at && platform && (
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="vm-muted-text text-xs">
               Plataforma registrada: {appPlatformLabels[platform] || platform}
             </p>
           )}
@@ -343,7 +343,7 @@ export function Users() {
         </span>
         <p className="text-xs text-slate-600">Plataforma: {appPlatformLabels[platform] || platform}</p>
         {version && <p className="text-xs text-slate-600">{version}</p>}
-        <p className="text-xs text-slate-500 dark:text-slate-400">Último uso: {formatAppSeenAt(user.last_app_seen_at)}</p>
+        <p className="vm-muted-text text-xs">Último uso: {formatAppSeenAt(user.last_app_seen_at)}</p>
       </div>
     );
   };
@@ -549,8 +549,8 @@ export function Users() {
       <div className="space-y-4 sm:space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Usuários</h1>
-            <p className="text-slate-600 mt-1 text-sm sm:text-base">Gerencie os usuários do sistema</p>
+            <h1 className="vm-card-heading text-2xl font-bold sm:text-3xl">Usuários</h1>
+            <p className="vm-muted-text mt-1 text-sm sm:text-base">Gerencie os usuários do sistema</p>
           </div>
           <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             <Button variant="secondary" onClick={exportUsers} className="w-full sm:w-auto">
@@ -573,11 +573,11 @@ export function Users() {
             </div>
           )}
 
-          <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/70">
+          <div className="vm-section-panel mb-5 rounded-2xl p-4 sm:p-5">
             <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Filtros</h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <h2 className="vm-card-heading text-sm font-semibold">Filtros</h2>
+                <p className="vm-muted-text text-xs">
                   Combine os campos abaixo para localizar usuários com mais precisão.
                 </p>
               </div>
@@ -657,15 +657,15 @@ export function Users() {
             )}
           </div>
 
-          <details className="mb-6 rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800">
+          <details className="vm-config-strip mb-6 overflow-hidden rounded-xl">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-slate-100 transition hover:bg-white/[0.06]">
               <SlidersHorizontal className="h-4 w-4" />
               Personalizar tabela
-              <span className="ml-1 text-xs font-normal text-slate-500 dark:text-slate-400">
+              <span className="ml-1 text-xs font-normal text-slate-400">
                 ordem das colunas e exportação
               </span>
             </summary>
-            <div className="border-t border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-950/40">
+            <div className="border-t border-white/10 bg-slate-900/45 p-4">
               <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
                 Use as setas para mover as colunas para a esquerda ou para a direita. A exportação segue a mesma ordem.
               </p>
@@ -1005,7 +1005,7 @@ export function Users() {
                 required
                 autoComplete="new-password"
               />
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="vm-muted-text text-xs">
                 A senha deve possuir pelo menos 6 caracteres.
               </p>
 
