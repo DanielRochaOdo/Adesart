@@ -286,7 +286,11 @@ private fun TeamEditorSheet(
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
+        tonalElevation = 10.dp,
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
