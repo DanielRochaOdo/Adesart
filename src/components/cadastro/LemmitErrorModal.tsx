@@ -10,8 +10,8 @@ interface LemmitErrorModalProps {
 
 export function LemmitErrorModal({ error, details, onContinue, onCancel }: LemmitErrorModalProps) {
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+    <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="vm-glass-modal w-full max-w-md rounded-3xl">
         <div className="p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -19,7 +19,7 @@ export function LemmitErrorModal({ error, details, onContinue, onCancel }: Lemmi
                 <AlertCircle className="w-6 h-6 text-red-600" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-slate-800">Integração da Lemmit Falhou</h2>
+                <h2 className="vm-page-title text-xl font-semibold">Integração da Lemmit Falhou</h2>
               </div>
             </div>
             <button
@@ -37,7 +37,7 @@ export function LemmitErrorModal({ error, details, onContinue, onCancel }: Lemmi
             </div>
 
             {details && (
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+              <div className="vm-cadastro-subcard rounded-2xl p-4">
                 <p className="text-sm font-medium text-slate-800 mb-2">Detalhes Técnicos:</p>
                 <pre className="text-xs text-slate-600 overflow-auto max-h-32 whitespace-pre-wrap">
                   {JSON.stringify(details, null, 2)}
