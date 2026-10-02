@@ -196,13 +196,13 @@ export function GeralConfigCard() {
 
   return (
     <div className="space-y-4">
-      <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+      <div className="vm-settings-card rounded-2xl p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
-            <h3 className="text-sm font-semibold text-slate-800 mb-1">
+            <h3 className="vm-page-title mb-1 text-sm font-semibold">
               Consulta Lemmit
             </h3>
-            <p className="text-xs text-slate-600">
+            <p className="vm-muted-text text-xs">
               Quando ativo, o sistema consulta a API Lemmit após verificar que o CPF não existe no ERP.
               Quando desativado, pula direto para a adição de usuários.
             </p>
@@ -211,12 +211,12 @@ export function GeralConfigCard() {
           <button
             onClick={handleToggleLemmit}
             disabled={updating || !config}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-              config?.ativar_lemmit ? 'bg-emerald-600' : 'bg-slate-300'
+            className={`vm-settings-toggle relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-transparent disabled:cursor-not-allowed disabled:opacity-50 ${
+              config?.ativar_lemmit ? 'bg-emerald-600' : 'bg-slate-300/90 dark:bg-slate-700'
             }`}
           >
             <span
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
                 config?.ativar_lemmit ? 'translate-x-5' : 'translate-x-0'
               }`}
             />
@@ -224,9 +224,9 @@ export function GeralConfigCard() {
         </div>
 
         {config && (
-          <div className="mt-3 pt-3 border-t border-slate-200">
-            <p className="text-xs text-slate-500">
-              Status atual: <span className="font-medium text-slate-700">
+          <div className="mt-3 border-t border-slate-200/70 pt-3 dark:border-white/10">
+            <p className="vm-meta-text text-xs">
+              Status atual: <span className="vm-page-title font-semibold">
                 {config.ativar_lemmit ? 'Ativado' : 'Desativado'}
               </span>
             </p>
@@ -234,13 +234,13 @@ export function GeralConfigCard() {
         )}
       </div>
 
-      <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+      <div className="vm-settings-card rounded-2xl p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
-            <h3 className="text-sm font-semibold text-slate-800 mb-1">
+            <h3 className="vm-page-title mb-1 text-sm font-semibold">
               Exigir Envio de Arquivo
             </h3>
-            <p className="text-xs text-slate-600">
+            <p className="vm-muted-text text-xs">
               Quando ativo, o sistema exige o upload de um documento durante o cadastro no ERP.
               O arquivo será enviado automaticamente após a criação do cadastro.
             </p>
@@ -249,12 +249,12 @@ export function GeralConfigCard() {
           <button
             onClick={handleToggleExigirArquivo}
             disabled={updating || !config}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-              config?.exigir_arquivo ? 'bg-emerald-600' : 'bg-slate-300'
+            className={`vm-settings-toggle relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-transparent disabled:cursor-not-allowed disabled:opacity-50 ${
+              config?.exigir_arquivo ? 'bg-emerald-600' : 'bg-slate-300/90 dark:bg-slate-700'
             }`}
           >
             <span
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
                 config?.exigir_arquivo ? 'translate-x-5' : 'translate-x-0'
               }`}
             />
@@ -262,9 +262,9 @@ export function GeralConfigCard() {
         </div>
 
         {config && (
-          <div className="mt-3 pt-3 border-t border-slate-200">
-            <p className="text-xs text-slate-500">
-              Status atual: <span className="font-medium text-slate-700">
+          <div className="mt-3 border-t border-slate-200/70 pt-3 dark:border-white/10">
+            <p className="vm-meta-text text-xs">
+              Status atual: <span className="vm-page-title font-semibold">
                 {config.exigir_arquivo ? 'Ativado' : 'Desativado'}
               </span>
             </p>
@@ -272,13 +272,13 @@ export function GeralConfigCard() {
         )}
       </div>
 
-      <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+      <div className="vm-settings-card rounded-2xl p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
-            <h3 className="text-sm font-semibold text-slate-800 mb-1">
+            <h3 className="vm-page-title mb-1 text-sm font-semibold">
               Lemmit no Dependente
             </h3>
-            <p className="text-xs text-slate-600">
+            <p className="vm-muted-text text-xs">
               Quando ativo, ao adicionar um dependente no fluxo de Novo Cadastro e preencher o CPF, o sistema consultará
               automaticamente a API Lemmit e preencherá os campos do dependente com os dados retornados.
             </p>
@@ -287,12 +287,12 @@ export function GeralConfigCard() {
           <button
             onClick={handleToggleLemmitDependente}
             disabled={updating || !config}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-              config?.lemmit_dependente ? 'bg-emerald-600' : 'bg-slate-300'
+            className={`vm-settings-toggle relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-transparent disabled:cursor-not-allowed disabled:opacity-50 ${
+              config?.lemmit_dependente ? 'bg-emerald-600' : 'bg-slate-300/90 dark:bg-slate-700'
             }`}
           >
             <span
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
                 config?.lemmit_dependente ? 'translate-x-5' : 'translate-x-0'
               }`}
             />
@@ -300,9 +300,9 @@ export function GeralConfigCard() {
         </div>
 
         {config && (
-          <div className="mt-3 pt-3 border-t border-slate-200">
-            <p className="text-xs text-slate-500">
-              Status atual: <span className="font-medium text-slate-700">
+          <div className="mt-3 border-t border-slate-200/70 pt-3 dark:border-white/10">
+            <p className="vm-meta-text text-xs">
+              Status atual: <span className="vm-page-title font-semibold">
                 {config.lemmit_dependente ? 'Ativado' : 'Desativado'}
               </span>
             </p>
@@ -310,13 +310,13 @@ export function GeralConfigCard() {
         )}
       </div>
 
-      <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+      <div className="vm-settings-card rounded-2xl p-4">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1">
-            <h3 className="text-sm font-semibold text-slate-800 mb-1">
+            <h3 className="vm-page-title mb-1 text-sm font-semibold">
               Lemmit Incluir Dep.
             </h3>
-            <p className="text-xs text-slate-600">
+            <p className="vm-muted-text text-xs">
               Quando ativo, ao digitar CPF válido no fluxo de Inclusão de Dependente, o sistema consultará automaticamente
               a API Lemmit e preencherá os campos com os dados retornados. Respeita regras de consumo e permite continuar manualmente se desejar.
             </p>
@@ -325,12 +325,12 @@ export function GeralConfigCard() {
           <button
             onClick={handleToggleLemmitInclusaoDependente}
             disabled={updating || !config}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-              config?.lemmit_inclusao_dependente ? 'bg-emerald-600' : 'bg-slate-300'
+            className={`vm-settings-toggle relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-transparent disabled:cursor-not-allowed disabled:opacity-50 ${
+              config?.lemmit_inclusao_dependente ? 'bg-emerald-600' : 'bg-slate-300/90 dark:bg-slate-700'
             }`}
           >
             <span
-              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out ${
                 config?.lemmit_inclusao_dependente ? 'translate-x-5' : 'translate-x-0'
               }`}
             />
@@ -338,9 +338,9 @@ export function GeralConfigCard() {
         </div>
 
         {config && (
-          <div className="mt-3 pt-3 border-t border-slate-200">
-            <p className="text-xs text-slate-500">
-              Status atual: <span className="font-medium text-slate-700">
+          <div className="mt-3 border-t border-slate-200/70 pt-3 dark:border-white/10">
+            <p className="vm-meta-text text-xs">
+              Status atual: <span className="vm-page-title font-semibold">
                 {config.lemmit_inclusao_dependente ? 'Ativado' : 'Desativado'}
               </span>
             </p>
@@ -348,9 +348,9 @@ export function GeralConfigCard() {
         )}
       </div>
 
-      <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+      <div className="vm-settings-card rounded-2xl p-4">
         <div>
-          <h3 className="text-sm font-semibold text-slate-800 mb-1">
+          <h3 className="vm-page-title mb-1 text-sm font-semibold">
             Situações que Barram Cadastro
           </h3>
           <p className="text-xs text-slate-600 mb-3">
@@ -364,20 +364,20 @@ export function GeralConfigCard() {
                 value={tempSituacoes}
                 onChange={(e) => setTempSituacoes(e.target.value)}
                 placeholder="Ex: 1, 4, 6"
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="vm-glass-field w-full rounded-xl border px-3 py-2 text-sm outline-none"
               />
               <div className="flex gap-2">
                 <button
                   onClick={handleSaveSituacoes}
                   disabled={updating}
-                  className="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                  className="vm-glass-primary rounded-lg px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
                 >
                   Salvar
                 </button>
                 <button
                   onClick={() => setEditingSituacoes(false)}
                   disabled={updating}
-                  className="px-3 py-1.5 text-sm bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 disabled:opacity-50"
+                  className="vm-glass-secondary rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
                 >
                   Cancelar
                 </button>
@@ -390,7 +390,7 @@ export function GeralConfigCard() {
               </p>
               <button
                 onClick={handleEditSituacoes}
-                className="px-3 py-1.5 text-sm bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300"
+                className="vm-glass-secondary rounded-lg px-3 py-1.5 text-sm font-semibold"
               >
                 Editar
               </button>
@@ -399,9 +399,9 @@ export function GeralConfigCard() {
         </div>
       </div>
 
-      <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+      <div className="vm-settings-card rounded-2xl p-4">
         <div>
-          <h3 className="text-sm font-semibold text-slate-800 mb-1">
+          <h3 className="vm-page-title mb-1 text-sm font-semibold">
             Planos Válidos
           </h3>
           <p className="text-xs text-slate-600 mb-3">
@@ -415,20 +415,20 @@ export function GeralConfigCard() {
                 value={tempPlanos}
                 onChange={(e) => setTempPlanos(e.target.value)}
                 placeholder="Ex: 4, 11, 3, 26"
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="vm-glass-field w-full rounded-xl border px-3 py-2 text-sm outline-none"
               />
               <div className="flex gap-2">
                 <button
                   onClick={handleSavePlanos}
                   disabled={updating}
-                  className="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                  className="vm-glass-primary rounded-lg px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
                 >
                   Salvar
                 </button>
                 <button
                   onClick={() => setEditingPlanos(false)}
                   disabled={updating}
-                  className="px-3 py-1.5 text-sm bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 disabled:opacity-50"
+                  className="vm-glass-secondary rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
                 >
                   Cancelar
                 </button>
@@ -441,7 +441,7 @@ export function GeralConfigCard() {
               </p>
               <button
                 onClick={handleEditPlanos}
-                className="px-3 py-1.5 text-sm bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300"
+                className="vm-glass-secondary rounded-lg px-3 py-1.5 text-sm font-semibold"
               >
                 Editar
               </button>
@@ -450,9 +450,9 @@ export function GeralConfigCard() {
         </div>
       </div>
 
-      <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+      <div className="vm-settings-card rounded-2xl p-4">
         <div>
-          <h3 className="text-sm font-semibold text-slate-800 mb-1">
+          <h3 className="vm-page-title mb-1 text-sm font-semibold">
             Planos Ocultos na Seleção de Dependentes
           </h3>
           <p className="text-xs text-slate-600 mb-3">
@@ -466,20 +466,20 @@ export function GeralConfigCard() {
                 value={tempPlanosOcultos}
                 onChange={(e) => setTempPlanosOcultos(e.target.value)}
                 placeholder="Ex: 110, 200, 300"
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="vm-glass-field w-full rounded-xl border px-3 py-2 text-sm outline-none"
               />
               <div className="flex gap-2">
                 <button
                   onClick={handleSavePlanosOcultos}
                   disabled={updating}
-                  className="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                  className="vm-glass-primary rounded-lg px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
                 >
                   Salvar
                 </button>
                 <button
                   onClick={() => setEditingPlanosOcultos(false)}
                   disabled={updating}
-                  className="px-3 py-1.5 text-sm bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 disabled:opacity-50"
+                  className="vm-glass-secondary rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
                 >
                   Cancelar
                 </button>
@@ -494,7 +494,7 @@ export function GeralConfigCard() {
               </p>
               <button
                 onClick={handleEditPlanosOcultos}
-                className="px-3 py-1.5 text-sm bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300"
+                className="vm-glass-secondary rounded-lg px-3 py-1.5 text-sm font-semibold"
               >
                 Editar
               </button>
@@ -503,9 +503,9 @@ export function GeralConfigCard() {
         </div>
       </div>
 
-      <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+      <div className="vm-settings-card rounded-2xl p-4">
         <div>
-          <h3 className="text-sm font-semibold text-slate-800 mb-1">
+          <h3 className="vm-page-title mb-1 text-sm font-semibold">
             Códigos de Empresa Inválidos
           </h3>
           <p className="text-xs text-slate-600 mb-3">
@@ -519,20 +519,20 @@ export function GeralConfigCard() {
                 value={tempEmpresasInvalidas}
                 onChange={(e) => setTempEmpresasInvalidas(e.target.value)}
                 placeholder="Ex: 2, 5, 9"
-                className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="vm-glass-field w-full rounded-xl border px-3 py-2 text-sm outline-none"
               />
               <div className="flex gap-2">
                 <button
                   onClick={handleSaveEmpresasInvalidas}
                   disabled={updating}
-                  className="px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                  className="vm-glass-primary rounded-lg px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
                 >
                   Salvar
                 </button>
                 <button
                   onClick={() => setEditingEmpresasInvalidas(false)}
                   disabled={updating}
-                  className="px-3 py-1.5 text-sm bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 disabled:opacity-50"
+                  className="vm-glass-secondary rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
                 >
                   Cancelar
                 </button>
@@ -547,7 +547,7 @@ export function GeralConfigCard() {
               </p>
               <button
                 onClick={handleEditEmpresasInvalidas}
-                className="px-3 py-1.5 text-sm bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300"
+                className="vm-glass-secondary rounded-lg px-3 py-1.5 text-sm font-semibold"
               >
                 Editar
               </button>
