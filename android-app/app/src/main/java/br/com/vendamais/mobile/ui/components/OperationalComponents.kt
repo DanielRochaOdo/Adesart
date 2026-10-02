@@ -273,17 +273,13 @@ fun VendaMetricCard(
                 spotColor = if (dark) Color.Black.copy(alpha = 0.32f) else Color(0xFF0F172A).copy(alpha = 0.08f),
             )
             .background(metricBrush, shape)
+            .background(metricSpecular, shape)
             .border(
                 1.dp,
                 if (dark) Color.White.copy(alpha = 0.13f) else Color.White.copy(alpha = 0.58f),
                 shape,
             ),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(metricSpecular, shape),
-        )
         Column(
             modifier = Modifier.padding(VendaSpacing.x3),
             verticalArrangement = Arrangement.spacedBy(3.dp),
