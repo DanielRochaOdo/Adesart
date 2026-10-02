@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Layout } from '../components/Layout';
-import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useAuth } from '../contexts/AuthContext';
@@ -32,6 +31,11 @@ export function Teams() {
   const canCreate = profile?.role === 'ADMINISTRADOR';
   const canEditFull = profile?.role === 'ADMINISTRADOR' || profile?.role === 'GERENTE';
   const isSupervisor = profile?.role === 'SUPERVISOR';
+
+  const activeTeamsCount = teams.filter((team) => team.is_active).length;
+  const totalMembers = isSupervisor
+    ? supervisorTeamMembers.length
+    : Object.values(teamMemberCounts).reduce((total, count) => total + count, 0);
 
   useEffect(() => {
     if (isSupervisor) {
@@ -133,40 +137,64 @@ export function Teams() {
   return (
     <Layout>
       <div className="space-y-4 sm:space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">
-              {isSupervisor ? 'Minha Equipe' : 'Equipes'}
-            </h1>
-            <p className="text-slate-600 mt-1 text-sm sm:text-base">
-              {isSupervisor ? 'Gerencie os vendedores da sua equipe' : 'Gerencie as equipes do sistema'}
-            </p>
+        <header className="vm-teams-hero flex flex-col gap-5 rounded-3xl p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="vm-dashboard-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+              <UsersIcon className="h-6 w-6" />
+            </div>
+            <div className="min-w-0">
+              <div className="mb-2 inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">
+                Organização comercial
+              </div>
+              <h1 className="vm-page-title text-2xl font-bold tracking-tight sm:text-3xl">
+                {isSupervisor ? 'Minha Equipe' : 'Equipes'}
+              </h1>
+              <p className="vm-muted-text mt-1 text-sm sm:text-base">
+                {isSupervisor
+                  ? 'Gerencie os vendedores e adesionistas vinculados à sua equipe.'
+                  : 'Organize equipes, acompanhe membros e mantenha a estrutura comercial do Venda+.'}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <span className="vm-dashboard-pill rounded-full px-2.5 py-1">
+                  {teams.length} {teams.length === 1 ? 'equipe' : 'equipes'}
+                </span>
+                {!isSupervisor && (
+                  <span className="vm-dashboard-pill rounded-full px-2.5 py-1">
+                    {activeTeamsCount} ativa(s)
+                  </span>
+                )}
+                <span className="vm-dashboard-pill rounded-full px-2.5 py-1">
+                  {totalMembers} {totalMembers === 1 ? 'membro' : 'membros'}
+                </span>
+              </div>
+            </div>
           </div>
+
           {canCreate && (
             <Button onClick={() => setShowCreateModal(true)} className="w-full sm:w-auto">
-              <Plus className="w-4 h-4 mr-2" />
+              <Plus className="mr-2 h-4 w-4" />
               Nova Equipe
             </Button>
           )}
-        </div>
+        </header>
 
         {isSupervisor ? (
-          <Card>
+          <section className="vm-teams-shell rounded-3xl p-4 sm:p-5">
             {loading ? (
               <div className="text-center py-12">
                 <Loader2 className="w-8 h-8 text-emerald-600 animate-spin mx-auto" />
               </div>
             ) : teams.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-slate-500">Você não está associado a nenhuma equipe</p>
+                <p className="vm-muted-text">Você não está associado a nenhuma equipe</p>
               </div>
             ) : (
               <div className="space-y-6">
-                <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+                <div className="vm-dashboard-subpanel flex flex-col gap-3 rounded-2xl p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h2 className="text-xl font-bold text-slate-800">{teams[0].name}</h2>
-                    <p className="text-sm text-slate-600 mt-1">
-                      {supervisorTeamMembers.length} {supervisorTeamMembers.length === 1 ? 'vendedor' : 'vendedores'}
+                    <h2 className="vm-page-title text-xl font-bold">{teams[0].name}</h2>
+                    <p className="vm-muted-text mt-1 text-sm">
+                      {supervisorTeamMembers.length} {supervisorTeamMembers.length === 1 ? 'membro ativo' : 'membros ativos'}
                     </p>
                   </div>
                   <Button onClick={() => setEditingTeamMembers(teams[0])} size="sm">
@@ -176,28 +204,28 @@ export function Teams() {
                 </div>
 
                 <div>
-                  <h3 className="text-lg font-semibold text-slate-800 mb-3">Vendedores</h3>
+                  <h3 className="vm-page-title mb-3 text-lg font-semibold">Membros da equipe</h3>
                   {supervisorTeamMembers.length === 0 ? (
-                    <p className="text-slate-500 text-sm py-4">Nenhum vendedor na equipe</p>
+                    <p className="vm-muted-text py-4 text-sm">Nenhum membro na equipe</p>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {supervisorTeamMembers.map((member) => (
                         <div
                           key={member.id}
-                          className="p-4 bg-slate-50 rounded-lg border border-slate-200"
+                          className="vm-team-member-card rounded-2xl p-4"
                         >
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
-                              <p className="font-medium text-slate-800">{member.name}</p>
-                              <p className="text-sm text-slate-600 mt-1">{member.email}</p>
+                              <p className="vm-page-title font-semibold">{member.name}</p>
+                              <p className="vm-muted-text mt-1 text-sm">{member.email}</p>
                               {member.external_id && (
-                                <p className="text-xs text-slate-500 mt-1">Código: {member.external_id}</p>
+                                <p className="vm-meta-text mt-1 text-xs">Código: {member.external_id}</p>
                               )}
                             </div>
-                            <span className={`text-xs px-2 py-1 rounded-full ${
+                            <span className={`vm-team-status rounded-full border px-2 py-1 text-xs font-medium ${
                               member.role === 'VENDEDOR'
-                                ? 'bg-blue-100 text-blue-700'
-                                : 'bg-purple-100 text-purple-700'
+                                ? 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300'
+                                : 'border-purple-500/20 bg-purple-500/10 text-purple-700 dark:text-purple-300'
                             }`}>
                               {member.role}
                             </span>
@@ -209,30 +237,30 @@ export function Teams() {
                 </div>
               </div>
             )}
-          </Card>
+          </section>
         ) : (
-          <Card>
+          <section className="vm-teams-shell rounded-3xl p-4 sm:p-5">
             {loading ? (
               <div className="text-center py-12">
                 <Loader2 className="w-8 h-8 text-emerald-600 animate-spin mx-auto" />
               </div>
             ) : teams.length === 0 ? (
               <div className="text-center py-12">
-                <p className="text-slate-500">Nenhuma equipe encontrada</p>
+                <p className="vm-muted-text">Nenhuma equipe encontrada</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {teams.map((team) => (
                   <div
                     key={team.id}
-                    className="border border-slate-200 rounded-lg p-5 hover:shadow-md transition-shadow bg-white"
+                    className="vm-team-card rounded-2xl p-5"
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-slate-800 mb-1">
+                        <h3 className="vm-page-title mb-1 text-lg font-semibold">
                           {team.name}
                         </h3>
-                        <div className="flex items-center text-sm text-slate-600">
+                        <div className="vm-muted-text flex items-center text-sm">
                           <UsersIcon className="w-4 h-4 mr-1" />
                           {teamMemberCounts[team.id] || 0} {teamMemberCounts[team.id] === 1 ? 'membro' : 'membros'}
                         </div>
@@ -243,18 +271,18 @@ export function Teams() {
                         <XCircle className="w-5 h-5 text-slate-400" />
                       )}
                     </div>
-                    <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-                      <span className={`text-xs px-2 py-1 rounded-full ${
+                    <div className="mt-4 flex items-center justify-between border-t border-slate-200/70 pt-4 dark:border-white/10">
+                      <span className={`vm-team-status rounded-full border px-2 py-1 text-xs font-medium ${
                         team.is_active
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-slate-100 text-slate-600'
+                          ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                          : 'border-slate-400/20 bg-slate-500/10 text-slate-600 dark:text-slate-300'
                       }`}>
                         {team.is_active ? 'Ativa' : 'Inativa'}
                       </span>
                       {canEditFull && (
                         <button
                           onClick={() => setEditingTeam(team)}
-                          className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                          className="vm-team-edit rounded-xl p-2"
                         >
                           <Edit className="w-4 h-4" />
                         </button>
@@ -264,18 +292,18 @@ export function Teams() {
                 ))}
               </div>
             )}
-          </Card>
+          </section>
         )}
       </div>
 
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full my-8">
-            <div className="flex items-center justify-between p-6 border-b border-slate-200">
-              <h2 className="text-xl font-bold text-slate-800">Nova Equipe</h2>
+        <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
+          <div className="vm-glass-modal my-8 w-full max-w-md rounded-2xl">
+            <div className="vm-glass-modal-bar flex items-center justify-between border-b p-6">
+              <h2 className="vm-page-title text-xl font-bold">Nova Equipe</h2>
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="text-slate-400 hover:text-slate-600"
+                className="vm-glass-nav-item rounded-lg p-1"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -291,7 +319,7 @@ export function Teams() {
               />
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                <div className="rounded-lg border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
                   {error}
                 </div>
               )}
