@@ -111,13 +111,13 @@ export function EditTeamModal({ team, onClose, onSuccess }: EditTeamModalProps) 
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-slate-800">Editar Equipe</h2>
+    <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
+      <div className="vm-glass-modal my-8 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl">
+        <div className="vm-glass-modal-bar sticky top-0 flex items-center justify-between border-b p-6">
+          <h2 className="vm-page-title text-xl font-bold">Editar Equipe</h2>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 transition-colors"
+            className="vm-glass-nav-item rounded-lg p-1"
           >
             <X className="w-5 h-5" />
           </button>
@@ -133,7 +133,7 @@ export function EditTeamModal({ team, onClose, onSuccess }: EditTeamModalProps) 
           />
 
           <div>
-            <h3 className="text-lg font-semibold text-slate-800 mb-3">Membros da Equipe</h3>
+            <h3 className="vm-page-title mb-3 text-lg font-semibold">Membros da Equipe</h3>
             {loadingData ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="w-6 h-6 text-emerald-600 animate-spin" />
@@ -141,22 +141,22 @@ export function EditTeamModal({ team, onClose, onSuccess }: EditTeamModalProps) 
             ) : (
               <>
                 {members.length === 0 ? (
-                  <p className="text-slate-500 text-sm py-4">Nenhum membro na equipe</p>
+                  <p className="vm-muted-text py-4 text-sm">Nenhum membro na equipe</p>
                 ) : (
                   <div className="space-y-2 mb-4">
                     {members.map((member) => (
                       <div
                         key={member.id}
-                        className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200"
+                        className="vm-team-member-card flex items-center justify-between rounded-xl p-3"
                       >
                         <div>
-                          <p className="font-medium text-slate-800">{member.name}</p>
-                          <p className="text-sm text-slate-600">{member.role}</p>
+                          <p className="vm-page-title font-semibold">{member.name}</p>
+                          <p className="vm-muted-text text-sm">{member.role}</p>
                         </div>
                         <button
                           type="button"
                           onClick={() => handleRemoveMember(member.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          className="vm-user-action rounded-lg text-red-600 hover:border-red-500/20 hover:bg-red-500/10 dark:text-red-300"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -166,19 +166,19 @@ export function EditTeamModal({ team, onClose, onSuccess }: EditTeamModalProps) 
                 )}
 
                 {availableUsers.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-slate-200">
-                    <h4 className="text-sm font-semibold text-slate-700 mb-2">
+                  <div className="mt-4 border-t border-slate-200/70 pt-4 dark:border-white/10">
+                    <h4 className="vm-muted-text mb-2 text-sm font-semibold">
                       Adicionar Membros
                     </h4>
                     <div className="space-y-2">
                       {availableUsers.map((user) => (
                         <div
                           key={user.id}
-                          className="flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-emerald-300 transition-colors"
+                          className="vm-team-member-card flex items-center justify-between rounded-xl p-3"
                         >
                           <div>
-                            <p className="font-medium text-slate-800">{user.name}</p>
-                            <p className="text-sm text-slate-600">{user.role}</p>
+                            <p className="vm-page-title font-semibold">{user.name}</p>
+                            <p className="vm-muted-text text-sm">{user.role}</p>
                           </div>
                           <Button
                             type="button"
@@ -197,12 +197,12 @@ export function EditTeamModal({ team, onClose, onSuccess }: EditTeamModalProps) 
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <div className="rounded-lg border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
               {error}
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-200">
+          <div className="flex flex-col gap-3 border-t border-slate-200/70 pt-4 dark:border-white/10 sm:flex-row">
             <Button
               type="button"
               variant="secondary"
