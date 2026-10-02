@@ -207,7 +207,7 @@ export function Cadastro() {
             <span className="hidden sm:inline">Adesões Pendentes</span>
             <span className="sm:hidden">Pendentes</span>
             {(stats.cadastro_incompletos + stats.inclusao_incompletos) > 0 && (
-              <span className="ml-2 rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-300">
+              <span className="vm-tab-badge-warning ml-2 rounded-full px-2 py-0.5 text-xs font-extrabold">
                 {stats.cadastro_incompletos + stats.inclusao_incompletos}
               </span>
             )}
@@ -222,7 +222,7 @@ export function Cadastro() {
             <span className="hidden xs:inline">Cadastradas</span>
             <span className="xs:hidden">Cadastradas</span>
             {(stats.cadastro_enviados + stats.inclusao_enviados) > 0 && (
-              <span className="ml-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+              <span className="vm-tab-badge-success ml-2 rounded-full px-2 py-0.5 text-xs font-extrabold">
                 {stats.cadastro_enviados + stats.inclusao_enviados}
               </span>
             )}
