@@ -23,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -265,9 +266,22 @@ fun MetricBadge(
     textColor: Color,
     modifier: Modifier = Modifier,
 ) {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val resolvedBackground = if (dark) bgColor.copy(alpha = 0.20f) else bgColor
+    val resolvedText = if (dark && textColor.luminance() < 0.55f) {
+        lerp(textColor, Color.White, 0.58f)
+    } else {
+        textColor
+    }
+
     Row(
         modifier = modifier
-            .background(bgColor, RoundedCornerShape(VendaRadius.full))
+            .background(resolvedBackground, RoundedCornerShape(VendaRadius.full))
+            .border(
+                1.dp,
+                resolvedText.copy(alpha = if (dark) 0.16f else 0.12f),
+                RoundedCornerShape(VendaRadius.full),
+            )
             .padding(horizontal = VendaSpacing.x3, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(7.dp),
@@ -275,12 +289,12 @@ fun MetricBadge(
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
-            color = textColor,
+            color = resolvedText,
         )
         Text(
             text = value,
             style = MaterialTheme.typography.labelLarge,
-            color = textColor,
+            color = resolvedText,
             fontWeight = FontWeight.Bold,
         )
     }
