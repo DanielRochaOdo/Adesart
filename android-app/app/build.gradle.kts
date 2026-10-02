@@ -85,6 +85,23 @@ val versionProperties = Properties().apply {
 
 val baseVersionCode = versionProperties.getProperty("VERSION_CODE")?.toIntOrNull() ?: 1
 val baseVersionName = parseVersionNameOrDefault(versionProperties.getProperty("VERSION_NAME"))
+val requestedVersionName = providers.environmentVariable("VENDA_VERSION_NAME").orNull
+    ?.trim()
+    ?.takeIf { it.isNotBlank() }
+val requestedVersionCode = providers.environmentVariable("VENDA_VERSION_CODE").orNull
+    ?.trim()
+    ?.takeIf { it.isNotBlank() }
+    ?.toIntOrNull()
+
+if ((requestedVersionName == null) != (requestedVersionCode == null)) {
+    throw GradleException(
+        "VENDA_VERSION_NAME e VENDA_VERSION_CODE devem ser informados juntos.",
+    )
+}
+if (requestedVersionName != null && !Regex("""\d+\.\d+\.\d+""").matches(requestedVersionName)) {
+    throw GradleException("VENDA_VERSION_NAME invalida: $requestedVersionName")
+}
+
 val releaseBuildRequested = gradle.startParameter.taskNames
     .map { it.substringAfterLast(':') }
     .any {
@@ -110,17 +127,26 @@ if (releaseBuildRequested && !hasReleaseSigningConfig) {
 }
 
 val appVersion = if (releaseBuildRequested) {
-    val bumped = AppVersion(
-        code = baseVersionCode + 1,
-        name = bumpPatchVersionName(baseVersionName),
-    )
-    versionProperties["VERSION_CODE"] = bumped.code.toString()
-    versionProperties["VERSION_NAME"] = bumped.name
-    versionPropertiesFile.outputStream().use { out ->
-        versionProperties.store(out, "Auto-updated on release build")
+    if (requestedVersionName != null && requestedVersionCode != null) {
+        val exact = AppVersion(
+            code = requestedVersionCode,
+            name = requestedVersionName,
+        )
+        println("Release version override: ${exact.name}(${exact.code})")
+        exact
+    } else {
+        val bumped = AppVersion(
+            code = baseVersionCode + 1,
+            name = bumpPatchVersionName(baseVersionName),
+        )
+        versionProperties["VERSION_CODE"] = bumped.code.toString()
+        versionProperties["VERSION_NAME"] = bumped.name
+        versionPropertiesFile.outputStream().use { out ->
+            versionProperties.store(out, "Auto-updated on release build")
+        }
+        println("Release version bump: $baseVersionName($baseVersionCode) -> ${bumped.name}(${bumped.code})")
+        bumped
     }
-    println("Release version bump: $baseVersionName($baseVersionCode) -> ${bumped.name}(${bumped.code})")
-    bumped
 } else {
     AppVersion(baseVersionCode, baseVersionName)
 }
