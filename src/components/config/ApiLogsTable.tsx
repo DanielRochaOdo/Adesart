@@ -1,4 +1,5 @@
 import { useState, useEffect, type FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../../lib/supabase';
 import { AlertCircle, CheckCircle, Clock, User, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Input } from '../Input';
@@ -127,6 +128,17 @@ export function ApiLogsTable() {
       setPage(totalPages);
     }
   }, [page, totalPages, setPage]);
+
+  useEffect(() => {
+    if (!selectedLog) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [selectedLog]);
 
   const aplicarPesquisa = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -416,27 +428,39 @@ export function ApiLogsTable() {
         </div>
       )}
 
-      {selectedLog && (
+      {selectedLog && typeof document !== 'undefined' && createPortal(
         <div
-          className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4"
+          className="vm-modal-overlay fixed inset-0 z-[120] flex items-start justify-center overflow-y-auto p-3 pt-4 sm:p-5 sm:pt-6"
           onClick={() => setSelectedLog(null)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="api-log-detail-title"
         >
           <div
-            className="vm-glass-modal max-h-[90vh] w-full max-w-4xl overflow-auto rounded-3xl"
+            className="vm-glass-modal flex max-h-[calc(100dvh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-3xl sm:max-h-[calc(100dvh-3rem)]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-5 sm:p-6">
-              <div className="flex justify-between items-start mb-4">
-                <h3 className="vm-page-title text-xl font-semibold">Detalhes do Log</h3>
-                <button
-                  onClick={() => setSelectedLog(null)}
-                  className="vm-glass-nav-item rounded-lg px-2 py-1"
-                >
-                  ✕
-                </button>
+            <div className="vm-glass-modal-bar sticky top-0 z-10 flex shrink-0 items-center justify-between border-b px-4 py-3 sm:px-5 sm:py-4">
+              <div>
+                <h3 id="api-log-detail-title" className="vm-page-title text-lg font-semibold sm:text-xl">
+                  Detalhes do Log
+                </h3>
+                <p className="vm-meta-text mt-0.5 text-xs">
+                  {selectedLog.endpoint} · {formatDate(selectedLog.created_at)}
+                </p>
               </div>
+              <button
+                onClick={() => setSelectedLog(null)}
+                className="vm-glass-nav-item rounded-lg px-2 py-1.5"
+                aria-label="Fechar detalhes do log"
+              >
+                ✕
+              </button>
+            </div>
 
-              <div className="space-y-4">
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
                 <div>
                   <label className="vm-muted-text mb-1 block text-sm font-semibold">
                     Status
@@ -496,7 +520,9 @@ export function ApiLogsTable() {
                       : '-'}
                   </p>
                 </div>
+              </div>
 
+              <div className="mt-4 space-y-4">
                 {selectedLog.error_message && (
                   <div>
                     <label className="vm-muted-text mb-1 block text-sm font-semibold">
@@ -540,7 +566,8 @@ export function ApiLogsTable() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
