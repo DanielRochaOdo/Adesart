@@ -941,7 +941,7 @@ export function Users() {
               )}
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                <div className="rounded-lg border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
                   {error}
                 </div>
               )}
@@ -986,11 +986,11 @@ export function Users() {
       )}
 
       {resetPasswordUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black bg-opacity-50 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-slate-200 p-5">
+        <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
+          <div className="vm-glass-modal w-full max-w-md rounded-2xl">
+            <div className="vm-glass-modal-bar flex items-center justify-between border-b p-5">
               <div>
-                <h2 className="text-lg font-bold text-slate-800">Redefinir senha</h2>
+                <h2 className="vm-page-title text-lg font-bold">Redefinir senha</h2>
                 <p className="mt-1 text-xs text-slate-500">
                   {resetPasswordUser.name} · {resetPasswordUser.email}
                 </p>
@@ -999,7 +999,7 @@ export function Users() {
                 type="button"
                 onClick={() => setResetPasswordUser(null)}
                 disabled={passwordResetLoading}
-                className="text-slate-400 transition-colors hover:text-slate-600 disabled:opacity-50"
+                className="vm-glass-nav-item rounded-lg p-1 disabled:opacity-50"
                 aria-label="Fechar"
               >
                 <X className="h-5 w-5" />
@@ -1035,7 +1035,7 @@ export function Users() {
                 </div>
               )}
 
-              <div className="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row">
+              <div className="flex flex-col gap-3 border-t border-slate-200/70 pt-4 dark:border-white/10 sm:flex-row">
                 <Button
                   type="button"
                   variant="secondary"
