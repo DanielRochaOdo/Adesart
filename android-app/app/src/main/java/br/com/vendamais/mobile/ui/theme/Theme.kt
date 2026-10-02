@@ -1,11 +1,13 @@
 package br.com.vendamais.mobile.ui.theme
 
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 
 private val LightColors = lightColorScheme(
@@ -86,10 +88,20 @@ fun VendaMaisTheme(
     darkTheme: Boolean = false,
     content: @Composable () -> Unit,
 ) {
+    val colors = if (darkTheme) DarkColors else LightColors
+
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
+        colorScheme = colors,
         typography = Typography,
         shapes = VendaMaisShapes,
-        content = content,
-    )
+    ) {
+        // Regra global de contraste: qualquer Text/Icon sem cor explicita herda
+        // uma cor legivel para o tema atual. Isso evita texto preto sobre
+        // superficies escuras em qualquer tela do aplicativo.
+        CompositionLocalProvider(
+            LocalContentColor provides colors.onBackground,
+        ) {
+            content()
+        }
+    }
 }
