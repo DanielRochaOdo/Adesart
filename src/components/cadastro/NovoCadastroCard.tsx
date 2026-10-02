@@ -787,8 +787,8 @@ export function NovoCadastroCard({ onSuccess }: NovoCadastroCardProps) {
       />
 
       {selectedEmpresa && (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-          <h3 className="text-lg font-semibold text-slate-800 mb-4">Consultar CPF</h3>
+        <div className="vm-cadastro-card rounded-3xl p-6">
+          <h3 className="vm-page-title mb-4 text-lg font-semibold">Consultar CPF</h3>
 
           <div className="space-y-4">
             {needsVendedor && (
@@ -808,7 +808,7 @@ export function NovoCadastroCard({ onSuccess }: NovoCadastroCardProps) {
                   ))}
                 </Select>
                 {vendedores.length === 0 && (
-                  <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-lg text-sm">
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
                     ⚠️ Nenhum vendedor disponível. Entre em contato com o administrador para cadastrar vendedores com código (ID Externo).
                   </div>
                 )}
@@ -831,12 +831,12 @@ export function NovoCadastroCard({ onSuccess }: NovoCadastroCardProps) {
                   ))}
                 </Select>
                 {adesionistas.length === 0 && profile?.role === 'ADMINISTRADOR' && !profile?.external_id && (
-                  <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-lg text-sm">
+                  <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
                     ⚠️ Configure seu ID Externo no perfil para ser usado como adesionista nos cadastros.
                   </div>
                 )}
                 {adesionistas.length === 0 && (profile?.role !== 'ADMINISTRADOR' || profile?.external_id) && (
-                  <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg text-sm">
+                  <div className="rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-3 text-sm text-blue-700 dark:text-blue-300">
                     ℹ️ Nenhum adesionista disponível. Este campo é opcional.
                   </div>
                 )}
@@ -856,7 +856,7 @@ export function NovoCadastroCard({ onSuccess }: NovoCadastroCardProps) {
             />
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
                 {error}
               </div>
             )}
