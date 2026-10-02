@@ -575,17 +575,13 @@ private fun AppHeaderBar(
                 spotColor = if (dark) Color.Black.copy(alpha = 0.42f) else Color(0xFF0F172A).copy(alpha = 0.10f),
             )
             .background(glassBrush, shape)
+            .background(specularBrush, shape)
             .border(
                 1.dp,
                 if (dark) Color.White.copy(alpha = 0.13f) else Color.White.copy(alpha = 0.64f),
                 shape,
             ),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(specularBrush, shape),
-        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -670,17 +666,13 @@ private fun MagicBottomNavigationBar(
                 spotColor = if (dark) Color.Black.copy(alpha = 0.44f) else Color(0xFF0F172A).copy(alpha = 0.11f),
             )
             .background(glassBrush, shape)
+            .background(navSpecularBrush, shape)
             .border(
                 1.dp,
                 if (dark) Color.White.copy(alpha = 0.13f) else Color.White.copy(alpha = 0.62f),
                 shape,
             ),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(navSpecularBrush, shape),
-        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
