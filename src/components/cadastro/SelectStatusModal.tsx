@@ -47,8 +47,8 @@ export function SelectStatusModal({ onSelect, onClose }: SelectStatusModalProps)
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+    <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="vm-glass-modal w-full max-w-md rounded-2xl">
         <div className="p-6">
           <div className="flex items-center gap-2 mb-4">
             <Tag className="w-5 h-5 text-emerald-600" />
