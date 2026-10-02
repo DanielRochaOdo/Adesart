@@ -1012,3 +1012,194 @@
     box-shadow: none;
   }
 }
+
+
+/* ============================================================
+   Venda+ Glass Lab — Dashboard / aggressive Reflect direction
+   ============================================================ */
+@layer utilities {
+  .vm-dashboard-hero {
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(520px circle at 8% -55%, rgba(16,185,129,.22), transparent 66%),
+      radial-gradient(440px circle at 92% -35%, rgba(20,184,166,.12), transparent 64%),
+      linear-gradient(180deg, rgba(255,255,255,.26), rgba(255,255,255,.015)),
+      var(--vm-glass-layer-strong);
+    border: 1px solid var(--vm-border);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.58),
+      0 22px 58px rgba(15,23,42,.10);
+    -webkit-backdrop-filter: blur(22px) saturate(132%);
+    backdrop-filter: blur(22px) saturate(132%);
+  }
+
+  .dark .vm-dashboard-hero {
+    background:
+      radial-gradient(520px circle at 8% -55%, rgba(16,185,129,.20), transparent 66%),
+      radial-gradient(440px circle at 92% -35%, rgba(14,116,144,.14), transparent 64%),
+      linear-gradient(180deg, rgba(255,255,255,.025), transparent),
+      rgba(10,18,32,.76);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.035),
+      0 24px 64px rgba(0,0,0,.26);
+  }
+
+  .vm-filter-dock {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.015)),
+      rgba(216, 228, 222, 0.76);
+    border: 1px solid var(--vm-border-strong);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.52),
+      0 16px 38px rgba(15,23,42,.065);
+    -webkit-backdrop-filter: blur(16px) saturate(118%);
+    backdrop-filter: blur(16px) saturate(118%);
+  }
+
+  .dark .vm-filter-dock {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.025), transparent),
+      rgba(9,17,31,.74);
+    border-color: var(--vm-border);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.025),
+      0 18px 42px rgba(0,0,0,.18);
+  }
+
+  .vm-dashboard-kpi {
+    position: relative;
+    overflow: hidden;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,.015)),
+      rgba(239, 246, 242, 0.80);
+    border: 1px solid var(--vm-border);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.58),
+      0 14px 32px rgba(15,23,42,.07);
+    -webkit-backdrop-filter: blur(14px) saturate(120%);
+    backdrop-filter: blur(14px) saturate(120%);
+    transition:
+      transform 170ms ease,
+      border-color 170ms ease,
+      box-shadow 170ms ease,
+      background-color 170ms ease;
+  }
+
+  .vm-dashboard-kpi::after {
+    content: "";
+    position: absolute;
+    width: 110px;
+    height: 110px;
+    right: -42px;
+    top: -52px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(16,185,129,.13), transparent 70%);
+    pointer-events: none;
+  }
+
+  .vm-dashboard-kpi:hover {
+    transform: translateY(-3px);
+    border-color: rgba(5,150,105,.26);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.66),
+      0 20px 42px rgba(15,23,42,.10),
+      0 0 0 1px rgba(16,185,129,.035);
+  }
+
+  .dark .vm-dashboard-kpi {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.026), transparent),
+      rgba(15,23,42,.66);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.025),
+      0 16px 38px rgba(0,0,0,.20);
+  }
+
+  .dark .vm-dashboard-kpi:hover {
+    border-color: rgba(52,211,153,.16);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.035),
+      0 22px 46px rgba(0,0,0,.28),
+      0 0 28px rgba(16,185,129,.045);
+  }
+
+  .vm-dashboard-panel {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.012)),
+      rgba(238, 245, 241, 0.76);
+    border: 1px solid var(--vm-border);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.54),
+      0 16px 40px rgba(15,23,42,.065);
+    -webkit-backdrop-filter: blur(15px) saturate(118%);
+    backdrop-filter: blur(15px) saturate(118%);
+  }
+
+  .dark .vm-dashboard-panel {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.022), transparent),
+      rgba(10,18,32,.68);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.024),
+      0 18px 44px rgba(0,0,0,.18);
+  }
+
+  .vm-dashboard-panel-title {
+    color: var(--vm-text);
+    letter-spacing: -0.01em;
+  }
+
+  .vm-dashboard-subpanel {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.01)),
+      rgba(220,231,225,.70);
+    border: 1px solid var(--vm-border);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.45);
+  }
+
+  .dark .vm-dashboard-subpanel {
+    background: rgba(15,23,42,.58);
+    border-color: var(--vm-border);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+  }
+
+  .vm-dashboard-icon {
+    border: 1px solid rgba(255,255,255,.40);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.34),
+      0 7px 18px rgba(15,23,42,.07);
+  }
+
+  .dark .vm-dashboard-icon {
+    border-color: rgba(255,255,255,.055);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.025),
+      0 8px 18px rgba(0,0,0,.15);
+  }
+
+  .vm-chart-well {
+    background: rgba(246,250,248,.48);
+    border: 1px solid rgba(30,41,59,.08);
+    border-radius: 14px;
+  }
+
+  .dark .vm-chart-well {
+    background: rgba(4,10,20,.30);
+    border-color: rgba(255,255,255,.045);
+  }
+
+  .vm-dashboard-pill {
+    background: rgba(236,244,240,.80);
+    border: 1px solid var(--vm-border);
+    color: var(--vm-text-secondary);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.48);
+  }
+
+  .dark .vm-dashboard-pill {
+    background: rgba(15,23,42,.62);
+    border-color: var(--vm-border);
+    color: var(--vm-text-secondary);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+  }
+}
