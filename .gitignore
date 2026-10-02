@@ -30,3 +30,8 @@ android-app/.idea/
 # Android signing
 android-app/**/*.jks
 android-app/**/*.keystore
+
+# iOS / Xcode local state
+android-app/iosApp/**/xcuserdata/
+android-app/iosApp/**/*.xcuserstate
+android-app/iosApp/DerivedData/

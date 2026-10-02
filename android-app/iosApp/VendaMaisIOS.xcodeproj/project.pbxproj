@@ -1,0 +1,54 @@
+// !$*UTF8*$!
+{
+    archiveVersion = 1;
+    classes = {};
+    objectVersion = 56;
+    objects = {
+/* Begin PBXBuildFile section */
+        A10000000000000000000001 = {isa = PBXBuildFile; fileRef = A10000000000000000000002; };
+/* End PBXBuildFile section */
+/* Begin PBXFileReference section */
+        A10000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VendaMaisIOSApp.swift; sourceTree = "<group>"; };
+        A10000000000000000000003 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+        A10000000000000000000004 = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = VendaMaisIOS.entitlements; sourceTree = "<group>"; };
+        A10000000000000000000005 = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config.xcconfig; sourceTree = "<group>"; };
+        A10000000000000000000006 = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Version.xcconfig; sourceTree = "<group>"; };
+        A10000000000000000000007 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VendaMaisIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+/* Begin PBXFrameworksBuildPhase section */
+        A10000000000000000000008 = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+/* Begin PBXGroup section */
+        A10000000000000000000009 = {isa = PBXGroup; children = (A1000000000000000000000A, A1000000000000000000000B, A1000000000000000000000C); sourceTree = "<group>"; };
+        A1000000000000000000000A = {isa = PBXGroup; children = (A10000000000000000000002, A10000000000000000000003, A10000000000000000000004); path = VendaMaisIOS; sourceTree = "<group>"; };
+        A1000000000000000000000B = {isa = PBXGroup; children = (A10000000000000000000005, A10000000000000000000006); path = Configuration; sourceTree = "<group>"; };
+        A1000000000000000000000C = {isa = PBXGroup; children = (A10000000000000000000007); name = Products; sourceTree = "<group>"; };
+/* End PBXGroup section */
+/* Begin PBXNativeTarget section */
+        A1000000000000000000000D = {isa = PBXNativeTarget; buildConfigurationList = A1000000000000000000000E; buildPhases = (A1000000000000000000000F, A10000000000000000000010, A10000000000000000000008, A10000000000000000000011); buildRules = (); dependencies = (); name = VendaMaisIOS; productName = VendaMaisIOS; productReference = A10000000000000000000007; productType = "com.apple.product-type.application"; };
+/* End PBXNativeTarget section */
+/* Begin PBXProject section */
+        A10000000000000000000012 = {isa = PBXProject; attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 1600; LastUpgradeCheck = 1600; TargetAttributes = {A1000000000000000000000D = {CreatedOnToolsVersion = 16.0; }; }; }; buildConfigurationList = A10000000000000000000013; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = A10000000000000000000009; productRefGroup = A1000000000000000000000C; projectDirPath = ""; projectRoot = ""; targets = (A1000000000000000000000D); };
+/* End PBXProject section */
+/* Begin PBXResourcesBuildPhase section */
+        A10000000000000000000011 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+/* Begin PBXShellScriptBuildPhase section */
+        A1000000000000000000000F = {isa = PBXShellScriptBuildPhase; alwaysOutOfDate = 1; buildActionMask = 2147483647; files = (); inputFileListPaths = (); inputPaths = (); name = "Build Kotlin Framework"; outputFileListPaths = (); outputPaths = (); runOnlyForDeploymentPostprocessing = 0; shellPath = /bin/sh; shellScript = "cd \"$SRCROOT/..\"\n./gradlew :shared:embedAndSignAppleFrameworkForXcode\n"; };
+/* End PBXShellScriptBuildPhase section */
+/* Begin PBXSourcesBuildPhase section */
+        A10000000000000000000010 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+/* Begin XCBuildConfiguration section */
+        A10000000000000000000014 = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; }; name = Debug; };
+        A10000000000000000000015 = {isa = XCBuildConfiguration; buildSettings = {ALWAYS_SEARCH_USER_PATHS = NO; CLANG_ENABLE_MODULES = YES; }; name = Release; };
+        A10000000000000000000016 = {isa = XCBuildConfiguration; baseConfigurationReference = A10000000000000000000005; buildSettings = {CODE_SIGN_ENTITLEMENTS = VendaMaisIOS/VendaMaisIOS.entitlements; CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = VendaMaisIOS/Info.plist; PRODUCT_BUNDLE_IDENTIFIER = br.com.vendamais.mobile; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; }; name = Debug; };
+        A10000000000000000000017 = {isa = XCBuildConfiguration; baseConfigurationReference = A10000000000000000000005; buildSettings = {CODE_SIGN_ENTITLEMENTS = VendaMaisIOS/VendaMaisIOS.entitlements; CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = VendaMaisIOS/Info.plist; PRODUCT_BUNDLE_IDENTIFIER = br.com.vendamais.mobile; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; VALIDATE_PRODUCT = YES; }; name = Release; };
+/* End XCBuildConfiguration section */
+/* Begin XCConfigurationList section */
+        A1000000000000000000000E = {isa = XCConfigurationList; buildConfigurations = (A10000000000000000000016, A10000000000000000000017); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+        A10000000000000000000013 = {isa = XCConfigurationList; buildConfigurations = (A10000000000000000000014, A10000000000000000000015); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+    };
+    rootObject = A10000000000000000000012;
+}
