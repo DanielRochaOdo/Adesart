@@ -167,13 +167,13 @@
    ============================================================ */
 @layer base {
   :root {
-    --vm-app-bg: #f3f7f5;
-    --vm-glass-bg: rgba(255, 255, 255, 0.88);
-    --vm-glass-bg-strong: rgba(255, 255, 255, 0.96);
-    --vm-glass-border: rgba(15, 23, 42, 0.12);
-    --vm-glass-highlight: rgba(255, 255, 255, 0.9);
-    --vm-glass-shadow: 0 16px 36px rgba(15, 23, 42, 0.09);
-    --vm-glass-shadow-pop: 0 22px 54px rgba(15, 23, 42, 0.18);
+    --vm-app-bg: #eaf0ed;
+    --vm-glass-bg: rgba(248, 251, 250, 0.78);
+    --vm-glass-bg-strong: rgba(252, 254, 253, 0.93);
+    --vm-glass-border: rgba(30, 41, 59, 0.15);
+    --vm-glass-highlight: rgba(255, 255, 255, 0.7);
+    --vm-glass-shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
+    --vm-glass-shadow-pop: 0 24px 64px rgba(15, 23, 42, 0.22);
     --vm-glass-blur: 14px;
     --vm-glass-blur-strong: 18px;
     --vm-accent: #059669;
@@ -202,8 +202,8 @@
     position: relative;
     isolation: isolate;
     background:
-      radial-gradient(820px circle at 12% -8%, rgba(16, 185, 129, 0.075), transparent 46%),
-      radial-gradient(680px circle at 92% 12%, rgba(34, 197, 94, 0.035), transparent 44%),
+      radial-gradient(900px circle at 10% -12%, rgba(16, 185, 129, 0.11), transparent 48%),
+      radial-gradient(760px circle at 92% 8%, rgba(20, 184, 166, 0.055), transparent 46%),
       var(--vm-app-bg);
   }
 
@@ -235,13 +235,15 @@
   }
 
   .vm-glass-card {
-    background: var(--vm-glass-bg);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.34), rgba(255,255,255,.06)),
+      var(--vm-glass-bg);
     border: 1px solid var(--vm-glass-border);
     box-shadow:
       inset 0 1px 0 var(--vm-glass-highlight),
-      0 10px 30px rgba(15, 23, 42, 0.06);
-    -webkit-backdrop-filter: blur(10px) saturate(120%);
-    backdrop-filter: blur(10px) saturate(120%);
+      0 14px 34px rgba(15, 23, 42, 0.08);
+    -webkit-backdrop-filter: blur(12px) saturate(118%);
+    backdrop-filter: blur(12px) saturate(118%);
   }
 
   .vm-glass-popover {
@@ -255,18 +257,27 @@
   }
 
   .vm-glass-field {
-    background: color-mix(in srgb, var(--vm-glass-bg-strong) 82%, transparent);
-    border-color: var(--vm-glass-border);
-    box-shadow: inset 0 1px 0 var(--vm-glass-highlight);
+    background: rgba(255, 255, 255, 0.72);
+    border-color: rgba(51, 65, 85, 0.18);
+    color: #1e293b;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.65),
+      0 1px 2px rgba(15,23,42,.03);
     transition:
       border-color 150ms ease,
       box-shadow 150ms ease,
       background-color 150ms ease;
   }
 
+  .dark .vm-glass-field {
+    background: rgba(15,23,42,.72);
+    border-color: rgba(148,163,184,.28);
+    color: #f8fafc;
+  }
+
   .vm-glass-field:focus,
   .vm-glass-field:focus-visible {
-    border-color: color-mix(in srgb, var(--vm-accent) 62%, transparent);
+    border-color: rgba(5,150,105,.55);
     box-shadow:
       0 0 0 3px var(--vm-accent-soft),
       inset 0 1px 0 var(--vm-glass-highlight);
@@ -285,16 +296,28 @@
   }
 
   .vm-glass-secondary {
-    background: var(--vm-glass-bg);
-    border: 1px solid var(--vm-glass-border);
+    background: rgba(248,250,252,.84);
+    border: 1px solid rgba(51,65,85,.16);
     box-shadow: inset 0 1px 0 var(--vm-glass-highlight);
     -webkit-backdrop-filter: blur(10px);
     backdrop-filter: blur(10px);
   }
 
   .vm-glass-secondary:hover {
-    background: color-mix(in srgb, var(--vm-glass-bg-strong) 94%, var(--vm-accent-soft));
-    border-color: color-mix(in srgb, var(--vm-accent) 24%, var(--vm-glass-border));
+    background: rgba(226,232,240,.88);
+    border-color: rgba(51,65,85,.24);
+    color: #0f172a;
+  }
+
+  .dark .vm-glass-secondary {
+    background: rgba(30,41,59,.68);
+    border-color: rgba(148,163,184,.18);
+  }
+
+  .dark .vm-glass-secondary:hover {
+    background: rgba(51,65,85,.78);
+    border-color: rgba(148,163,184,.28);
+    color: #f8fafc;
   }
 
   .vm-glass-nav-item {
@@ -405,6 +428,57 @@
       radial-gradient(540px circle at 18% 8%, rgba(16,185,129,.16), transparent 52%),
       radial-gradient(520px circle at 85% 85%, rgba(5,150,105,.09), transparent 50%),
       #07111e;
+  }
+
+
+  .vm-section-panel {
+    background:
+      linear-gradient(180deg, rgba(236, 242, 239, 0.94), rgba(229, 237, 233, 0.9));
+    border: 1px solid rgba(51, 65, 85, 0.16);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.65),
+      0 10px 24px rgba(15,23,42,.05);
+  }
+
+  .dark .vm-section-panel {
+    background:
+      linear-gradient(180deg, rgba(30,41,59,.84), rgba(15,23,42,.82));
+    border-color: rgba(148,163,184,.16);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.035),
+      0 14px 28px rgba(0,0,0,.14);
+  }
+
+  .vm-config-strip {
+    background:
+      linear-gradient(180deg, rgba(30,41,59,.97), rgba(15,23,42,.97));
+    border: 1px solid rgba(15,23,42,.18);
+    color: #f8fafc;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.035),
+      0 8px 18px rgba(15,23,42,.11);
+  }
+
+  .dark .vm-config-strip {
+    background:
+      linear-gradient(180deg, rgba(15,23,42,.92), rgba(2,6,23,.94));
+    border-color: rgba(148,163,184,.12);
+  }
+
+  .vm-muted-text {
+    color: #475569;
+  }
+
+  .dark .vm-muted-text {
+    color: #94a3b8;
+  }
+
+  .vm-card-heading {
+    color: #0f172a;
+  }
+
+  .dark .vm-card-heading {
+    color: #f8fafc;
   }
 
   @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
