@@ -306,7 +306,7 @@ fun ErrosUploadErpScreen(
                             text = errorCategoryLabels[item.errorCategory] ?: item.errorCategory,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = Red500,
+                            color = MaterialTheme.colorScheme.error,
                         )
 
                         item.empresaNome?.takeIf { it.isNotBlank() }?.let {
