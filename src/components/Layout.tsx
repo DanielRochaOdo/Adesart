@@ -275,7 +275,7 @@ export function Layout({ children }: LayoutProps) {
           </div>
         )}
       </nav>
-      <main className="relative z-10 mx-auto max-w-7xl px-3 py-5 sm:px-4 sm:py-7 lg:px-8">
+      <main className="relative mx-auto max-w-7xl px-3 py-5 sm:px-4 sm:py-7 lg:px-8">
         {children}
       </main>
     </div>
