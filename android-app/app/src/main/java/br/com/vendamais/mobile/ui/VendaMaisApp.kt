@@ -90,6 +90,7 @@ import br.com.vendamais.mobile.ui.theme.EmeraldDark
 import br.com.vendamais.mobile.ui.theme.EmeraldSoft
 import br.com.vendamais.mobile.ui.theme.Red100
 import br.com.vendamais.mobile.ui.theme.Red500
+import br.com.vendamais.mobile.ui.theme.VendaGlass
 import java.util.Locale
 
 private enum class AppNavGroup {
@@ -545,15 +546,15 @@ private fun AppHeaderBar(
     val glassBrush = if (dark) {
         Brush.verticalGradient(
             listOf(
-                Color(0xFF172338).copy(alpha = 0.92f),
-                Color(0xFF0E192A).copy(alpha = 0.82f),
+                Color(0xFF182A40).copy(alpha = VendaGlass.darkSurfaceStrongAlpha),
+                Color(0xFF0B1728).copy(alpha = VendaGlass.darkSurfaceAlpha),
             ),
         )
     } else {
         Brush.verticalGradient(
             listOf(
-                Color(0xFFF9FCFA).copy(alpha = 0.94f),
-                Color(0xFFEAF2EE).copy(alpha = 0.84f),
+                Color(0xFFFAFCFB).copy(alpha = VendaGlass.lightSurfaceStrongAlpha),
+                Color(0xFFE5F0EA).copy(alpha = VendaGlass.lightSurfaceAlpha),
             ),
         )
     }
@@ -570,7 +571,8 @@ private fun AppHeaderBar(
             .background(glassBrush, shape)
             .border(
                 1.dp,
-                if (dark) Color.White.copy(alpha = 0.08f) else Color(0xFF334155).copy(alpha = 0.12f),
+                if (dark) Color.White.copy(alpha = VendaGlass.darkBorderAlpha)
+                else Color(0xFF334155).copy(alpha = VendaGlass.lightBorderAlpha),
                 shape,
             ),
     ) {
@@ -628,15 +630,15 @@ private fun MagicBottomNavigationBar(
     val glassBrush = if (dark) {
         Brush.verticalGradient(
             listOf(
-                Color(0xFF152136).copy(alpha = 0.88f),
-                Color(0xFF0B1525).copy(alpha = 0.82f),
+                Color(0xFF17263B).copy(alpha = VendaGlass.darkSurfaceStrongAlpha),
+                Color(0xFF091525).copy(alpha = VendaGlass.darkSurfaceAlpha),
             ),
         )
     } else {
         Brush.verticalGradient(
             listOf(
-                Color(0xFFF8FBF9).copy(alpha = 0.92f),
-                Color(0xFFE8F0EC).copy(alpha = 0.84f),
+                Color(0xFFF9FCFA).copy(alpha = VendaGlass.lightSurfaceStrongAlpha),
+                Color(0xFFE4EEE8).copy(alpha = VendaGlass.lightSurfaceAlpha),
             ),
         )
     }
@@ -727,8 +729,13 @@ private fun NavigationGroupSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
-        tonalElevation = 10.dp,
+        containerColor = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
+            Color(0xFF0F1A2C).copy(alpha = VendaGlass.darkSurfaceStrongAlpha)
+        } else {
+            Color(0xFFF4F9F6).copy(alpha = VendaGlass.lightSurfaceStrongAlpha)
+        },
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        tonalElevation = VendaGlass.raisedElevation,
     ) {
         Column(
             modifier = Modifier
