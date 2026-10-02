@@ -52,7 +52,7 @@ export function SelectStatusModal({ onSelect, onClose }: SelectStatusModalProps)
         <div className="p-6">
           <div className="flex items-center gap-2 mb-4">
             <Tag className="w-5 h-5 text-emerald-600" />
-            <h3 className="text-lg font-semibold text-slate-800">
+            <h3 className="vm-page-title text-lg font-semibold">
               Selecione o Status da Adesão
             </h3>
           </div>
@@ -80,7 +80,7 @@ export function SelectStatusModal({ onSelect, onClose }: SelectStatusModalProps)
                     className={`w-full text-left p-3 rounded-lg border-2 transition-all ${
                       selectedId === status.id
                         ? 'border-emerald-500 bg-emerald-50'
-                        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+                        : 'border-slate-400/20 hover:border-emerald-500/20 hover:bg-emerald-500/[0.06]'
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -88,7 +88,7 @@ export function SelectStatusModal({ onSelect, onClose }: SelectStatusModalProps)
                         className="w-4 h-4 rounded-full flex-shrink-0"
                         style={{ backgroundColor: status.cor }}
                       />
-                      <span className="font-medium text-slate-800">{status.nome}</span>
+                      <span className="vm-page-title font-semibold">{status.nome}</span>
                     </div>
                   </button>
                 ))}
