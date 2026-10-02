@@ -836,10 +836,15 @@ export function PublicCadastroLink() {
         </section>
       )}
 
-      {coverageOpen && coverageUrl && <div role="dialog" aria-label="Cobertura do plano" className="vm-modal-overlay fixed inset-0 z-[100] flex flex-col p-3 sm:p-6">
-        <div className="mb-3 flex items-center justify-between gap-3"><h3 className="font-semibold">Cobertura — {coverageName || 'Plano odontológico'}</h3><button type="button" className="rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white" onClick={() => setCoverageOpen(false)}>Fechar</button></div>
-        <iframe title="Cobertura do plano contratado" src={coverageUrl} className="min-h-0 w-full flex-1 rounded-xl border border-slate-200" />
-        <a href={coverageUrl} target="_blank" rel="noreferrer" className="mt-3 text-center text-sm font-semibold text-emerald-800 underline">Abrir ou baixar o PDF</a>
+      {coverageOpen && coverageUrl && <div role="dialog" aria-label="Cobertura do plano" className="vm-modal-overlay fixed inset-0 z-[100] flex p-3 sm:p-6">
+        <div className="vm-glass-modal flex min-h-0 w-full flex-1 flex-col rounded-3xl p-3 sm:p-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h3 className="vm-page-title font-semibold">Cobertura — {coverageName || 'Plano odontológico'}</h3>
+            <button type="button" className="vm-glass-primary rounded-lg px-4 py-2 font-semibold text-white" onClick={() => setCoverageOpen(false)}>Fechar</button>
+          </div>
+          <iframe title="Cobertura do plano contratado" src={coverageUrl} className="min-h-0 w-full flex-1 rounded-2xl border border-slate-200 bg-white/80" />
+          <a href={coverageUrl} target="_blank" rel="noreferrer" className="mt-3 text-center text-sm font-semibold text-emerald-700 underline dark:text-emerald-300">Abrir ou baixar o PDF</a>
+        </div>
       </div>}
       {emailModalOpen && (
         <div className="vm-modal-overlay fixed inset-0 z-[100] flex items-end p-0 sm:items-center sm:justify-center sm:p-4">
