@@ -6,7 +6,7 @@ import { Input } from '../components/Input';
 import { Select } from '../components/Select';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Profile, Team } from '../lib/supabase';
-import { Plus, X, Edit, UserCheck, UserX, Download, ArrowLeft, ArrowRight, KeyRound, FilterX, SlidersHorizontal, History } from 'lucide-react';
+import { Plus, X, Edit, UserCheck, UserX, Download, ArrowLeft, ArrowRight, KeyRound, FilterX, SlidersHorizontal, History, UsersRound } from 'lucide-react';
 import { EditUserModal } from '../components/users/EditUserModal';
 import { UserLinkHistoryModal } from '../components/users/UserLinkHistoryModal';
 import { usePersistentState } from '../hooks/usePersistentState';
@@ -290,13 +290,13 @@ export function Users() {
   };
 
   const roleBadgeColors: Record<Profile['role'], string> = {
-    ADMINISTRADOR: 'bg-red-100 text-red-700 border-red-200',
-    GERENTE: 'bg-blue-100 text-blue-700 border-blue-200',
-    GESTOR: 'bg-indigo-100 text-indigo-700 border-indigo-200',
-    CADASTRO: 'bg-teal-100 text-teal-700 border-teal-200',
-    SUPERVISOR: 'bg-purple-100 text-purple-700 border-purple-200',
-    VENDEDOR: 'bg-green-100 text-green-700 border-green-200',
-    ADESIONISTA: 'bg-amber-100 text-amber-700 border-amber-200',
+    ADMINISTRADOR: 'bg-red-500/10 text-red-700 border-red-500/20 dark:text-red-300 dark:border-red-400/15',
+    GERENTE: 'bg-blue-500/10 text-blue-700 border-blue-500/20 dark:text-blue-300 dark:border-blue-400/15',
+    GESTOR: 'bg-indigo-500/10 text-indigo-700 border-indigo-500/20 dark:text-indigo-300 dark:border-indigo-400/15',
+    CADASTRO: 'bg-teal-500/10 text-teal-700 border-teal-500/20 dark:text-teal-300 dark:border-teal-400/15',
+    SUPERVISOR: 'bg-purple-500/10 text-purple-700 border-purple-500/20 dark:text-purple-300 dark:border-purple-400/15',
+    VENDEDOR: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20 dark:text-emerald-300 dark:border-emerald-400/15',
+    ADESIONISTA: 'bg-amber-500/10 text-amber-700 border-amber-500/20 dark:text-amber-300 dark:border-amber-400/15',
   };
 
   const formatAppSeenAt = (dateString: string) => {
@@ -320,7 +320,7 @@ export function Users() {
     if (!user.last_app_seen_at || !isAndroid) {
       return (
         <div className="space-y-1">
-          <span className="inline-flex px-2 py-1 rounded-lg text-xs font-medium border bg-slate-100 text-slate-600 border-slate-200">
+          <span className="vm-role-badge inline-flex rounded-lg border border-slate-400/20 bg-slate-500/10 px-2 py-1 text-xs font-medium text-slate-600 dark:text-slate-300">
             App mobile: Não identificado
           </span>
           {user.last_app_seen_at && platform && (
@@ -338,7 +338,7 @@ export function Users() {
 
     return (
       <div className="space-y-1">
-        <span className="inline-flex px-2 py-1 rounded-lg text-xs font-medium border bg-emerald-100 text-emerald-700 border-emerald-200">
+        <span className="vm-role-badge inline-flex rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
           App mobile: Sim
         </span>
         <p className="text-xs text-slate-600">Plataforma: {appPlatformLabels[platform] || platform}</p>
@@ -517,7 +517,7 @@ export function Users() {
         return user.email;
       case 'role':
         return (
-          <span className={`px-2 py-1 rounded-lg text-xs font-medium border ${roleBadgeColors[user.role]}`}>
+          <span className={`vm-role-badge rounded-lg border px-2 py-1 text-xs font-medium ${roleBadgeColors[user.role]}`}>
             {roleLabels[user.role]}
           </span>
         );
@@ -547,41 +547,62 @@ export function Users() {
   return (
     <Layout>
       <div className="space-y-4 sm:space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="vm-card-heading text-2xl font-bold sm:text-3xl">Usuários</h1>
-            <p className="vm-muted-text mt-1 text-sm sm:text-base">Gerencie os usuários do sistema</p>
+        <header className="vm-users-hero flex flex-col gap-5 rounded-3xl p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="vm-dashboard-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/12 text-emerald-700 dark:text-emerald-300">
+              <UsersRound className="h-6 w-6" />
+            </div>
+            <div className="min-w-0">
+              <div className="mb-2 inline-flex items-center rounded-full border border-emerald-500/15 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">
+                Gestão de acesso
+              </div>
+              <h1 className="vm-page-title text-2xl font-bold tracking-tight sm:text-3xl">Usuários</h1>
+              <p className="vm-muted-text mt-1 text-sm sm:text-base">
+                Gerencie perfis, permissões, equipes e acesso ao Venda+.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <span className="vm-dashboard-pill rounded-full px-2.5 py-1">
+                  {users.length} usuário(s)
+                </span>
+                <span className="vm-dashboard-pill rounded-full px-2.5 py-1">
+                  {users.filter((user) => user.is_active).length} ativo(s)
+                </span>
+                <span className="vm-dashboard-pill rounded-full px-2.5 py-1">
+                  {filteredUsers.length} no filtro atual
+                </span>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
             <Button variant="secondary" onClick={exportUsers} className="w-full sm:w-auto">
-              <Download className="w-4 h-4 mr-2" />
+              <Download className="mr-2 h-4 w-4" />
               Exportar
             </Button>
             {canCreate && (
               <Button onClick={() => setShowCreateModal(true)} className="w-full sm:w-auto">
-                <Plus className="w-4 h-4 mr-2" />
-                <span className="sm:inline">Novo Usuário</span>
+                <Plus className="mr-2 h-4 w-4" />
+                Novo Usuário
               </Button>
             )}
           </div>
-        </div>
+        </header>
 
-        <Card>
+        <section className="vm-users-shell rounded-3xl p-4 sm:p-5">
           {passwordResetNotice && (
             <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-200">
               {passwordResetNotice}
             </div>
           )}
 
-          <div className="vm-section-panel mb-5 rounded-2xl p-4 sm:p-5">
+          <div className="vm-users-filter-dock mb-5 rounded-3xl p-4 sm:p-5">
             <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <h2 className="vm-card-heading text-sm font-semibold">Filtros</h2>
+                <h2 className="vm-page-title text-sm font-bold">Filtros</h2>
                 <p className="vm-muted-text text-xs">
                   Combine os campos abaixo para localizar usuários com mais precisão.
                 </p>
               </div>
-              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              <span className="vm-dashboard-pill rounded-full px-2.5 py-1 text-xs font-semibold">
                 {filteredUsers.length} de {users.length} usuário(s)
               </span>
             </div>
@@ -657,7 +678,7 @@ export function Users() {
             )}
           </div>
 
-          <details className="vm-control-strip mb-6 overflow-hidden rounded-xl">
+          <details className="vm-users-customizer mb-6 overflow-hidden rounded-2xl">
             <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-700 transition dark:text-slate-200">
               <SlidersHorizontal className="h-4 w-4" />
               Personalizar tabela
@@ -665,7 +686,7 @@ export function Users() {
                 ordem das colunas e exportação
               </span>
             </summary>
-            <div className="vm-control-strip-content p-4">
+            <div className="vm-users-customizer-content p-4">
               <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
                 Use as setas para mover as colunas para a esquerda ou para a direita. A exportação segue a mesma ordem.
               </p>
@@ -673,7 +694,7 @@ export function Users() {
                 {userColumns.map((column, index) => (
                   <div
                     key={column.key}
-                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 dark:border-slate-700 dark:bg-slate-900"
+                    className="vm-column-chip inline-flex items-center gap-1 rounded-xl px-2 py-1.5"
                   >
                     <span className="text-xs font-medium text-slate-700 dark:text-slate-200">{column.label}</span>
                     <button
@@ -710,10 +731,10 @@ export function Users() {
             </div>
           ) : (
             <>
-              <div className="vm-table-shell hidden overflow-x-auto md:block">
+              <div className="vm-users-table-shell hidden overflow-x-auto md:block">
                 <table className="w-full">
                   <thead>
-                    <tr className="vm-table-head border-b">
+                    <tr className="vm-users-table-head border-b">
                       {userColumns.map((column) => (
                         <th key={column.key} className="text-left py-3 px-4 text-sm font-semibold text-slate-600">
                           {column.label}
@@ -727,7 +748,7 @@ export function Users() {
                   </thead>
                   <tbody>
                     {filteredUsers.map((user) => (
-                      <tr key={user.id} className="vm-table-row border-b">
+                      <tr key={user.id} className="vm-users-table-row border-b">
                         {userColumns.map((column) => (
                           <td key={column.key} className="py-3 px-4 text-slate-600">
                             {renderCell(user, column.key)}
@@ -738,7 +759,7 @@ export function Users() {
                             <button
                               type="button"
                               onClick={() => setLinksHistoryUser(user)}
-                              className="inline-flex items-center justify-center rounded-lg p-2 text-sky-600 transition-colors hover:bg-sky-50 dark:hover:bg-sky-950/30"
+                              className="vm-user-action vm-user-action-history"
                               title="Histórico de links"
                               aria-label={`Histórico de links de ${user.name}`}
                             >
@@ -750,7 +771,7 @@ export function Users() {
                           <div className="inline-flex items-center gap-1">
                             <button
                               onClick={() => setEditingUser(user)}
-                              className="inline-flex items-center justify-center rounded-lg p-2 text-slate-600 transition-colors hover:bg-slate-100"
+                              className="vm-user-action vm-user-action-neutral"
                               title="Editar usuário"
                               aria-label={`Editar ${user.name}`}
                             >
@@ -759,7 +780,7 @@ export function Users() {
                             {canResetPasswordFor(user) && (
                               <button
                                 onClick={() => openPasswordReset(user)}
-                                className="inline-flex items-center justify-center rounded-lg p-2 text-amber-600 transition-colors hover:bg-amber-50"
+                                className="vm-user-action vm-user-action-password"
                                 title="Redefinir senha"
                                 aria-label={`Redefinir senha de ${user.name}`}
                               >
@@ -776,11 +797,11 @@ export function Users() {
 
               <div className="md:hidden space-y-3">
                 {filteredUsers.map((user) => (
-                  <div key={user.id} className="vm-mobile-card rounded-xl p-4">
+                  <div key={user.id} className="vm-mobile-card rounded-2xl p-4">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
-                        <h3 className="font-semibold text-slate-800">{user.name}</h3>
-                        <p className="text-sm text-slate-600 mt-1">{user.email}</p>
+                        <h3 className="vm-page-title font-semibold">{user.name}</h3>
+                        <p className="vm-muted-text mt-1 text-sm">{user.email}</p>
                       </div>
                       <div className="flex items-center gap-2">
                         {user.is_active ? (
@@ -790,7 +811,7 @@ export function Users() {
                         )}
                         <button
                           onClick={() => setEditingUser(user)}
-                          className="rounded-lg p-1 text-slate-600 transition-colors hover:bg-slate-100"
+                          className="vm-user-action vm-user-action-neutral h-7 w-7"
                           title="Editar usuário"
                           aria-label={`Editar ${user.name}`}
                         >
@@ -800,7 +821,7 @@ export function Users() {
                           <button
                             type="button"
                             onClick={() => setLinksHistoryUser(user)}
-                            className="rounded-lg p-1 text-sky-600 transition-colors hover:bg-sky-50 dark:hover:bg-sky-950/30"
+                            className="vm-user-action vm-user-action-history h-7 w-7"
                             title="Histórico de links"
                             aria-label={`Histórico de links de ${user.name}`}
                           >
@@ -810,7 +831,7 @@ export function Users() {
                         {canResetPasswordFor(user) && (
                           <button
                             onClick={() => openPasswordReset(user)}
-                            className="rounded-lg p-1 text-amber-600 transition-colors hover:bg-amber-50"
+                            className="vm-user-action vm-user-action-password h-7 w-7"
                             title="Redefinir senha"
                             aria-label={`Redefinir senha de ${user.name}`}
                           >
@@ -836,7 +857,7 @@ export function Users() {
               </div>
             </>
           )}
-        </Card>
+        </section>
       </div>
 
       {showCreateModal && canCreate && (
