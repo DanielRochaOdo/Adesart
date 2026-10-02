@@ -389,7 +389,7 @@ fun CadastrosScreen(
                             )
                             Text(
                                 text = "Clique no botao para buscar um responsavel financeiro e adicionar novos dependentes.",
-                                color = Slate500,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodyMedium,
                             )
                             VendaButton(
@@ -612,7 +612,7 @@ private fun CadastrosSupervisorGroupedSection(
                             Text(
                                 text = "${vendedorGroup.empresas.size} empresas",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Slate500,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         Row(
@@ -661,7 +661,7 @@ private fun CadastrosSupervisorGroupedSection(
                                                     Text(
                                                         text = "CNPJ: $cnpj",
                                                         style = MaterialTheme.typography.bodySmall,
-                                                        color = Slate500,
+                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                     )
                                                 }
                                             }
@@ -751,7 +751,7 @@ private fun CadastrosGerenteGroupedSection(
                             Text(
                                 text = "${equipeGroup.vendedores.size} vendedores",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Slate500,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         Row(
@@ -843,7 +843,7 @@ private fun CadastrosGerenteGroupedSection(
                                                                         Text(
                                                                             text = "CNPJ: $cnpj",
                                                                             style = MaterialTheme.typography.bodySmall,
-                                                                            color = Slate500,
+                                                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                                         )
                                                                     }
                                                                 }
@@ -1008,7 +1008,7 @@ private fun CadastrosFilterPanel(
                     Text(
                         text = "Mostrando $filteredCount de $totalCount adesoes",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Slate500,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
