@@ -493,7 +493,11 @@ private fun UserEditorSheet(
     val requiresTeam = requiresTeamAndExternal(normalizedRole)
     val validationError = form.validationError(initialUser == null, initialUser)
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
+        tonalElevation = 10.dp,
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -699,7 +703,11 @@ private fun PasswordResetSheet(
         else -> null
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
+        tonalElevation = 10.dp,
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
