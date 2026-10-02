@@ -70,7 +70,8 @@ fun LoginScreen(
                     listOf(
                         Color(0xFF0B8A63),
                         Color(0xFF075D47),
-                        Color(0xFF081A26),
+                        Color(0xFF0A1830),
+                        Color(0xFF07111F),
                     ),
                 ),
             ),
@@ -94,10 +95,10 @@ fun LoginScreen(
 
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f),
-                shadowElevation = 12.dp,
-                border = BorderStroke(1.dp, White.copy(alpha = 0.22f)),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f),
+                shadowElevation = 18.dp,
+                border = BorderStroke(1.dp, White.copy(alpha = 0.20f)),
             ) {
                 Column(
                     modifier = Modifier.padding(horizontal = VendaSpacing.x5, vertical = VendaSpacing.x6),
