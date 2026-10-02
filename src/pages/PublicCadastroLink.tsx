@@ -139,7 +139,7 @@ const whatsappUrl = (phone?: string | null) => {
 function ConsultantContact({ link }: { link: Pick<LinkData, 'vendedorNome' | 'vendedorTelefone'> | null }) {
   const url = whatsappUrl(link?.vendedorTelefone);
   if (!link?.vendedorNome && !url) return null;
-  return <div className="mt-5 rounded-2xl bg-emerald-50 p-4 text-left">
+  return <div className="vm-public-consultant mt-5 rounded-2xl p-4 text-left">
     <p className="font-bold text-emerald-900">Ficou com alguma dúvida?</p>
     <p className="mt-1 text-sm text-emerald-900">Seu consultor está pronto para lhe atender.</p>
     {link?.vendedorNome && <p className="mt-3 text-sm font-semibold text-emerald-950">{link.vendedorNome}</p>}
@@ -192,7 +192,7 @@ function AppButtons() {
       </button>
 
       {showFallback && (
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
+        <div className="vm-public-info rounded-2xl p-4 text-left">
           <p className="text-sm leading-6 text-slate-600">
             Nao foi possivel identificar automaticamente o sistema deste aparelho. Escolha a loja abaixo.
           </p>
@@ -662,9 +662,9 @@ export function PublicCadastroLink() {
   };
 
   const shell = (children: React.ReactNode) => (
-    <div translate="no" className="min-h-screen bg-slate-50 px-4 py-5 sm:py-8">
-      <main className="mx-auto w-full max-w-xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <header className="bg-emerald-700 px-5 py-6 text-white sm:px-7">
+    <div translate="no" className="vm-public-page min-h-screen px-4 py-5 sm:py-8">
+      <main className="vm-public-shell mx-auto w-full max-w-xl overflow-hidden rounded-[28px]">
+        <header className="vm-public-header px-5 py-6 text-white sm:px-7">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <p className="text-xs font-medium uppercase tracking-[0.16em] text-emerald-100">Adesão Odontoart</p>
@@ -677,10 +677,10 @@ export function PublicCadastroLink() {
           {whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) && <a href={whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) || '#'} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-extrabold text-white shadow-lg ring-2 ring-orange-200 transition-colors hover:bg-orange-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-300"><MessageCircle className="h-5 w-5" />Precisa de ajuda? Fale com seu consultor</a>}
         </header>
         <div className="p-5 sm:p-7">
-          {linkData && !['success', 'completed', 'not_eligible'].includes(stage) && <div aria-label="Progresso da adesão" className="mb-5 grid grid-cols-4 gap-1 text-center text-[10px] font-medium">
+          {linkData && !['success', 'completed', 'not_eligible'].includes(stage) && <div aria-label="Progresso da adesão" className="vm-public-progress mb-5 grid grid-cols-4 gap-1.5 rounded-2xl p-1.5 text-center text-[10px] font-semibold">
             {['Dados', 'Plano', 'Dependentes', 'Confirmação'].map((label, index) => {
               const currentStep = stage === 'identify' ? 0 : stage === 'details' ? (form.titularPlano ? 1 : 0) : stage === 'dependents' ? 2 : 3;
-              return <span key={label} className={`rounded-lg px-1 py-2 ${index <= currentStep ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-100 text-slate-500'}`}>{label}</span>;
+              return <span key={label} className={`rounded-xl border px-1 py-2 ${index <= currentStep ? 'vm-public-step-active' : 'vm-public-step'}`}>{label}</span>;
             })}
           </div>}
           {children}
@@ -842,8 +842,8 @@ export function PublicCadastroLink() {
         <a href={coverageUrl} target="_blank" rel="noreferrer" className="mt-3 text-center text-sm font-semibold text-emerald-800 underline">Abrir ou baixar o PDF</a>
       </div>}
       {emailModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end bg-slate-950/50 p-0 sm:items-center sm:justify-center sm:p-4">
-          <div className="w-full rounded-t-3xl bg-white p-5 shadow-2xl sm:max-w-md sm:rounded-3xl sm:p-6">
+        <div className="vm-modal-overlay fixed inset-0 z-[100] flex items-end p-0 sm:items-center sm:justify-center sm:p-4">
+          <div className="vm-glass-modal w-full rounded-t-3xl p-5 sm:max-w-md sm:rounded-3xl sm:p-6">
             <h3 className="text-xl font-bold text-slate-900">Confirme seu e-mail</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">O contrato será enviado para este endereço. Você pode corrigi-lo antes de continuar.</p>
             <div className="mt-5"><Input label="E-mail do contrato" type="email" value={emailToConfirm} onChange={(event) => setEmailToConfirm(event.target.value)} required className="min-h-12" /></div>
