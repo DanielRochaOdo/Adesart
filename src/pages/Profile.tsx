@@ -105,6 +105,8 @@ export function Profile() {
   const roleLabels: Record<string, string> = {
     ADMINISTRADOR: 'Administrador',
     GERENTE: 'Gerente',
+    GESTOR: 'Gestor',
+    CADASTRO: 'Cadastro',
     SUPERVISOR: 'Supervisor',
     VENDEDOR: 'Vendedor',
     ADESIONISTA: 'Adesionista',
@@ -218,7 +220,7 @@ export function Profile() {
                   <span className="font-medium">Função</span>
                 </div>
                 <p className="vm-page-title font-semibold">
-                  {profile?.role ? roleLabels[profile.role] : '-'}
+                  {profile?.role ? roleLabels[profile.role] || profile.role : '-'}
                 </p>
               </div>
 
