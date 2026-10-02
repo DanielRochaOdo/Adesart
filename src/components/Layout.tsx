@@ -116,8 +116,8 @@ export function Layout({ children }: LayoutProps) {
                     onClick={() => navigate(item.path)}
                     className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       location.pathname === item.path
-                        ? 'bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/10 dark:text-emerald-300'
-                        : 'text-slate-600 hover:bg-white/45 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/[0.06] dark:hover:text-white'
+                        ? 'vm-glass-nav-item-active'
+                        : 'vm-glass-nav-item'
                     }`}
                   >
                     <item.icon className="w-4 h-4 mr-2" />
@@ -135,8 +135,8 @@ export function Layout({ children }: LayoutProps) {
                       onClick={() => setConfigDropdownOpen((open) => !open)}
                       className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                         isConfigActive
-                          ? 'bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/10 dark:text-emerald-300'
-                          : 'text-slate-600 hover:bg-white/45 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/[0.06] dark:hover:text-white'
+                          ? 'vm-glass-nav-item-active'
+                          : 'vm-glass-nav-item'
                       }`}
                     >
                       <Settings className="w-4 h-4 mr-2" />
@@ -155,8 +155,8 @@ export function Layout({ children }: LayoutProps) {
                             }}
                             className={`w-full flex items-center px-4 py-2.5 text-sm font-medium transition-colors ${
                               location.pathname === item.path
-                                ? 'bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/10 dark:text-emerald-300'
-                                : 'text-slate-600 hover:bg-white/45 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-white/[0.06] dark:hover:text-white'
+                                ? 'vm-glass-nav-item-active'
+                                : 'vm-glass-nav-item'
                             }`}
                           >
                             <item.icon className="w-4 h-4 mr-3" />
@@ -177,7 +177,7 @@ export function Layout({ children }: LayoutProps) {
               <button
                 type="button"
                 onClick={toggleTheme}
-                className="rounded-lg p-2 text-slate-600 transition-colors hover:bg-white/45 hover:text-slate-900 active:bg-white/60 dark:text-slate-300 dark:hover:bg-white/[0.06] dark:hover:text-white"
+                className="vm-glass-nav-item rounded-lg p-2"
                 aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
                 title={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
               >
@@ -185,7 +185,7 @@ export function Layout({ children }: LayoutProps) {
               </button>
               <button
                 onClick={handleSignOut}
-                className="flex items-center rounded-lg px-2 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-white/45 hover:text-slate-900 active:bg-white/60 dark:text-slate-300 dark:hover:bg-white/[0.06] dark:hover:text-white sm:px-3 sm:py-2"
+                className="vm-glass-nav-item flex items-center rounded-lg px-2 py-1.5 text-sm font-medium sm:px-3 sm:py-2"
                 aria-label="Sair"
               >
                 <LogOut className="w-4 h-4 sm:mr-1.5" />
@@ -209,8 +209,8 @@ export function Layout({ children }: LayoutProps) {
                   onClick={() => handleNavigate(item.path)}
                   className={`w-full flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors active:scale-95 ${
                     location.pathname === item.path
-                      ? 'bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/10 dark:text-emerald-300'
-                      : 'text-slate-600 hover:bg-white/45 hover:text-slate-900 active:bg-white/60 dark:text-slate-300 dark:hover:bg-white/[0.06] dark:hover:text-white dark:active:bg-white/[0.09]'
+                      ? 'vm-glass-nav-item-active'
+                      : 'vm-glass-nav-item'
                   }`}
                 >
                   <item.icon className="w-5 h-5 mr-3 flex-shrink-0" />
@@ -227,8 +227,8 @@ export function Layout({ children }: LayoutProps) {
                     onClick={() => setMobileConfigOpen((open) => !open)}
                     className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors active:scale-95 ${
                       isConfigActive
-                        ? 'bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/10 dark:text-emerald-300'
-                        : 'text-slate-600 hover:bg-white/45 hover:text-slate-900 active:bg-white/60 dark:text-slate-300 dark:hover:bg-white/[0.06] dark:hover:text-white dark:active:bg-white/[0.09]'
+                        ? 'vm-glass-nav-item-active'
+                        : 'vm-glass-nav-item'
                     }`}
                   >
                     <div className="flex items-center">
@@ -250,8 +250,8 @@ export function Layout({ children }: LayoutProps) {
                           onClick={() => handleNavigate(item.path)}
                           className={`w-full flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors active:scale-95 ${
                             location.pathname === item.path
-                              ? 'bg-emerald-500/10 text-emerald-700 ring-1 ring-emerald-500/10 dark:text-emerald-300'
-                              : 'text-slate-600 hover:bg-white/45 hover:text-slate-900 active:bg-white/60 dark:text-slate-300 dark:hover:bg-white/[0.06] dark:hover:text-white dark:active:bg-white/[0.09]'
+                              ? 'vm-glass-nav-item-active'
+                              : 'vm-glass-nav-item'
                           }`}
                         >
                           <item.icon className="w-4 h-4 mr-3 flex-shrink-0" />
