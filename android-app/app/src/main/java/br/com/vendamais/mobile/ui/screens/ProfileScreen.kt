@@ -83,9 +83,9 @@ fun ProfileScreen(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.78f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
-            shadowElevation = 5.dp,
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.68f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)),
+            shadowElevation = 9.dp,
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
