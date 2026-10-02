@@ -105,10 +105,19 @@ export function Layout({ children }: LayoutProps) {
                   <Menu className="w-5 h-5" />
                 )}
               </button>
-              <div className="flex items-center">
-                <span className="inline-flex rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,.3)]"><Briefcase className="h-5 w-5 text-emerald-600 dark:text-emerald-400 sm:h-6 sm:w-6" /></span>
-                <span className="vm-page-title ml-1.5 text-base font-bold tracking-[-0.02em] sm:ml-2 sm:text-xl">Venda+</span>
-              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/dashboard')}
+                className="group flex items-center rounded-xl px-1 py-0.5 transition hover:bg-white/30 dark:hover:bg-white/[0.04]"
+                aria-label="Ir para o Dashboard"
+              >
+                <img
+                  src="/venda-plus-logo.webp"
+                  alt="Venda+"
+                  className="h-10 w-10 rounded-xl object-contain drop-shadow-[0_6px_12px_rgba(5,150,105,.18)] sm:h-11 sm:w-11"
+                />
+                <span className="vm-page-title ml-2 hidden text-lg font-bold tracking-[-0.03em] xl:inline">Venda+</span>
+              </button>
               <div className="hidden md:flex space-x-1">
                 {mainMenuItems.map((item) => item.show && (
                   <button
