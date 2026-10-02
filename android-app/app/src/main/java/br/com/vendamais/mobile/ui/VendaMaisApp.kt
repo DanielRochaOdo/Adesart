@@ -541,9 +541,9 @@ private fun AppHeaderBar(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding(),
-        shadowElevation = 0.dp,
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shadowElevation = 6.dp,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.78f)),
     ) {
         Row(
             modifier = Modifier
@@ -598,9 +598,9 @@ private fun MagicBottomNavigationBar(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding(),
-        shadowElevation = 0.dp,
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shadowElevation = 8.dp,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.78f)),
     ) {
         Row(
             modifier = Modifier
@@ -632,7 +632,9 @@ private fun MagicBottomNavigationBar(
                     Surface(
                         modifier = Modifier.size(width = 44.dp, height = 32.dp),
                         shape = RoundedCornerShape(16.dp),
-                        color = if (selected) EmeraldSoft else Color.Transparent,
+                        color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.80f) else Color.Transparent,
+                        border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)) else null,
+                        shadowElevation = if (selected) 2.dp else 0.dp,
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
@@ -668,7 +670,11 @@ private fun NavigationGroupSheet(
     onDismiss: () -> Unit,
     onSelect: (AppNavModule) -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        tonalElevation = 6.dp,
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -685,10 +691,12 @@ private fun NavigationGroupSheet(
                 Surface(
                     onClick = { onSelect(module) },
                     shape = RoundedCornerShape(14.dp),
-                    color = if (selected) EmeraldSoft else MaterialTheme.colorScheme.surface,
+                    color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.78f)
+                    else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.84f),
                     border = BorderStroke(
                         width = 1.dp,
-                        color = if (selected) Emerald.copy(alpha = 0.35f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+                        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.42f),
                     ),
                 ) {
                     Column {
