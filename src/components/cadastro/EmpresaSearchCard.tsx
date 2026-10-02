@@ -230,15 +230,15 @@ export function EmpresaSearchCard({ onEmpresaSelected, selectedEmpresa }: Empres
         />
       )}
 
-      <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6" style={{ display: selectedEmpresa ? 'block' : 'none' }}>
+      <div className="vm-cadastro-card rounded-2xl p-4 sm:rounded-3xl sm:p-6" style={{ display: selectedEmpresa ? 'block' : 'none' }}>
         <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
           <div className="flex-1 w-full">
             <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-              <div className="p-2 sm:p-3 bg-emerald-50 rounded-lg">
+              <div className="vm-dashboard-icon rounded-xl bg-emerald-500/10 p-2 text-emerald-700 dark:text-emerald-300 sm:p-3">
                 <Building2 className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
               </div>
               <div>
-                <h3 className="text-base sm:text-lg font-semibold text-slate-800">Empresa Selecionada</h3>
+                <h3 className="vm-page-title text-base font-semibold sm:text-lg">Empresa Selecionada</h3>
                 <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1">
                   <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600" />
                   <span className="text-xs sm:text-sm text-emerald-600 font-medium">Confirmado</span>
@@ -250,20 +250,20 @@ export function EmpresaSearchCard({ onEmpresaSelected, selectedEmpresa }: Empres
               <>
                 <div className="space-y-1.5 sm:space-y-2 text-xs sm:text-sm">
                   <div className="flex flex-col sm:flex-row">
-                    <span className="font-medium text-slate-700 sm:w-32 mb-0.5 sm:mb-0">Razão Social:</span>
-                    <span className="text-slate-600">{selectedEmpresa.razaoSocial}</span>
+                    <span className="vm-muted-text mb-0.5 font-semibold sm:mb-0 sm:w-32">Razão Social:</span>
+                    <span className="vm-muted-text">{selectedEmpresa.razaoSocial}</span>
                   </div>
                   <div className="flex flex-col sm:flex-row">
-                    <span className="font-medium text-slate-700 sm:w-32 mb-0.5 sm:mb-0">Nome Fantasia:</span>
-                    <span className="text-slate-600">{selectedEmpresa.nomeFantasia}</span>
+                    <span className="vm-muted-text mb-0.5 font-semibold sm:mb-0 sm:w-32">Nome Fantasia:</span>
+                    <span className="vm-muted-text">{selectedEmpresa.nomeFantasia}</span>
                   </div>
                   <div className="flex flex-col sm:flex-row">
-                    <span className="font-medium text-slate-700 sm:w-32 mb-0.5 sm:mb-0">CNPJ:</span>
-                    <span className="text-slate-600">{formatCNPJ(selectedEmpresa.cnpj)}</span>
+                    <span className="vm-muted-text mb-0.5 font-semibold sm:mb-0 sm:w-32">CNPJ:</span>
+                    <span className="vm-muted-text">{formatCNPJ(selectedEmpresa.cnpj)}</span>
                   </div>
                   <div className="flex flex-col sm:flex-row">
-                    <span className="font-medium text-slate-700 sm:w-32 mb-0.5 sm:mb-0">Planos:</span>
-                    <span className="text-slate-600">{selectedEmpresa.precoPlano.length} disponíveis</span>
+                    <span className="vm-muted-text mb-0.5 font-semibold sm:mb-0 sm:w-32">Planos:</span>
+                    <span className="vm-muted-text">{selectedEmpresa.precoPlano.length} disponíveis</span>
                   </div>
                   {selectedEmpresa.exigeMatricula === 1 && (
                     <div className="flex flex-col sm:flex-row">
@@ -273,8 +273,8 @@ export function EmpresaSearchCard({ onEmpresaSelected, selectedEmpresa }: Empres
                   )}
                 </div>
 
-                <div className="mt-4 pt-4 border-t border-slate-200">
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <div className="mt-4 border-t border-slate-200/70 pt-4 dark:border-white/10">
+                  <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3">
                     <p className="text-sm font-semibold text-red-700 mb-1">Observações:</p>
                     {selectedEmpresa.observacoes && selectedEmpresa.observacoes.trim() !== '' ? (
                       <p className="text-sm text-red-700 whitespace-pre-wrap">{selectedEmpresa.observacoes}</p>
@@ -297,14 +297,14 @@ export function EmpresaSearchCard({ onEmpresaSelected, selectedEmpresa }: Empres
         </div>
       </div>
 
-      <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-slate-200 p-4 sm:p-6" style={{ display: selectedEmpresa ? 'none' : 'block' }}>
+      <div className="vm-cadastro-card rounded-2xl p-4 sm:rounded-3xl sm:p-6" style={{ display: selectedEmpresa ? 'none' : 'block' }}>
         <div className="flex items-start gap-2 sm:gap-3 mb-4 sm:mb-6">
-          <div className="p-2 sm:p-3 bg-blue-50 rounded-lg flex-shrink-0">
+          <div className="vm-dashboard-icon flex-shrink-0 rounded-xl bg-blue-500/10 p-2 text-blue-700 dark:text-blue-300 sm:p-3">
             <Building2 className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
           </div>
           <div>
-            <h3 className="text-base sm:text-lg font-semibold text-slate-800">Buscar Empresa</h3>
-            <p className="text-xs sm:text-sm text-slate-600 mt-0.5 sm:mt-1">
+            <h3 className="vm-page-title text-base font-semibold sm:text-lg">Buscar Empresa</h3>
+            <p className="vm-muted-text mt-0.5 text-xs sm:mt-1 sm:text-sm">
               Busque por CNPJ, Nome ou Código da empresa
             </p>
           </div>
@@ -313,14 +313,14 @@ export function EmpresaSearchCard({ onEmpresaSelected, selectedEmpresa }: Empres
         <div className="space-y-3 sm:space-y-4">
           <div className="flex flex-col gap-2 sm:gap-3">
             <div className="w-full sm:w-48">
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              <label className="vm-muted-text mb-1.5 block text-sm font-semibold">
                 Buscar por
               </label>
               <select
                 value={searchType}
                 onChange={handleSearchTypeChange}
                 disabled={loading}
-                className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-500"
+                className="vm-glass-field w-full rounded-xl border px-3 py-2 text-sm outline-none disabled:opacity-60"
               >
                 <option value="cnpj">CNPJ</option>
                 <option value="nome">Nome da Empresa</option>
@@ -363,25 +363,25 @@ export function EmpresaSearchCard({ onEmpresaSelected, selectedEmpresa }: Empres
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 sm:px-4 sm:py-3 rounded-lg text-xs sm:text-sm">
+            <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300 sm:px-4 sm:py-3 sm:text-sm">
               {error}
             </div>
           )}
 
           {empresas.length > 1 && (
             <div className="space-y-2">
-              <p className="text-xs sm:text-sm font-medium text-slate-700">
+              <p className="vm-muted-text text-xs font-semibold sm:text-sm">
                 {empresas.length} empresas encontradas. Selecione uma:
               </p>
               {empresas.map((empresa) => (
                 <button
                   key={empresa.id}
                   onClick={() => handleSelectEmpresa(empresa)}
-                  className="w-full text-left p-3 sm:p-4 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 rounded-lg border border-slate-200 transition-colors"
+                  className="vm-cadastro-result w-full rounded-2xl p-3 text-left sm:p-4"
                 >
-                  <div className="font-medium text-slate-800 text-sm sm:text-base">{empresa.nomeFantasia}</div>
-                  <div className="text-xs sm:text-sm text-slate-600 mt-1">{empresa.razaoSocial}</div>
-                  <div className="text-xs text-slate-500 mt-1">CNPJ: {formatCNPJ(empresa.cnpj)}</div>
+                  <div className="vm-page-title text-sm font-semibold sm:text-base">{empresa.nomeFantasia}</div>
+                  <div className="vm-muted-text mt-1 text-xs sm:text-sm">{empresa.razaoSocial}</div>
+                  <div className="vm-meta-text mt-1 text-xs">CNPJ: {formatCNPJ(empresa.cnpj)}</div>
                 </button>
               ))}
             </div>
