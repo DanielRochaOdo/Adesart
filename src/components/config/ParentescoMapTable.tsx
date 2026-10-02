@@ -77,7 +77,7 @@ export function ParentescoMapTable() {
   return (
     <div className="space-y-3 sm:space-y-4">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 sm:px-4 sm:py-3 rounded-lg text-xs sm:text-sm">
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs text-red-700 dark:text-red-300 sm:px-4 sm:py-3 sm:text-sm">
           {error}
         </div>
       )}
@@ -90,8 +90,8 @@ export function ParentescoMapTable() {
       )}
 
       {(isCreating || editingId) && (
-        <div className="bg-slate-50 p-3 sm:p-4 rounded-lg border border-slate-200 space-y-3 sm:space-y-4">
-          <h3 className="font-semibold text-slate-800 text-sm sm:text-base">
+        <div className="vm-settings-card space-y-3 rounded-2xl p-3 sm:space-y-4 sm:p-4">
+          <h3 className="vm-page-title text-sm font-semibold sm:text-base">
             {editingId ? 'Editar Parentesco' : 'Novo Parentesco'}
           </h3>
 
@@ -136,10 +136,10 @@ export function ParentescoMapTable() {
         </div>
       )}
 
-      <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="vm-settings-table-shell overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[480px]">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="vm-settings-table-head border-b">
               <tr>
                 <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-600 uppercase">ID</th>
                 <th className="px-3 sm:px-4 py-2 sm:py-3 text-left text-xs font-medium text-slate-600 uppercase">Label</th>
@@ -156,9 +156,9 @@ export function ParentescoMapTable() {
                 </tr>
               ) : (
                 parentescos.map((parentesco) => (
-                  <tr key={parentesco.id} className="hover:bg-slate-50">
-                    <td className="px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium text-slate-800">{parentesco.parentesco_id}</td>
-                    <td className="px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-slate-800">{parentesco.label}</td>
+                  <tr key={parentesco.id} className="vm-settings-row">
+                    <td className="vm-page-title px-3 py-2 text-xs font-semibold sm:px-4 sm:py-3 sm:text-sm">{parentesco.parentesco_id}</td>
+                    <td className="vm-muted-text px-3 py-2 text-xs sm:px-4 sm:py-3 sm:text-sm">{parentesco.label}</td>
                     <td className="px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm">
                       <span className={`inline-flex items-center px-2 py-0.5 sm:py-1 rounded text-xs font-medium ${
                         parentesco.ativo ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-600'
@@ -171,7 +171,7 @@ export function ParentescoMapTable() {
                         <div className="flex items-center justify-end gap-1 sm:gap-2">
                           <button
                             onClick={() => handleEdit(parentesco)}
-                            className="p-1.5 sm:p-2 text-blue-600 hover:bg-blue-50 active:bg-blue-100 rounded-lg transition-colors"
+                            className="vm-user-action rounded-lg text-blue-600 hover:border-blue-500/20 hover:bg-blue-500/10 dark:text-blue-300"
                             aria-label="Editar"
                           >
                             <Edit2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -179,7 +179,7 @@ export function ParentescoMapTable() {
                           {canDelete && (
                             <button
                               onClick={() => handleDelete(parentesco.id)}
-                              className="p-1.5 sm:p-2 text-red-600 hover:bg-red-50 active:bg-red-100 rounded-lg transition-colors"
+                              className="vm-user-action rounded-lg text-red-600 hover:border-red-500/20 hover:bg-red-500/10 dark:text-red-300"
                               aria-label="Excluir"
                             >
                               <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
