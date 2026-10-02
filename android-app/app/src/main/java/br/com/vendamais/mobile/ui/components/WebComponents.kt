@@ -119,22 +119,14 @@ fun WebCard(
                 spotColor = if (dark) Color.Black.copy(alpha = 0.42f) else Color(0xFF0F172A).copy(alpha = 0.10f),
             )
             .background(surfaceBrush, shape)
+            .background(glowBrush, shape)
+            .background(specularBrush, shape)
             .border(
                 1.dp,
                 if (dark) Color.White.copy(alpha = 0.13f) else Color.White.copy(alpha = 0.62f),
                 shape,
             ),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(glowBrush, shape),
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(specularBrush, shape),
-        )
         Column {
             if (title != null) {
                 Column {
@@ -196,22 +188,14 @@ fun ScreenHeading(
                 spotColor = if (dark) Color.Black.copy(alpha = 0.42f) else Color(0xFF0F172A).copy(alpha = 0.10f),
             )
             .background(heroBrush, shape)
+            .background(heroGlow, shape)
+            .background(heroSpecular, shape)
             .border(
                 1.dp,
                 if (dark) Color.White.copy(alpha = 0.13f) else Color.White.copy(alpha = 0.66f),
                 shape,
             ),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(heroGlow, shape),
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(heroSpecular, shape),
-        )
         Column(
             modifier = Modifier.padding(horizontal = VendaSpacing.x5, vertical = VendaSpacing.x5),
             verticalArrangement = Arrangement.spacedBy(VendaSpacing.x1),
