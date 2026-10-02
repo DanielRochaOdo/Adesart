@@ -702,15 +702,29 @@ function GraficoEvolucao({ registros, inicio, fimExclusivo }: {
   if (!registros.some((c) => c.tipo_cadastro === 'cadastro')) {
     return <div className="flex h-52 items-center justify-center text-sm text-slate-500">Sem cadastros no período selecionado.</div>;
   }
-  return <div>
-    <div className="mb-2 flex justify-end gap-4 text-xs text-slate-600">
-      <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-blue-500" />Iniciados</span>
-      <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500" />Enviados ao ERP</span>
+  return <div className="vm-chart-well p-3">
+    <div className="vm-muted-text mb-2 flex justify-end gap-4 text-xs">
+      <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-blue-500 shadow-sm" />Iniciados</span>
+      <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500 shadow-sm" />Enviados ao ERP</span>
     </div>
     <svg viewBox="0 0 715 208" role="img" aria-label="Cadastros criados em cada dia ou grupo de dias do período, separados pelo status atual" className="h-56 w-full">
       {[0, 1, 2, 3, 4].map((parte) => <g key={parte}>
-        <line x1="38" y1={176 - parte * 37.5} x2="685" y2={176 - parte * 37.5} stroke="#e2e8f0" />
-        <text x="29" y={180 - parte * 37.5} textAnchor="end" fill="#64748b" fontSize="11">
+        <line
+          x1="38"
+          y1={176 - parte * 37.5}
+          x2="685"
+          y2={176 - parte * 37.5}
+          stroke="currentColor"
+          className="text-slate-300 dark:text-slate-700"
+        />
+        <text
+          x="29"
+          y={180 - parte * 37.5}
+          textAnchor="end"
+          fill="currentColor"
+          fontSize="11"
+          className="text-slate-500 dark:text-slate-400"
+        >
           {inteiro(Math.round(maior * parte / 4))}
         </text>
       </g>)}
@@ -720,12 +734,20 @@ function GraficoEvolucao({ registros, inicio, fimExclusivo }: {
       <path d={linha('enviados')} fill="none" stroke="#16a34a" strokeWidth="2.7" strokeLinejoin="round" />
       {pontos.filter((_, indice) => indice % Math.max(1, Math.ceil(pontos.length / 7)) === 0).map((p) => {
         const indice = pontos.indexOf(p);
-        return <text key={p.dia} x={x(indice)} y="199" textAnchor="middle" fill="#64748b" fontSize="11">
+        return <text
+          key={p.dia}
+          x={x(indice)}
+          y="199"
+          textAnchor="middle"
+          fill="currentColor"
+          fontSize="11"
+          className="text-slate-500 dark:text-slate-400"
+        >
           {p.dia.slice(8, 10) + '/' + p.dia.slice(5, 7)}
         </text>;
       })}
     </svg>
-    <p className="text-xs text-slate-500">Por data de criação; a linha verde mostra a situação atual dos cadastros criados em cada data.</p>
+    <p className="vm-meta-text text-xs">Por data de criação; a linha verde mostra a situação atual dos cadastros criados em cada data.</p>
   </div>;
 }
 
