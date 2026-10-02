@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -638,240 +638,252 @@ export function ErrosUploadERP() {
           </label>
         </div>
 
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="space-y-3">
           {loading ? (
-            <div className="flex min-h-64 items-center justify-center">
+            <div className="flex min-h-64 items-center justify-center rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
               <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
             </div>
           ) : response.items.length === 0 ? (
-            <div className="flex min-h-64 flex-col items-center justify-center gap-3 p-8 text-center">
+            <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900">
               <CheckCircle2 className="h-10 w-10 text-emerald-500" />
               <div>
-                <p className="font-semibold text-slate-800">Nenhuma falha encontrada</p>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="font-semibold text-slate-800 dark:text-slate-100">Nenhuma falha encontrada</p>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                   Não há registros para os filtros selecionados.
                 </p>
               </div>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1540px] text-left text-sm">
-                <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500 dark:bg-slate-950/60 dark:text-slate-400">
-                  <tr>
-                    <th className="px-3 py-3">Data</th>
-                    <th className="px-3 py-3">Cliente</th>
-                    <th className="px-3 py-3">Empresa</th>
-                    <th className="px-3 py-3">Vendedor</th>
-                    <th className="px-3 py-3">Adesionista</th>
-                    <th className="px-3 py-3">Arquivo</th>
-                    <th className="px-3 py-3">Dependente destino</th>
-                    <th className="px-3 py-3">Causa</th>
-                    <th className="px-3 py-3 text-center">Tentativas</th>
-                    <th className="px-3 py-3">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedItems.map((item) => (
-                    <Fragment key={item.id}>
-                      <tr className="border-t border-slate-100 align-top dark:border-slate-800">
-                        <td className="whitespace-nowrap px-3 py-3 text-xs text-slate-600 dark:text-slate-300">
-                          {formatDateTime(item.created_at)}
-                          {item.is_legacy_failure && (
-                            <div className="mt-1 text-[11px] font-medium text-slate-400">
-                              Passivo histórico
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="max-w-44 font-semibold text-slate-800 dark:text-slate-100">
-                            {item.cliente_nome || 'Não informado'}
-                          </div>
-                          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            {item.cliente_cpf ? formatCPF(item.cliente_cpf) : '—'}
-                          </div>
-                        </td>
-                        <td className="max-w-36 px-3 py-3 text-sm text-slate-600 dark:text-slate-300">
-                          {item.empresa_nome || '—'}
-                        </td>
-                        <td className="max-w-44 px-3 py-3">
-                          <div className="truncate text-sm text-slate-700 dark:text-slate-200" title={item.vendedor_nome || undefined}>
-                            {item.vendedor_nome || '—'}
-                          </div>
-                        </td>
-                        <td className="max-w-44 px-3 py-3">
-                          <div className="truncate text-sm text-slate-700 dark:text-slate-200" title={item.adesionista_nome || undefined}>
-                            {item.adesionista_nome || '—'}
-                          </div>
-                        </td>
-                        <td className="max-w-64 px-3 py-3">
-                          <div className="flex items-start gap-2">
-                            <FileText className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-                            <div className="min-w-0">
-                              <div className="break-all text-xs font-semibold text-slate-700 dark:text-slate-200">
-                                {item.arquivo_nome || '—'}
-                              </div>
-                              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
-                                <span>{formatBytes(item.file_size_bytes)}</span>
-                                <span>·</span>
-                                <span className={`rounded-full px-1.5 py-0.5 ${
-                                  item.file_exists
-                                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-                                    : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'
-                                }`}>
-                                  {item.file_exists ? 'disponível' : 'arquivo ausente'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="max-w-44 px-3 py-3 text-slate-700 dark:text-slate-200">
-                          <div className="font-medium">{item.target_dependente_nome || '—'}</div>
-                          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            {item.target_dependente_cpf
-                              ? formatCPF(item.target_dependente_cpf)
-                              : `ERP ID ${item.id_dependente || '—'}`}
-                          </div>
-                        </td>
-                        <td className="px-3 py-3">
-                          <span className="inline-flex max-w-40 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-200">
-                            {categoryLabel(item.error_category)}
-                          </span>
-                          {item.error_resolution && (
-                            <div className="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-300">
-                              {item.error_resolution}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-3 py-3 text-center font-semibold tabular-nums text-slate-700 dark:text-slate-200">
-                          {item.attempts}
-                        </td>
-                        <td className="px-3 py-3">
-                          <div className="flex min-w-32 flex-wrap items-center gap-1.5">
-                            {item.can_reconcile && (
-                              <button
-                                type="button"
-                                disabled={busyId === item.id}
-                                onClick={() => handleSync(item)}
-                                title="Sincronizar"
-                                aria-label="Sincronizar este erro"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                              >
-                                <RefreshCw className="h-4 w-4" />
-                              </button>
-                            )}
-                            {item.can_upload_replacement && (
-                              <button
-                                type="button"
-                                disabled={busyId === item.id}
-                                onClick={() => chooseReplacement(item)}
-                                title="Enviar novo arquivo"
-                                aria-label="Enviar novo arquivo"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 text-emerald-600 transition hover:bg-emerald-50 disabled:opacity-40 dark:border-emerald-900/60 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
-                              >
-                                <Upload className="h-4 w-4" />
-                              </button>
-                            )}
-                            {item.can_compress && (
-                              <button
-                                type="button"
-                                disabled={busyId === item.id}
-                                onClick={() => handleCompress(item)}
-                                title="Comprimir e reenviar"
-                                aria-label="Comprimir e reenviar"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-amber-200 text-amber-600 transition hover:bg-amber-50 disabled:opacity-40 dark:border-amber-900/60 dark:text-amber-300 dark:hover:bg-amber-950/30"
-                              >
-                                {busyId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-                              </button>
-                            )}
-                            {item.can_reprocess && (
-                              <button
-                                type="button"
-                                disabled={busyId === item.id}
-                                onClick={() => handleReprocess(item)}
-                                title="Tentar novamente"
-                                aria-label="Tentar novamente"
-                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
-                              >
-                                <RotateCcw className="h-4 w-4" />
-                              </button>
-                            )}
-                            {!item.can_upload_replacement && !item.can_compress && !item.can_reprocess && !item.can_reconcile && (
-                              <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
-                                <FileWarning className="h-3.5 w-3.5" />
-                                Sem ação
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                      <tr className="border-t border-slate-100 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-950/35">
-                        <td colSpan={10} className="px-3 py-2.5">
-                          <div className="grid gap-3 text-xs lg:grid-cols-[1fr_auto_auto] lg:items-center">
-                            <div className="min-w-0">
-                              <div className="mb-0.5 flex items-center gap-2 font-semibold text-slate-600 dark:text-slate-300">
-                                <FileWarning className="h-3.5 w-3.5" />
-                                Detalhe técnico
-                              </div>
-                              <div className="break-words text-slate-500 dark:text-slate-400">
-                                {item.last_error || 'Sem detalhe técnico adicional.'}
-                              </div>
-                            </div>
-                            <div className="border-l border-slate-200 pl-3 dark:border-slate-700">
-                              <div className="text-[10px] uppercase tracking-wide text-slate-400">Código do erro</div>
-                              <div className="mt-0.5 font-mono text-[11px] text-slate-600 dark:text-slate-300">
-                                {[item.last_error_code, item.last_status_code && `HTTP ${item.last_status_code}`]
-                                  .filter(Boolean)
-                                  .join(' · ') || '—'}
-                              </div>
-                            </div>
-                            <div className="border-l border-slate-200 pl-3 dark:border-slate-700">
-                              <div className="text-[10px] uppercase tracking-wide text-slate-400">Última tentativa</div>
-                              <div className="mt-0.5 whitespace-nowrap text-[11px] text-slate-600 dark:text-slate-300">
-                                {formatDateTime(item.last_attempt_at || item.finished_at || item.created_at)}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    </Fragment>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+            <>
+              <div className="hidden rounded-xl border border-slate-200 bg-slate-950/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400 shadow-sm xl:grid xl:grid-cols-[118px_minmax(170px,1.25fr)_105px_minmax(150px,1fr)_minmax(150px,1fr)_135px_72px_92px] xl:gap-3">
+                <div>Data</div>
+                <div>Cliente</div>
+                <div>Empresa</div>
+                <div>Vendedor</div>
+                <div>Adesionista</div>
+                <div>Causa</div>
+                <div className="text-center">Tent.</div>
+                <div className="text-right">Ações</div>
+              </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
-            <p className="text-xs text-slate-500">
-              {response.pagination.total} registro(s) · Página {response.pagination.page} de{' '}
-              {response.pagination.total_pages}
-            </p>
-            <div className="flex gap-2">
-              <Button
-                variant="secondary"
-                disabled={page <= 1 || loading}
-                onClick={() => {
-                  const next = Math.max(1, page - 1);
-                  setPage(next);
-                  loadErrors(next);
-                }}
-              >
-                <ChevronLeft className="h-4 w-4" />
-                Anterior
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={page >= response.pagination.total_pages || loading}
-                onClick={() => {
-                  const next = Math.min(response.pagination.total_pages, page + 1);
-                  setPage(next);
-                  loadErrors(next);
-                }}
-              >
-                Próxima
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+              {sortedItems.map((item) => (
+                <article
+                  key={item.id}
+                  className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"
+                >
+                  <div className="grid gap-3 px-3 py-3 sm:grid-cols-2 xl:grid-cols-[118px_minmax(170px,1.25fr)_105px_minmax(150px,1fr)_minmax(150px,1fr)_135px_72px_92px] xl:items-start">
+                    <div>
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Data</p>
+                      <p className="whitespace-nowrap text-xs font-medium text-slate-700 dark:text-slate-200">
+                        {formatDateTime(item.created_at)}
+                      </p>
+                      {item.is_legacy_failure && (
+                        <p className="mt-1 text-[10px] font-medium text-slate-400">Passivo histórico</p>
+                      )}
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Cliente</p>
+                      <p className="break-words text-sm font-semibold leading-tight text-slate-800 dark:text-slate-100">
+                        {item.cliente_nome || 'Não informado'}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        {item.cliente_cpf ? formatCPF(item.cliente_cpf) : '—'}
+                      </p>
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Empresa</p>
+                      <p className="break-words text-sm text-slate-700 dark:text-slate-200">
+                        {item.empresa_nome || '—'}
+                      </p>
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Vendedor</p>
+                      <p className="break-words text-sm text-slate-700 dark:text-slate-200">
+                        {item.vendedor_nome || '—'}
+                      </p>
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Adesionista</p>
+                      <p className="break-words text-sm text-slate-700 dark:text-slate-200">
+                        {item.adesionista_nome || '—'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Causa</p>
+                      <span className="inline-flex max-w-full rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-semibold leading-tight text-red-700 dark:bg-red-950/60 dark:text-red-200">
+                        {categoryLabel(item.error_category)}
+                      </span>
+                      {item.error_resolution && (
+                        <p className="mt-1.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-300">
+                          {item.error_resolution}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="text-left xl:text-center">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Tentativas</p>
+                      <p className="text-sm font-bold tabular-nums text-slate-800 dark:text-slate-100">
+                        {item.attempts}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Ações</p>
+                      <div className="flex flex-wrap items-center gap-1.5 xl:justify-end">
+                        {item.can_reconcile && (
+                          <button
+                            type="button"
+                            disabled={busyId === item.id}
+                            onClick={() => handleSync(item)}
+                            title="Sincronizar"
+                            aria-label="Sincronizar este erro"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                          >
+                            <RefreshCw className="h-4 w-4" />
+                          </button>
+                        )}
+                        {item.can_upload_replacement && (
+                          <button
+                            type="button"
+                            disabled={busyId === item.id}
+                            onClick={() => chooseReplacement(item)}
+                            title="Enviar novo arquivo"
+                            aria-label="Enviar novo arquivo"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 text-emerald-600 transition hover:bg-emerald-50 disabled:opacity-40 dark:border-emerald-900/60 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+                          >
+                            <Upload className="h-4 w-4" />
+                          </button>
+                        )}
+                        {item.can_compress && (
+                          <button
+                            type="button"
+                            disabled={busyId === item.id}
+                            onClick={() => handleCompress(item)}
+                            title="Comprimir e reenviar"
+                            aria-label="Comprimir e reenviar"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-amber-200 text-amber-600 transition hover:bg-amber-50 disabled:opacity-40 dark:border-amber-900/60 dark:text-amber-300 dark:hover:bg-amber-950/30"
+                          >
+                            {busyId === item.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Wand2 className="h-4 w-4" />
+                            )}
+                          </button>
+                        )}
+                        {item.can_reprocess && (
+                          <button
+                            type="button"
+                            disabled={busyId === item.id}
+                            onClick={() => handleReprocess(item)}
+                            title="Tentar novamente"
+                            aria-label="Tentar novamente"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                          >
+                            <RotateCcw className="h-4 w-4" />
+                          </button>
+                        )}
+                        {!item.can_upload_replacement &&
+                          !item.can_compress &&
+                          !item.can_reprocess &&
+                          !item.can_reconcile && (
+                            <span className="text-[11px] text-slate-400">Sem ação</span>
+                          )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 border-t border-slate-200 bg-slate-50/70 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-950/40 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1.6fr)]">
+                    <div className="min-w-0">
+                      <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                        <FileText className="h-3.5 w-3.5" />
+                        Arquivo
+                      </div>
+                      <p className="break-all text-xs font-semibold text-slate-700 dark:text-slate-200">
+                        {item.arquivo_nome || '—'}
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                        <span>{formatBytes(item.file_size_bytes)}</span>
+                        <span>·</span>
+                        <span>{item.file_exists ? 'arquivo disponível' : 'arquivo ausente'}</span>
+                      </div>
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                        Dependente destino
+                      </div>
+                      <p className="break-words text-xs font-semibold text-slate-700 dark:text-slate-200">
+                        {item.target_dependente_nome || '—'}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                        {item.target_dependente_cpf
+                          ? formatCPF(item.target_dependente_cpf)
+                          : `ERP ID ${item.id_dependente || '—'}`}
+                      </p>
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                        <FileWarning className="h-3.5 w-3.5" />
+                        Detalhe técnico
+                      </div>
+                      <p className="break-words text-xs text-slate-600 dark:text-slate-300">
+                        {item.last_error || 'Sem detalhe técnico adicional.'}
+                      </p>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10px] text-slate-500 dark:text-slate-400">
+                        <span>
+                          {[item.last_error_code, item.last_status_code && `HTTP ${item.last_status_code}`]
+                            .filter(Boolean)
+                            .join(' · ') || '—'}
+                        </span>
+                        <span>
+                          Última tentativa: {formatDateTime(item.last_attempt_at || item.finished_at || item.created_at)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              ))}
+
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {response.pagination.total} registro(s) · Página {response.pagination.page} de{' '}
+                  {response.pagination.total_pages}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="secondary"
+                    disabled={page <= 1 || loading}
+                    onClick={() => {
+                      const next = Math.max(1, page - 1);
+                      setPage(next);
+                      loadErrors(next);
+                    }}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Anterior
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    disabled={page >= response.pagination.total_pages || loading}
+                    onClick={() => {
+                      const next = Math.min(response.pagination.total_pages, page + 1);
+                      setPage(next);
+                      loadErrors(next);
+                    }}
+                  >
+                    Próxima
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         {scope === 'historical' && (
