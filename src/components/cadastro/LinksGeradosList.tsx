@@ -173,13 +173,13 @@ const countDependentesCadastrados = (dependentes: unknown) => {
 const historyStatusClass = (status: HistoryStatus) => {
   switch (status) {
     case 'Concluiu a adesão':
-      return 'bg-emerald-500/15 text-emerald-800 border-emerald-500/30 dark:bg-emerald-400/15 dark:text-emerald-100 dark:border-emerald-300/25';
+      return 'bg-emerald-500/20 text-emerald-800 border-emerald-500/30 dark:bg-emerald-400/20 dark:text-emerald-100 dark:border-emerald-300/25';
     case 'Chegou ao contrato e não concluiu':
-      return 'bg-amber-400/20 text-amber-900 border-amber-500/35 dark:bg-amber-300/18 dark:text-amber-100 dark:border-amber-300/35';
+      return 'bg-amber-400/20 text-amber-900 border-amber-500/40 dark:bg-amber-300/20 dark:text-amber-100 dark:border-amber-300/35';
     case 'Validou CPF/data e abandonou depois':
-      return 'bg-blue-500/15 text-blue-800 border-blue-500/30 dark:bg-blue-400/15 dark:text-blue-100 dark:border-blue-300/25';
+      return 'bg-blue-500/20 text-blue-800 border-blue-500/30 dark:bg-blue-400/20 dark:text-blue-100 dark:border-blue-300/25';
     case 'Informou CPF e chegou à consulta dos dados':
-      return 'bg-violet-500/15 text-violet-800 border-violet-500/30 dark:bg-violet-400/15 dark:text-violet-100 dark:border-violet-300/25';
+      return 'bg-violet-500/20 text-violet-800 border-violet-500/30 dark:bg-violet-400/20 dark:text-violet-100 dark:border-violet-300/25';
     default:
       return 'bg-slate-500/10 text-slate-700 border-slate-500/25 dark:bg-slate-400/10 dark:text-slate-100 dark:border-slate-300/20';
   }
