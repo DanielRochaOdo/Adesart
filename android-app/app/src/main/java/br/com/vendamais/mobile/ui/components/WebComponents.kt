@@ -34,17 +34,32 @@ fun ScreenBackground(content: @Composable () -> Unit) {
     val backgroundBrush = if (dark) {
         Brush.verticalGradient(
             listOf(
-                Color(0xFF0B1625),
-                MaterialTheme.colorScheme.background,
+                Color(0xFF08111F),
+                Color(0xFF0A1524),
                 Color(0xFF07101D),
             ),
         )
     } else {
         Brush.verticalGradient(
             listOf(
-                Color(0xFFDDEBE4),
-                MaterialTheme.colorScheme.background,
+                Color(0xFFDCE8E2),
+                Color(0xFFE7EEEB),
                 Color(0xFFEAF1ED),
+            ),
+        )
+    }
+    val glowBrush = if (dark) {
+        Brush.radialGradient(
+            colors = listOf(
+                Color(0xFF10B981).copy(alpha = 0.16f),
+                Color.Transparent,
+            ),
+        )
+    } else {
+        Brush.radialGradient(
+            colors = listOf(
+                Color(0xFF10B981).copy(alpha = 0.13f),
+                Color.Transparent,
             ),
         )
     }
@@ -53,6 +68,11 @@ fun ScreenBackground(content: @Composable () -> Unit) {
             .fillMaxSize()
             .background(backgroundBrush),
     ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(glowBrush),
+        )
         content()
     }
 }
@@ -69,53 +89,66 @@ fun WebCard(
     content: @Composable () -> Unit,
 ) {
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val shape = RoundedCornerShape(VendaRadius.lg)
+    val shape = RoundedCornerShape(VendaRadius.xl)
     val surfaceBrush = if (dark) {
         Brush.verticalGradient(
             listOf(
-                MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                MaterialTheme.colorScheme.surface.copy(alpha = 0.76f),
+                Color(0xFF172338).copy(alpha = 0.84f),
+                Color(0xFF0F1A2C).copy(alpha = 0.72f),
             ),
         )
     } else {
         Brush.verticalGradient(
             listOf(
-                Color(0xFFF8FBF9).copy(alpha = 0.96f),
-                MaterialTheme.colorScheme.surface.copy(alpha = 0.84f),
+                Color(0xFFF8FBF9).copy(alpha = 0.90f),
+                Color(0xFFEFF6F2).copy(alpha = 0.76f),
             ),
         )
     }
-    Column(
+    val glowBrush = Brush.radialGradient(
+        colors = listOf(
+            MaterialTheme.colorScheme.primary.copy(alpha = if (dark) 0.10f else 0.09f),
+            Color.Transparent,
+        ),
+    )
+    Box(
         modifier = modifier
             .shadow(
-                elevation = if (dark) 8.dp else 6.dp,
+                elevation = if (dark) 14.dp else 10.dp,
                 shape = shape,
-                ambientColor = if (dark) Color.Black.copy(alpha = 0.35f) else Color(0xFF0F172A).copy(alpha = 0.12f),
-                spotColor = if (dark) Color.Black.copy(alpha = 0.35f) else Color(0xFF0F172A).copy(alpha = 0.10f),
+                ambientColor = if (dark) Color.Black.copy(alpha = 0.38f) else Color(0xFF0F172A).copy(alpha = 0.13f),
+                spotColor = if (dark) Color.Black.copy(alpha = 0.42f) else Color(0xFF0F172A).copy(alpha = 0.10f),
             )
             .background(surfaceBrush, shape)
             .border(
                 1.dp,
-                if (dark) Color.White.copy(alpha = 0.08f) else Color(0xFF334155).copy(alpha = 0.14f),
+                if (dark) Color.White.copy(alpha = 0.09f) else Color(0xFF334155).copy(alpha = 0.14f),
                 shape,
             ),
     ) {
-        if (title != null) {
-            Column {
-                Text(
-                    text = title,
-                    modifier = Modifier.padding(horizontal = VendaSpacing.x4, vertical = VendaSpacing.x3),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f))
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(glowBrush, shape),
+        )
+        Column {
+            if (title != null) {
+                Column {
+                    Text(
+                        text = title,
+                        modifier = Modifier.padding(horizontal = VendaSpacing.x4, vertical = VendaSpacing.x3),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.58f))
+                }
             }
-        }
-        Box(modifier = Modifier.padding(contentPadding)) {
-            content()
+            Box(modifier = Modifier.padding(contentPadding)) {
+                content()
+            }
         }
     }
 }
@@ -128,59 +161,73 @@ fun ScreenHeading(
     eyebrow: String? = null,
 ) {
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val shape = RoundedCornerShape(VendaRadius.xl)
+    val shape = RoundedCornerShape(VendaRadius.xxl)
     val heroBrush = if (dark) {
         Brush.verticalGradient(
             listOf(
-                Color(0xFF14273A).copy(alpha = 0.95f),
-                Color(0xFF0F1A2C).copy(alpha = 0.86f),
+                Color(0xFF183047).copy(alpha = 0.94f),
+                Color(0xFF0F1A2C).copy(alpha = 0.82f),
             ),
         )
     } else {
         Brush.verticalGradient(
             listOf(
-                Color(0xFFE4F3EC).copy(alpha = 0.98f),
-                Color(0xFFF3F8F5).copy(alpha = 0.90f),
+                Color(0xFFE1F2E9).copy(alpha = 0.95f),
+                Color(0xFFF4F8F6).copy(alpha = 0.84f),
             ),
         )
     }
-    Column(
+    val heroGlow = Brush.radialGradient(
+        colors = listOf(
+            MaterialTheme.colorScheme.primary.copy(alpha = if (dark) 0.18f else 0.16f),
+            Color.Transparent,
+        ),
+    )
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .shadow(
-                elevation = if (dark) 8.dp else 7.dp,
+                elevation = if (dark) 15.dp else 11.dp,
                 shape = shape,
-                ambientColor = if (dark) Color.Black.copy(alpha = 0.32f) else Color(0xFF0F172A).copy(alpha = 0.10f),
-                spotColor = if (dark) Color.Black.copy(alpha = 0.32f) else Color(0xFF0F172A).copy(alpha = 0.08f),
+                ambientColor = if (dark) Color.Black.copy(alpha = 0.40f) else Color(0xFF0F172A).copy(alpha = 0.13f),
+                spotColor = if (dark) Color.Black.copy(alpha = 0.42f) else Color(0xFF0F172A).copy(alpha = 0.10f),
             )
             .background(heroBrush, shape)
             .border(
                 1.dp,
-                if (dark) Color.White.copy(alpha = 0.08f) else Color(0xFF059669).copy(alpha = 0.18f),
+                if (dark) Color.White.copy(alpha = 0.09f) else Color(0xFF059669).copy(alpha = 0.20f),
                 shape,
-            )
-            .padding(horizontal = VendaSpacing.x4, vertical = VendaSpacing.x4),
-        verticalArrangement = Arrangement.spacedBy(VendaSpacing.x1),
+            ),
     ) {
-        eyebrow?.takeIf { it.isNotBlank() }?.let {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(heroGlow, shape),
+        )
+        Column(
+            modifier = Modifier.padding(horizontal = VendaSpacing.x5, vertical = VendaSpacing.x5),
+            verticalArrangement = Arrangement.spacedBy(VendaSpacing.x1),
+        ) {
+            eyebrow?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    text = it.uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
             Text(
-                text = it.uppercase(),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary,
+                text = title,
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onBackground,
                 fontWeight = FontWeight.Bold,
             )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
-        Text(
-            text = title,
-            style = MaterialTheme.typography.headlineSmall,
-            color = MaterialTheme.colorScheme.onBackground,
-            fontWeight = FontWeight.Bold,
-        )
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
