@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Layout } from '../components/Layout';
-import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Select } from '../components/Select';
@@ -290,13 +289,13 @@ export function Users() {
   };
 
   const roleBadgeColors: Record<Profile['role'], string> = {
-    ADMINISTRADOR: 'bg-red-500/10 text-red-700 border-red-500/20 dark:text-red-300 dark:border-red-400/15',
-    GERENTE: 'bg-blue-500/10 text-blue-700 border-blue-500/20 dark:text-blue-300 dark:border-blue-400/15',
-    GESTOR: 'bg-indigo-500/10 text-indigo-700 border-indigo-500/20 dark:text-indigo-300 dark:border-indigo-400/15',
-    CADASTRO: 'bg-teal-500/10 text-teal-700 border-teal-500/20 dark:text-teal-300 dark:border-teal-400/15',
-    SUPERVISOR: 'bg-purple-500/10 text-purple-700 border-purple-500/20 dark:text-purple-300 dark:border-purple-400/15',
-    VENDEDOR: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20 dark:text-emerald-300 dark:border-emerald-400/15',
-    ADESIONISTA: 'bg-amber-500/10 text-amber-700 border-amber-500/20 dark:text-amber-300 dark:border-amber-400/15',
+    ADMINISTRADOR: 'bg-red-500/10 text-red-700 border-red-500/20 dark:text-red-300 dark:border-red-400/20',
+    GERENTE: 'bg-blue-500/10 text-blue-700 border-blue-500/20 dark:text-blue-300 dark:border-blue-400/20',
+    GESTOR: 'bg-indigo-500/10 text-indigo-700 border-indigo-500/20 dark:text-indigo-300 dark:border-indigo-400/20',
+    CADASTRO: 'bg-teal-500/10 text-teal-700 border-teal-500/20 dark:text-teal-300 dark:border-teal-400/20',
+    SUPERVISOR: 'bg-purple-500/10 text-purple-700 border-purple-500/20 dark:text-purple-300 dark:border-purple-400/20',
+    VENDEDOR: 'bg-emerald-500/10 text-emerald-700 border-emerald-500/20 dark:text-emerald-300 dark:border-emerald-400/20',
+    ADESIONISTA: 'bg-amber-500/10 text-amber-700 border-amber-500/20 dark:text-amber-300 dark:border-amber-400/20',
   };
 
   const formatAppSeenAt = (dateString: string) => {
@@ -549,11 +548,11 @@ export function Users() {
       <div className="space-y-4 sm:space-y-6">
         <header className="vm-users-hero flex flex-col gap-5 rounded-3xl p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-start gap-4">
-            <div className="vm-dashboard-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/12 text-emerald-700 dark:text-emerald-300">
+            <div className="vm-dashboard-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
               <UsersRound className="h-6 w-6" />
             </div>
             <div className="min-w-0">
-              <div className="mb-2 inline-flex items-center rounded-full border border-emerald-500/15 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">
+              <div className="mb-2 inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">
                 Gestão de acesso
               </div>
               <h1 className="vm-page-title text-2xl font-bold tracking-tight sm:text-3xl">Usuários</h1>
