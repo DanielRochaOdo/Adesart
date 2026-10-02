@@ -1,0 +1,335 @@
+name: Mobile Release
+run-name: Mobile Release ${{ github.ref_name }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: "Versao sem prefixo v, ex.: 1.0.140"
+        required: true
+        type: string
+      version_code:
+        description: "Build numerico, ex.: 140"
+        required: true
+        type: string
+      ios_export_method:
+        description: "Canal de assinatura/exportacao iOS"
+        required: true
+        default: development
+        type: choice
+        options:
+          - development
+          - ad-hoc
+          - app-store-connect
+  push:
+    tags:
+      - "mobile-release-dev-v*"
+      - "mobile-release-adhoc-v*"
+      - "mobile-release-store-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  metadata:
+    name: Release metadata
+    runs-on: ubuntu-latest
+    outputs:
+      version_name: ${{ steps.release.outputs.version_name }}
+      version_code: ${{ steps.release.outputs.version_code }}
+      ios_export_method: ${{ steps.release.outputs.ios_export_method }}
+    steps:
+      - id: release
+        name: Resolve release metadata
+        shell: bash
+        env:
+          INPUT_VERSION_NAME: ${{ inputs.version_name }}
+          INPUT_VERSION_CODE: ${{ inputs.version_code }}
+          INPUT_IOS_EXPORT_METHOD: ${{ inputs.ios_export_method }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            version_name="${INPUT_VERSION_NAME}"
+            version_code="${INPUT_VERSION_CODE}"
+            ios_export_method="${INPUT_IOS_EXPORT_METHOD}"
+          else
+            tag="${GITHUB_REF_NAME}"
+            if [[ ! "${tag}" =~ ^mobile-release-(dev|adhoc|store)-v([0-9]+\.[0-9]+\.[0-9]+)-b([0-9]+)-[0-9]{14}$ ]]; then
+              echo "::error::Tag de release invalida: ${tag}"
+              exit 1
+            fi
+
+            mode="${BASH_REMATCH[1]}"
+            version_name="${BASH_REMATCH[2]}"
+            version_code="${BASH_REMATCH[3]}"
+
+            case "${mode}" in
+              dev) ios_export_method="development" ;;
+              adhoc) ios_export_method="ad-hoc" ;;
+              store) ios_export_method="app-store-connect" ;;
+              *) exit 1 ;;
+            esac
+          fi
+
+          if [[ ! "${version_name}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::version_name invalida: ${version_name}"
+            exit 1
+          fi
+          if [[ ! "${version_code}" =~ ^[0-9]+$ ]]; then
+            echo "::error::version_code invalida: ${version_code}"
+            exit 1
+          fi
+
+          echo "version_name=${version_name}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${version_code}" >> "$GITHUB_OUTPUT"
+          echo "ios_export_method=${ios_export_method}" >> "$GITHUB_OUTPUT"
+
+  android:
+    name: APK + AAB
+    needs: metadata
+    runs-on: ubuntu-latest
+    env:
+      VENDA_VERSION_NAME: ${{ needs.metadata.outputs.version_name }}
+      VENDA_VERSION_CODE: ${{ needs.metadata.outputs.version_code }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Validate Android release secrets
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD SUPABASE_URL SUPABASE_ANON_KEY; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::GitHub Secret ausente: ${name}"
+              missing=1
+            fi
+          done
+          exit "${missing}"
+
+      - name: Prepare Android signing and configuration
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          PUBLIC_APP_URL: ${{ vars.PUBLIC_APP_URL }}
+        run: |
+          set -euo pipefail
+          mkdir -p android-app/keystore
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android-app/keystore/ci-release.jks
+
+          public_app_url="${PUBLIC_APP_URL:-https://vendamais.odontoart.com}"
+          cat > android-app/local.properties <<EOF
+          supabaseUrl=${SUPABASE_URL}
+          supabaseAnonKey=${SUPABASE_ANON_KEY}
+          publicAppUrl=${public_app_url}
+          releaseStoreFile=keystore/ci-release.jks
+          releaseStorePassword=${ANDROID_KEYSTORE_PASSWORD}
+          releaseKeyAlias=${ANDROID_KEY_ALIAS}
+          releaseKeyPassword=${ANDROID_KEY_PASSWORD}
+          EOF
+
+      - name: Build signed APK and AAB
+        working-directory: android-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon :app:renameReleaseApk :app:renameReleaseBundle
+          test -f "app/build/outputs/release-artifacts/vendamais-mobile-v${VENDA_VERSION_NAME}.apk"
+          test -f "app/build/outputs/release-artifacts/vendamais-mobile-v${VENDA_VERSION_NAME}.aab"
+
+      - name: Upload Android release
+        uses: actions/upload-artifact@v4
+        with:
+          name: vendamais-android-v${{ needs.metadata.outputs.version_name }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            android-app/app/build/outputs/release-artifacts/vendamais-mobile-v${{ needs.metadata.outputs.version_name }}.apk
+            android-app/app/build/outputs/release-artifacts/vendamais-mobile-v${{ needs.metadata.outputs.version_name }}.aab
+
+  ios:
+    name: IPA
+    needs: metadata
+    runs-on: macos-latest
+    env:
+      VENDA_VERSION_NAME: ${{ needs.metadata.outputs.version_name }}
+      VENDA_VERSION_CODE: ${{ needs.metadata.outputs.version_code }}
+      IOS_EXPORT_METHOD: ${{ needs.metadata.outputs.ios_export_method }}
+      IOS_BUNDLE_ID: br.com.vendamais.mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Validate iOS signing secrets
+        shell: bash
+        env:
+          IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in IOS_CERTIFICATE_P12_BASE64 IOS_CERTIFICATE_PASSWORD IOS_PROVISIONING_PROFILE_BASE64 IOS_TEAM_ID; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::GitHub Secret ausente: ${name}"
+              missing=1
+            fi
+          done
+          exit "${missing}"
+
+      - name: Install Apple certificate and provisioning profile
+        id: signing
+        shell: bash
+        env:
+          IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          cert_path="$RUNNER_TEMP/vendamais-cert.p12"
+          profile_path="$RUNNER_TEMP/vendamais.mobileprovision"
+          profile_plist="$RUNNER_TEMP/profile.plist"
+          keychain_path="$RUNNER_TEMP/vendamais-build.keychain-db"
+          keychain_password="$(openssl rand -hex 24)"
+
+          printf '%s' "$IOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$cert_path"
+          printf '%s' "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$profile_path"
+
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$cert_path" -k "$keychain_path" -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain_path"
+          security list-keychains -d user -s "$keychain_path" login.keychain-db
+
+          security cms -D -i "$profile_path" > "$profile_plist"
+          profile_uuid=$(/usr/libexec/PlistBuddy -c "Print :UUID" "$profile_plist")
+          profile_name=$(/usr/libexec/PlistBuddy -c "Print :Name" "$profile_plist")
+          profile_team=$(/usr/libexec/PlistBuddy -c "Print :TeamIdentifier:0" "$profile_plist")
+
+          if [[ "$profile_team" != "$IOS_TEAM_ID" ]]; then
+            echo "::error::IOS_TEAM_ID nao corresponde ao provisioning profile."
+            exit 1
+          fi
+
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$profile_path" "$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.mobileprovision"
+
+          echo "profile_name=$profile_name" >> "$GITHUB_OUTPUT"
+          echo "keychain_path=$keychain_path" >> "$GITHUB_OUTPUT"
+
+      - name: Sync iOS version
+        working-directory: android-app
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon syncIosVersion
+
+      - name: Archive signed iOS app
+        working-directory: android-app
+        shell: bash
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          PROFILE_NAME: ${{ steps.signing.outputs.profile_name }}
+        run: |
+          set -euo pipefail
+          xcodebuild             -project iosApp/VendaMaisIOS.xcodeproj             -scheme VendaMaisIOS             -configuration Release             -destination "generic/platform=iOS"             -archivePath "$RUNNER_TEMP/VendaMaisIOS.xcarchive"             PRODUCT_BUNDLE_IDENTIFIER="$IOS_BUNDLE_ID"             DEVELOPMENT_TEAM="$IOS_TEAM_ID"             CODE_SIGN_STYLE=Manual             PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME"             archive
+
+      - name: Export IPA
+        working-directory: android-app
+        shell: bash
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          PROFILE_NAME: ${{ steps.signing.outputs.profile_name }}
+        run: |
+          set -euo pipefail
+
+          case "$IOS_EXPORT_METHOD" in
+            development) xcode_method="debugging" ;;
+            ad-hoc) xcode_method="release-testing" ;;
+            app-store-connect) xcode_method="app-store-connect" ;;
+            *)
+              echo "::error::Metodo iOS invalido: $IOS_EXPORT_METHOD"
+              exit 1
+              ;;
+          esac
+
+          export_options="$RUNNER_TEMP/ExportOptions.plist"
+          cat > "$export_options" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>${xcode_method}</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>teamID</key>
+              <string>${IOS_TEAM_ID}</string>
+              <key>manageAppVersionAndBuildNumber</key>
+              <false/>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>${IOS_BUNDLE_ID}</key>
+                  <string>${PROFILE_NAME}</string>
+              </dict>
+          </dict>
+          </plist>
+          EOF
+
+          mkdir -p "$RUNNER_TEMP/ios-export"
+          xcodebuild             -exportArchive             -archivePath "$RUNNER_TEMP/VendaMaisIOS.xcarchive"             -exportPath "$RUNNER_TEMP/ios-export"             -exportOptionsPlist "$export_options"
+
+          ipa_path="$(find "$RUNNER_TEMP/ios-export" -maxdepth 1 -name '*.ipa' -print -quit)"
+          if [[ -z "$ipa_path" ]]; then
+            echo "::error::IPA nao foi gerado."
+            exit 1
+          fi
+
+          mkdir -p iosApp/build/release-artifacts
+          cp "$ipa_path" "iosApp/build/release-artifacts/vendamais-mobile-ios-v${VENDA_VERSION_NAME}.ipa"
+
+      - name: Upload iOS release
+        uses: actions/upload-artifact@v4
+        with:
+          name: vendamais-ios-v${{ needs.metadata.outputs.version_name }}
+          if-no-files-found: error
+          retention-days: 30
+          path: android-app/iosApp/build/release-artifacts/vendamais-mobile-ios-v${{ needs.metadata.outputs.version_name }}.ipa
+
+      - name: Cleanup temporary keychain
+        if: always()
+        shell: bash
+        env:
+          KEYCHAIN_PATH: ${{ steps.signing.outputs.keychain_path }}
+        run: |
+          if [[ -n "${KEYCHAIN_PATH:-}" && -f "$KEYCHAIN_PATH" ]]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
