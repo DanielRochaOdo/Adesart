@@ -663,20 +663,22 @@ export function PublicCadastroLink() {
 
   const shell = (children: React.ReactNode) => (
     <div translate="no" className="vm-public-page min-h-screen px-4 py-5 sm:py-8">
-      <main className="vm-public-shell mx-auto w-full max-w-xl overflow-hidden rounded-[28px]">
-        <header className="vm-public-header px-5 py-6 text-white sm:px-7">
-          <div className="flex items-start justify-between gap-3">
+      <main className="vm-public-shell mx-auto w-full max-w-2xl overflow-hidden rounded-[32px]">
+        <header className="vm-public-header px-5 py-6 text-white sm:px-7 sm:py-7">
+          <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="text-xs font-medium uppercase tracking-[0.16em] text-emerald-100">Adesão Odontoart</p>
               <h1 className="truncate text-lg font-semibold">{linkData?.empresaNome || 'Plano odontológico'}</h1>
               {(linkData || knownConsultant)?.vendedorNome && <p className="mt-1 text-xs text-emerald-100">Consultor: {(linkData || knownConsultant)?.vendedorNome}</p>}
               {(linkData || knownConsultant)?.vendedorTelefone && <p className="mt-0.5 text-xs text-emerald-100">WhatsApp: {formatMobilePhone((linkData || knownConsultant)?.vendedorTelefone || '')}</p>}
             </div>
-            <img src="/logo-odontoart.png" alt="Odontoart Planos Odontológicos" className="h-auto w-32 shrink-0 object-contain sm:w-40" />
+            <div className="vm-public-logo-tile shrink-0 rounded-2xl p-2.5">
+              <img src="/logo-odontoart.png" alt="Odontoart Planos Odontológicos" className="h-auto w-28 object-contain sm:w-36" />
+            </div>
           </div>
           {whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) && <a href={whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) || '#'} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-extrabold text-white shadow-lg ring-2 ring-orange-200 transition-colors hover:bg-orange-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-300"><MessageCircle className="h-5 w-5" />Precisa de ajuda? Fale com seu consultor</a>}
         </header>
-        <div className="p-5 sm:p-7">
+        <div className="vm-public-content p-5 sm:p-7">
           {linkData && !['success', 'completed', 'not_eligible'].includes(stage) && <div aria-label="Progresso da adesão" className="vm-public-progress mb-5 grid grid-cols-4 gap-1.5 rounded-2xl p-1.5 text-center text-[10px] font-semibold">
             {['Dados', 'Plano', 'Dependentes', 'Confirmação'].map((label, index) => {
               const currentStep = stage === 'identify' ? 0 : stage === 'details' ? (form.titularPlano ? 1 : 0) : stage === 'dependents' ? 2 : 3;
@@ -727,7 +729,7 @@ export function PublicCadastroLink() {
       {error && <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
       {stage === 'identify' && (
-        <section className="vm-public-section rounded-3xl p-4 sm:p-5">
+        <section className="vm-public-section rounded-3xl p-5 sm:p-6">
           <div className="mb-6"><ShieldCheck className="mb-3 h-9 w-9 text-emerald-700" /><h2 className="text-2xl font-bold text-slate-900">Vamos começar sua adesão</h2><p className="mt-2 text-sm leading-6 text-slate-600">Informe os dados do responsável financeiro para validar sua identidade.</p></div>
           <div className="space-y-4">
             <Input label="CPF" inputMode="numeric" value={formatCPF(cpf)} onChange={(event) => setCpf(event.target.value)} maxLength={14} required error={validationErrors.includes('CPF válido') ? 'Informe um CPF válido.' : undefined} className="min-h-12 text-base" />
@@ -742,7 +744,7 @@ export function PublicCadastroLink() {
       )}
 
       {stage === 'details' && (
-        <section className="vm-public-section space-y-5 rounded-3xl p-4 sm:p-5">
+        <section className="vm-public-section space-y-5 rounded-3xl p-5 sm:p-6">
           <div><UserRound className="mb-3 h-8 w-8 text-emerald-700" /><h2 className="text-xl font-bold text-slate-900">Seus dados</h2><p className="mt-1 text-sm text-slate-600">Revise os dados localizados e corrija o que for necessário.</p></div>
           <Input label="Nome completo" value={form.nome} onChange={(event) => setForm((prev) => ({ ...prev, nome: event.target.value }))} required className="min-h-12" />
           <div className="grid gap-4 sm:grid-cols-2">
@@ -776,7 +778,7 @@ export function PublicCadastroLink() {
           <div className="flex items-start justify-between gap-4"><div><h2 className="text-xl font-bold text-slate-900">Dependentes</h2><p className="mt-1 text-sm text-slate-600">Inclua os dependentes que deseja cadastrar nesta adesão.</p></div><span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">{dependents.length}</span></div>
           <div className="mt-5 space-y-4">
             {dependents.map((dep, index) => (
-              <div key={dep.id} className="vm-public-info rounded-2xl p-4">
+              <div key={dep.id} className="vm-public-info rounded-2xl p-4 sm:p-5">
                 <div className="mb-4 flex items-center justify-between"><strong className="text-sm text-slate-800">Dependente {index + 1}</strong><button type="button" onClick={() => removeDependent(dep.id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button></div>
                 <div className="space-y-4">
                   <div>
@@ -803,10 +805,10 @@ export function PublicCadastroLink() {
           <button type="button" onClick={() => setStage('dependents')} className="mb-4 inline-flex items-center text-sm font-medium text-slate-600"><ChevronLeft className="mr-1 h-4 w-4" />Voltar</button>
           <h2 className="text-xl font-bold text-slate-900">Revise sua adesão</h2>
           <div className="mt-5 space-y-3 text-sm">
-            <div className="vm-public-info rounded-2xl p-4"><span className="text-slate-500">Responsável financeiro</span><strong className="mt-1 block text-slate-900">{form.nome}</strong><span className="text-slate-600">{formatCPF(cpf)}</span></div>
-            <div className="vm-public-info rounded-2xl p-4"><span className="text-slate-500">Plano do titular</span><strong className="mt-1 block text-slate-900">{plans.find((plan) => plan.Plano === form.titularPlano)?.nomeExibicao}</strong><span className="text-slate-600">{currency(plans.find((plan) => plan.Plano === form.titularPlano)?.ValorTitular || 0)}</span></div>
-            <div className="vm-public-info rounded-2xl p-4"><span className="text-slate-500">Dependentes</span><strong className="mt-1 block text-slate-900">{dependents.length}</strong>{dependents.map((dep) => <p key={dep.id} className="mt-2 text-slate-600">{dep.nome} - {plans.find((plan) => plan.Plano === dep.plano)?.nomeExibicao}</p>)}</div>
-            <div className="vm-public-info rounded-2xl p-4"><span className="text-slate-500">Contato</span><strong className="mt-1 block text-slate-900">{formatPhone(form.telefone)}</strong><span className="text-slate-600">{form.email}</span></div>
+            <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Responsável financeiro</span><strong className="mt-1 block text-slate-900">{form.nome}</strong><span className="text-slate-600">{formatCPF(cpf)}</span></div>
+            <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Plano do titular</span><strong className="mt-1 block text-slate-900">{plans.find((plan) => plan.Plano === form.titularPlano)?.nomeExibicao}</strong><span className="text-slate-600">{currency(plans.find((plan) => plan.Plano === form.titularPlano)?.ValorTitular || 0)}</span></div>
+            <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Dependentes</span><strong className="mt-1 block text-slate-900">{dependents.length}</strong>{dependents.map((dep) => <p key={dep.id} className="mt-2 text-slate-600">{dep.nome} - {plans.find((plan) => plan.Plano === dep.plano)?.nomeExibicao}</p>)}</div>
+            <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Contato</span><strong className="mt-1 block text-slate-900">{formatPhone(form.telefone)}</strong><span className="text-slate-600">{form.email}</span></div>
           </div>
           <Button onClick={() => { setEmailToConfirm(form.email); setEmailModalOpen(true); setError(''); }} className="mt-5 min-h-12 w-full text-base"><FileCheck2 className="mr-2 h-5 w-5" />Revisar contrato</Button>
         </section>
