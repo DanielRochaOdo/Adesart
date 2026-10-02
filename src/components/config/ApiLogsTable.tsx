@@ -208,30 +208,30 @@ export function ApiLogsTable() {
         <div className="flex gap-2">
           <button
             onClick={() => { setFilter('all'); setPage(1); }}
-            className={`px-4 py-2 rounded-lg ${
+            className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${
               filter === 'all'
-                ? 'bg-blue-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                ? 'border-blue-500/30 bg-blue-500/15 text-blue-700 shadow-sm dark:text-blue-300'
+                : 'vm-glass-secondary'
             }`}
           >
             Todos
           </button>
           <button
             onClick={() => { setFilter('success'); setPage(1); }}
-            className={`px-4 py-2 rounded-lg ${
+            className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${
               filter === 'success'
-                ? 'bg-green-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-700 shadow-sm dark:text-emerald-300'
+                : 'vm-glass-secondary'
             }`}
           >
             Sucesso
           </button>
           <button
             onClick={() => { setFilter('error'); setPage(1); }}
-            className={`px-4 py-2 rounded-lg ${
+            className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${
               filter === 'error'
-                ? 'bg-red-600 text-white'
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                ? 'border-red-500/30 bg-red-500/15 text-red-700 shadow-sm dark:text-red-300'
+                : 'vm-glass-secondary'
             }`}
           >
             Erros
@@ -254,7 +254,7 @@ export function ApiLogsTable() {
           <div className="flex items-end">
             <button
               onClick={limparFiltros}
-              className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+              className="vm-glass-secondary w-full rounded-lg px-4 py-2 font-semibold"
             >
               Limpar Filtros
             </button>
@@ -295,13 +295,13 @@ export function ApiLogsTable() {
             />
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs text-slate-500">
+            <p className="vm-meta-text text-xs">
               Os filtros podem ser combinados. CPF e empresa retornam somente logs que
               registraram esses identificadores ou um cadastro vinculado; registros antigos
               com CPF apenas em hash ou sem código da empresa não são pesquisáveis por esses campos.
             </p>
             <button type="submit" disabled={loading}
-              className="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+              className="vm-glass-primary rounded-lg px-5 py-2 text-sm font-semibold text-white disabled:opacity-50">
               Pesquisar
             </button>
           </div>
@@ -309,33 +309,33 @@ export function ApiLogsTable() {
       </div>
 
       {erroBusca && (
-        <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div role="alert" className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
           {erroBusca}
         </div>
       )}
 
       {loading ? (
-        <div className="text-center py-8 text-gray-600">Carregando logs...</div>
+        <div className="vm-muted-text py-8 text-center">Carregando logs...</div>
       ) : filteredLogs.length === 0 ? (
         <div className="text-center py-8 text-gray-600">Nenhum log encontrado</div>
       ) : (
-        <div className="overflow-x-auto">
+        <div className="vm-settings-table-shell overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>
-              <tr className="bg-gray-100 border-b">
-                <th className="text-left p-3 font-medium text-gray-700">Status</th>
-                <th className="text-left p-3 font-medium text-gray-700">Usuário</th>
-                <th className="text-left p-3 font-medium text-gray-700">Endpoint</th>
-                <th className="text-left p-3 font-medium text-gray-700">Código</th>
-                <th className="text-left p-3 font-medium text-gray-700">Duração</th>
-                <th className="text-left p-3 font-medium text-gray-700">Custo</th>
-                <th className="text-left p-3 font-medium text-gray-700">Data/Hora</th>
-                <th className="text-left p-3 font-medium text-gray-700">Ações</th>
+              <tr className="vm-settings-table-head border-b">
+                <th className="p-3 text-left font-semibold">Status</th>
+                <th className="p-3 text-left font-semibold">Usuário</th>
+                <th className="p-3 text-left font-semibold">Endpoint</th>
+                <th className="p-3 text-left font-semibold">Código</th>
+                <th className="p-3 text-left font-semibold">Duração</th>
+                <th className="p-3 text-left font-semibold">Custo</th>
+                <th className="p-3 text-left font-semibold">Data/Hora</th>
+                <th className="p-3 text-left font-semibold">Ações</th>
               </tr>
             </thead>
             <tbody>
               {filteredLogs.map((log) => (
-                <tr key={log.id} className="border-b hover:bg-gray-50">
+                <tr key={log.id} className="vm-settings-row border-b">
                   <td className="p-3">
                     {log.success ? (
                       <CheckCircle className={`w-5 h-5 ${getStatusColor(true)}`} />
@@ -345,7 +345,7 @@ export function ApiLogsTable() {
                   </td>
                   <td className="p-3">
                     <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-gray-500" />
+                      <User className="vm-meta-text h-4 w-4" />
                       <span className="text-sm">{log.user_email || 'Anônimo'}</span>
                     </div>
                   </td>
@@ -362,25 +362,25 @@ export function ApiLogsTable() {
                     </span>
                   </td>
                   <td className="p-3">
-                    <div className="flex items-center gap-1 text-sm text-gray-600">
+                    <div className="vm-muted-text flex items-center gap-1 text-sm">
                       <Clock className="w-4 h-4" />
                       {log.duration_ms ? `${log.duration_ms}ms` : '-'}
                     </div>
                   </td>
                   <td className="p-3">
                     {log.cost && log.cost > 0 ? (
-                      <span className="text-sm font-medium text-gray-900">
+                      <span className="vm-page-title text-sm font-semibold">
                         R$ {log.cost.toFixed(2)}
                       </span>
                     ) : (
-                      <span className="text-sm text-gray-400">-</span>
+                      <span className="vm-meta-text text-sm">-</span>
                     )}
                   </td>
-                  <td className="p-3 text-sm text-gray-600">{formatDate(log.created_at)}</td>
+                  <td className="vm-muted-text p-3 text-sm">{formatDate(log.created_at)}</td>
                   <td className="p-3">
                     <button
                       onClick={() => handleViewDetails(log)}
-                      className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                      className="rounded-lg border border-blue-500/20 bg-blue-500/10 px-2.5 py-1.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-500/15 dark:text-blue-300"
                     >
                       Ver Detalhes
                     </button>
@@ -390,15 +390,15 @@ export function ApiLogsTable() {
             </tbody>
           </table>
 
-          <div className="flex items-center justify-between mt-4 px-4 py-3 bg-gray-50 rounded-lg">
-            <div className="text-sm text-gray-600">
+          <div className="vm-settings-card mt-4 flex items-center justify-between rounded-2xl px-4 py-3">
+            <div className="vm-muted-text text-sm">
               Página {page} de {totalPages} ({totalRegistros} registros encontrados)
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1 || loading}
-                className="px-3 py-1 rounded bg-blue-600 text-white disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 flex items-center gap-1"
+                className="vm-glass-secondary flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <ChevronLeft className="w-4 h-4" />
                 Anterior
@@ -406,7 +406,7 @@ export function ApiLogsTable() {
               <button
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages || loading}
-                className="px-3 py-1 rounded bg-blue-600 text-white disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 flex items-center gap-1"
+                className="vm-glass-secondary flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Próxima
                 <ChevronRight className="w-4 h-4" />
@@ -418,19 +418,19 @@ export function ApiLogsTable() {
 
       {selectedLog && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4"
           onClick={() => setSelectedLog(null)}
         >
           <div
-            className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-auto"
+            className="vm-glass-modal max-h-[90vh] w-full max-w-4xl overflow-auto rounded-3xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="p-6">
+            <div className="p-5 sm:p-6">
               <div className="flex justify-between items-start mb-4">
-                <h3 className="text-xl font-semibold">Detalhes do Log</h3>
+                <h3 className="vm-page-title text-xl font-semibold">Detalhes do Log</h3>
                 <button
                   onClick={() => setSelectedLog(null)}
-                  className="text-gray-500 hover:text-gray-700"
+                  className="vm-glass-nav-item rounded-lg px-2 py-1"
                 >
                   ✕
                 </button>
@@ -438,7 +438,7 @@ export function ApiLogsTable() {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="vm-muted-text mb-1 block text-sm font-semibold">
                     Status
                   </label>
                   <div className="flex items-center gap-2">
@@ -457,40 +457,40 @@ export function ApiLogsTable() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="vm-muted-text mb-1 block text-sm font-semibold">
                     Usuário
                   </label>
-                  <p className="text-gray-900">{selectedLog.user_email || 'Anônimo'}</p>
+                  <p className="vm-page-title">{selectedLog.user_email || 'Anônimo'}</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="vm-muted-text mb-1 block text-sm font-semibold">
                     Endpoint
                   </label>
-                  <p className="text-gray-900">{selectedLog.endpoint}</p>
+                  <p className="vm-page-title">{selectedLog.endpoint}</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="vm-muted-text mb-1 block text-sm font-semibold">
                     Data/Hora
                   </label>
-                  <p className="text-gray-900">{formatDate(selectedLog.created_at)}</p>
+                  <p className="vm-page-title">{formatDate(selectedLog.created_at)}</p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="vm-muted-text mb-1 block text-sm font-semibold">
                     Duração
                   </label>
-                  <p className="text-gray-900">
+                  <p className="vm-page-title">
                     {selectedLog.duration_ms ? `${selectedLog.duration_ms}ms` : '-'}
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="vm-muted-text mb-1 block text-sm font-semibold">
                     Custo
                   </label>
-                  <p className="text-gray-900">
+                  <p className="vm-page-title">
                     {selectedLog.cost && selectedLog.cost > 0
                       ? `R$ ${selectedLog.cost.toFixed(2)}`
                       : '-'}
@@ -499,35 +499,35 @@ export function ApiLogsTable() {
 
                 {selectedLog.error_message && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="vm-muted-text mb-1 block text-sm font-semibold">
                       Mensagem de Erro
                     </label>
-                    <p className="text-red-600 bg-red-50 p-3 rounded">
+                    <p className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-red-700 dark:text-red-300">
                       {selectedLog.error_message}
                     </p>
                   </div>
                 )}
 
                 {loadingDetail ? (
-                  <div className="text-center py-4 text-gray-600">
+                  <div className="vm-muted-text py-4 text-center">
                     Carregando detalhes...
                   </div>
                 ) : selectedLogDetail ? (
                   <>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="vm-muted-text mb-1 block text-sm font-semibold">
                         Request Body
                       </label>
-                      <pre className="bg-gray-50 p-3 rounded text-xs overflow-auto max-h-40">
+                      <pre className="vm-settings-code max-h-40 overflow-auto rounded-xl p-3 text-xs">
                         {JSON.stringify(selectedLogDetail.request_body, null, 2)}
                       </pre>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="vm-muted-text mb-1 block text-sm font-semibold">
                         Response Body
                       </label>
-                      <pre className="bg-gray-50 p-3 rounded text-xs overflow-auto max-h-40">
+                      <pre className="vm-settings-code max-h-40 overflow-auto rounded-xl p-3 text-xs">
                         {JSON.stringify(selectedLogDetail.response_body, null, 2)}
                       </pre>
                     </div>
