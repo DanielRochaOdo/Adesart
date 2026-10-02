@@ -34,6 +34,10 @@ private val LightColors = lightColorScheme(
     error = Red500,
     errorContainer = Red100,
     onErrorContainer = Red500,
+    surfaceTint = Color.Transparent,
+    inverseSurface = Color(0xFF162033),
+    inverseOnSurface = Color(0xFFF4F7FB),
+    scrim = Color(0xFF08111F),
 )
 
 private val DarkColors = darkColorScheme(
@@ -63,6 +67,10 @@ private val DarkColors = darkColorScheme(
     error = Color(0xFFFF8A84),
     errorContainer = Color(0xFF4A1D1B),
     onErrorContainer = Color(0xFFFFDAD6),
+    surfaceTint = Color.Transparent,
+    inverseSurface = Color(0xFFF4F7FB),
+    inverseOnSurface = Color(0xFF162033),
+    scrim = Color(0xFF020617),
 )
 
 private val VendaMaisShapes = Shapes(
