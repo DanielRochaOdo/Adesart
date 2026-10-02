@@ -374,14 +374,15 @@ private fun OperationStepHeader(
         Surface(
             modifier = Modifier.size(30.dp),
             shape = MaterialTheme.shapes.small,
-            color = if (completed) EmeraldSoft else MaterialTheme.colorScheme.surfaceVariant,
+            color = if (completed) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.82f)
+            else MaterialTheme.colorScheme.surfaceVariant,
         ) {
             Box(contentAlignment = Alignment.Center) {
                 if (completed) {
                     Icon(
                         imageVector = Icons.Rounded.CheckCircle,
                         contentDescription = null,
-                        tint = EmeraldDark,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.size(18.dp),
                     )
                 } else {
@@ -410,8 +411,8 @@ private fun SelectedEmpresaCard(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
-        color = EmeraldSoft.copy(alpha = 0.72f),
-        border = BorderStroke(1.dp, Emerald.copy(alpha = 0.20f)),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)),
     ) {
         Column(
             modifier = Modifier.padding(14.dp),
@@ -429,7 +430,7 @@ private fun SelectedEmpresaCard(
                     Text(
                         text = "Empresa selecionada",
                         style = MaterialTheme.typography.labelMedium,
-                        color = EmeraldDark,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
