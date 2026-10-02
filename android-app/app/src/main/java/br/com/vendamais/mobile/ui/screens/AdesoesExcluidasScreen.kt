@@ -265,13 +265,13 @@ fun AdesoesExcluidasScreen(
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
-                            color = Red100,
+                            color = MaterialTheme.colorScheme.errorContainer,
                         ) {
                             Text(
                                 text = item.motivoExclusao.ifBlank { "Motivo nao informado" },
                                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = Red500,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
                             )
                         }
 
@@ -364,7 +364,7 @@ fun AdesoesExcluidasScreen(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    color = Red100,
+                    color = MaterialTheme.colorScheme.errorContainer,
                 ) {
                     Column(
                         modifier = Modifier.padding(12.dp),
@@ -373,13 +373,13 @@ fun AdesoesExcluidasScreen(
                         Text(
                             text = "Motivo",
                             style = MaterialTheme.typography.labelSmall,
-                            color = Red500,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
                             fontWeight = FontWeight.SemiBold,
                         )
                         Text(
                             text = current.motivoExclusao.ifBlank { "Nao informado" },
                             style = MaterialTheme.typography.bodyMedium,
-                            color = Red500,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
                         )
                     }
                 }
