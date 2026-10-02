@@ -2364,3 +2364,158 @@
     border-color: rgba(110,231,183,.14);
   }
 }
+
+
+/* ============================================================
+   Venda+ Glass Lab — final contrast tuning for cadastro/history
+   ============================================================ */
+@layer utilities {
+  .dark .vm-link-stat-card {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.035), transparent),
+      rgba(30,41,59,.82);
+    border-color: rgba(148,163,184,.22);
+  }
+
+  .dark .vm-link-stat-label {
+    color: #cbd5e1;
+  }
+
+  .dark .vm-link-stat-value {
+    color: #f8fafc;
+  }
+
+  .dark .vm-history-toolbar {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.028), transparent),
+      rgba(15,23,42,.86);
+    border-color: rgba(148,163,184,.12);
+  }
+
+  .vm-public-page .bg-white {
+    background-color: rgba(246,250,248,.82);
+  }
+
+  .vm-public-page .bg-slate-50,
+  .vm-public-page .bg-gray-50 {
+    background-color: rgba(222,234,228,.70);
+  }
+
+  .vm-public-page .bg-slate-100,
+  .vm-public-page .bg-gray-100 {
+    background-color: rgba(211,226,218,.78);
+  }
+
+  .vm-public-page .border-slate-200,
+  .vm-public-page .border-gray-200 {
+    border-color: rgba(30,41,59,.14);
+  }
+
+  .vm-public-page .border-slate-300 {
+    border-color: rgba(30,41,59,.22);
+  }
+
+  .vm-public-page .text-slate-900,
+  .vm-public-page .text-slate-800 {
+    color: var(--vm-text);
+  }
+
+  .vm-public-page .text-slate-700,
+  .vm-public-page .text-slate-600 {
+    color: var(--vm-text-secondary);
+  }
+
+  .vm-public-page .text-slate-500,
+  .vm-public-page .text-slate-400 {
+    color: var(--vm-text-muted);
+  }
+
+  .dark .vm-public-page .bg-white,
+  .dark .vm-public-page .bg-slate-50,
+  .dark .vm-public-page .bg-gray-50,
+  .dark .vm-public-page .bg-slate-100,
+  .dark .vm-public-page .bg-gray-100 {
+    background-color: rgba(15,23,42,.62);
+  }
+
+  .dark .vm-public-page .border-slate-200,
+  .dark .vm-public-page .border-gray-200,
+  .dark .vm-public-page .border-slate-300 {
+    border-color: rgba(148,163,184,.14);
+  }
+
+  .dark .vm-public-page .text-slate-900,
+  .dark .vm-public-page .text-slate-800 {
+    color: #f8fafc;
+  }
+
+  .dark .vm-public-page .text-slate-700,
+  .dark .vm-public-page .text-slate-600 {
+    color: #cbd5e1;
+  }
+
+  .dark .vm-public-page .text-slate-500,
+  .dark .vm-public-page .text-slate-400 {
+    color: #94a3b8;
+  }
+
+  /* Global glass scrollbars: low-contrast track, emerald translucent thumb. */
+  html,
+  body,
+  .vm-app-bg,
+  .vm-public-page,
+  .vm-app-bg *,
+  .vm-public-page * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(16,185,129,.42) rgba(255,255,255,.045);
+  }
+
+  html.dark,
+  html.dark body,
+  .dark .vm-app-bg,
+  .dark .vm-public-page,
+  .dark .vm-app-bg *,
+  .dark .vm-public-page * {
+    scrollbar-color: rgba(52,211,153,.36) rgba(15,23,42,.10);
+  }
+
+  body::-webkit-scrollbar-track,
+  .vm-app-bg :not(.dashboard-scrollbar-hidden)::-webkit-scrollbar-track,
+  .vm-public-page ::-webkit-scrollbar-track {
+    background: rgba(255,255,255,.045);
+    box-shadow:
+      inset 0 0 0 1px rgba(30,41,59,.035),
+      inset 0 1px 6px rgba(15,23,42,.025);
+  }
+
+  body::-webkit-scrollbar-thumb,
+  .vm-app-bg :not(.dashboard-scrollbar-hidden)::-webkit-scrollbar-thumb,
+  .vm-public-page ::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background:
+      linear-gradient(180deg, rgba(16,185,129,.58), rgba(5,150,105,.38))
+      padding-box;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.18),
+      0 2px 8px rgba(5,150,105,.09);
+  }
+
+  .dark .vm-app-bg :not(.dashboard-scrollbar-hidden)::-webkit-scrollbar-track,
+  .dark .vm-public-page ::-webkit-scrollbar-track {
+    background: rgba(15,23,42,.10);
+    box-shadow:
+      inset 0 0 0 1px rgba(255,255,255,.018),
+      inset 0 2px 7px rgba(0,0,0,.12);
+  }
+
+  .dark .vm-app-bg :not(.dashboard-scrollbar-hidden)::-webkit-scrollbar-thumb,
+  .dark .vm-public-page ::-webkit-scrollbar-thumb {
+    background:
+      linear-gradient(180deg, rgba(52,211,153,.46), rgba(16,185,129,.28))
+      padding-box;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.05),
+      0 3px 10px rgba(0,0,0,.18);
+  }
+}
