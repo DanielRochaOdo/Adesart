@@ -41,6 +41,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -137,8 +138,17 @@ fun VendaButton(
             modifier = modifier.heightIn(min = height),
             enabled = enabled && !loading,
             shape = RoundedCornerShape(VendaRadius.md),
-            border = BorderStroke(1.dp, if (enabled) Emerald.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outline),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Emerald),
+            border = BorderStroke(
+                1.dp,
+                if (enabled) MaterialTheme.colorScheme.outline.copy(alpha = 0.72f)
+                else MaterialTheme.colorScheme.outline.copy(alpha = 0.38f),
+            ),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.78f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f),
+                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.68f),
+            ),
             content = { content() },
         )
 
@@ -175,14 +185,15 @@ fun VendaStatusChip(
     tone: VendaStatusTone,
     modifier: Modifier = Modifier,
 ) {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val colors = when (tone) {
-        VendaStatusTone.SUCCESS -> EmeraldSoft to EmeraldDark
-        VendaStatusTone.WARNING -> Amber100 to Amber500
-        VendaStatusTone.ERROR -> Red100 to Red500
-        VendaStatusTone.INFO -> Blue100 to Blue500
-        VendaStatusTone.PENDING -> Amber100 to Amber500
-        VendaStatusTone.PROCESSING -> Blue100 to Blue500
-        VendaStatusTone.NEUTRAL -> Slate100 to Slate500
+        VendaStatusTone.SUCCESS -> if (dark) Color(0xFF123F33) to Color(0xFF6EE7B7) else Color(0xFFDDF3E9) to Color(0xFF047857)
+        VendaStatusTone.WARNING -> if (dark) Color(0xFF4A3212) to Color(0xFFFBBF24) else Color(0xFFFFF1C7) to Color(0xFFB45309)
+        VendaStatusTone.ERROR -> if (dark) Color(0xFF4A1D1B) to Color(0xFFFF8A84) else Color(0xFFFEE4E2) to Color(0xFFB42318)
+        VendaStatusTone.INFO -> if (dark) Color(0xFF1E335F) to Color(0xFF8FB0FF) else Color(0xFFDBEAFE) to Color(0xFF1D4ED8)
+        VendaStatusTone.PENDING -> if (dark) Color(0xFF4A3212) to Color(0xFFFBBF24) else Color(0xFFFFF1C7) to Color(0xFFB45309)
+        VendaStatusTone.PROCESSING -> if (dark) Color(0xFF1E335F) to Color(0xFF8FB0FF) else Color(0xFFDBEAFE) to Color(0xFF1D4ED8)
+        VendaStatusTone.NEUTRAL -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
     }
     val icon = when (tone) {
         VendaStatusTone.SUCCESS -> Icons.Rounded.CheckCircle
@@ -196,7 +207,9 @@ fun VendaStatusChip(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(VendaRadius.full),
-        color = colors.first,
+        color = colors.first.copy(alpha = 0.96f),
+        border = BorderStroke(1.dp, colors.second.copy(alpha = 0.18f)),
+        shadowElevation = 1.dp,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = VendaSpacing.x3, vertical = 6.dp),
@@ -231,8 +244,13 @@ fun VendaMetricCard(
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .animateContentSize(),
         shape = RoundedCornerShape(VendaRadius.lg),
-        color = containerColor,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        color = if (containerColor == MaterialTheme.colorScheme.surface) {
+            MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.84f)
+        } else {
+            containerColor.copy(alpha = 0.90f)
+        },
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.78f)),
+        shadowElevation = 4.dp,
     ) {
         Column(
             modifier = Modifier.padding(VendaSpacing.x3),
@@ -390,7 +408,8 @@ fun VendaEmptyState(
             Surface(
                 modifier = Modifier.size(48.dp),
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+        shadowElevation = 3.dp,
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -488,8 +507,9 @@ fun VendaSectionTabs(
                         .heightIn(min = 40.dp),
                     onClick = { onSelected(index) },
                     shape = RoundedCornerShape(VendaRadius.md),
-                    color = if (selected) MaterialTheme.colorScheme.surface else Color.Transparent,
-                    tonalElevation = if (selected) 1.dp else 0.dp,
+                    color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.78f) else Color.Transparent,
+                    border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)) else null,
+                    shadowElevation = if (selected) 2.dp else 0.dp,
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
