@@ -17,8 +17,8 @@ export function LemmitLimitModal({
   isUnlimited
 }: LemmitLimitModalProps) {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+    <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="vm-glass-modal w-full max-w-md rounded-3xl">
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center gap-2">
             <AlertCircle className="w-5 h-5 text-orange-500" />
