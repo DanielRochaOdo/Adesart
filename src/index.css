@@ -2519,3 +2519,43 @@
       0 3px 10px rgba(0,0,0,.18);
   }
 }
+
+
+@layer utilities {
+  .vm-public-page .bg-emerald-50 {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.01)),
+      rgba(187,230,207,.46);
+    border-color: rgba(5,150,105,.20);
+  }
+
+  .dark .vm-public-page .bg-emerald-50 {
+    background: rgba(6,78,59,.24);
+    border-color: rgba(110,231,183,.14);
+  }
+
+  .dark .vm-public-page .text-emerald-950,
+  .dark .vm-public-page .text-emerald-900,
+  .dark .vm-public-page .text-emerald-800,
+  .dark .vm-public-page .text-emerald-700 {
+    color: #d1fae5;
+  }
+
+  .dark .vm-public-page .text-amber-900,
+  .dark .vm-public-page .text-amber-800,
+  .dark .vm-public-page .text-amber-700 {
+    color: #fef3c7;
+  }
+
+  .vm-public-page a,
+  .vm-public-page button {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .vm-public-page input,
+  .vm-public-page select,
+  .vm-public-page textarea {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+}
