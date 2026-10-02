@@ -3090,3 +3090,413 @@
     color: var(--vm-text-secondary);
   }
 }
+
+
+/* ============================================================
+   Venda+ Liquid Glass Lab — high-intensity optical pass
+   ------------------------------------------------------------
+   Mais próximo da linguagem de "Liquid Glass":
+   - translucidez real, não só cartões claros
+   - blur e saturação mais fortes
+   - highlights especulares nas bordas
+   - lens glow/refração simulada
+   - hierarquia separada para light/dark
+   ============================================================ */
+@layer base {
+  :root {
+    --vm-liquid-bg: rgba(238, 247, 243, 0.54);
+    --vm-liquid-bg-strong: rgba(244, 250, 247, 0.68);
+    --vm-liquid-border: rgba(255, 255, 255, 0.62);
+    --vm-liquid-border-shadow: rgba(51, 65, 85, 0.16);
+    --vm-liquid-specular: rgba(255, 255, 255, 0.62);
+    --vm-liquid-depth: rgba(15, 23, 42, 0.16);
+    --vm-liquid-green: rgba(16, 185, 129, 0.16);
+    --vm-liquid-cyan: rgba(45, 212, 191, 0.10);
+  }
+
+  html.dark {
+    --vm-liquid-bg: rgba(10, 20, 35, 0.48);
+    --vm-liquid-bg-strong: rgba(15, 27, 45, 0.62);
+    --vm-liquid-border: rgba(255, 255, 255, 0.13);
+    --vm-liquid-border-shadow: rgba(0, 0, 0, 0.48);
+    --vm-liquid-specular: rgba(255, 255, 255, 0.11);
+    --vm-liquid-depth: rgba(0, 0, 0, 0.46);
+    --vm-liquid-green: rgba(52, 211, 153, 0.13);
+    --vm-liquid-cyan: rgba(34, 211, 238, 0.07);
+  }
+}
+
+@layer utilities {
+  .vm-glass-nav,
+  .vm-glass-card,
+  .vm-glass-panel,
+  .vm-glass-popover,
+  .vm-glass-modal,
+  .vm-dashboard-hero,
+  .vm-dashboard-panel,
+  .vm-dashboard-kpi,
+  .vm-filter-dock,
+  .vm-users-hero,
+  .vm-users-shell,
+  .vm-users-filter-dock,
+  .vm-teams-hero,
+  .vm-teams-shell,
+  .vm-team-card,
+  .vm-cadastro-hero,
+  .vm-cadastro-shell,
+  .vm-cadastro-card,
+  .vm-cadastro-list-card,
+  .vm-profile-hero,
+  .vm-profile-shell,
+  .vm-settings-hero,
+  .vm-settings-shell,
+  .vm-settings-card,
+  .vm-public-shell,
+  .vm-public-section {
+    position: relative;
+    isolation: isolate;
+    background:
+      radial-gradient(140% 115% at 8% -18%, var(--vm-liquid-specular), transparent 34%),
+      radial-gradient(95% 120% at 96% 8%, var(--vm-liquid-cyan), transparent 52%),
+      radial-gradient(90% 105% at 32% 112%, var(--vm-liquid-green), transparent 58%),
+      linear-gradient(145deg, rgba(255,255,255,.16), rgba(255,255,255,.018) 42%, rgba(255,255,255,.08) 100%),
+      var(--vm-liquid-bg) !important;
+    border-color: var(--vm-liquid-border) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.62),
+      inset 0 -1px 0 rgba(15,23,42,.06),
+      inset 1px 0 0 rgba(255,255,255,.18),
+      0 18px 44px var(--vm-liquid-depth),
+      0 2px 10px rgba(15,23,42,.05) !important;
+    -webkit-backdrop-filter: blur(34px) saturate(165%) brightness(1.035) !important;
+    backdrop-filter: blur(34px) saturate(165%) brightness(1.035) !important;
+  }
+
+  .dark .vm-glass-nav,
+  .dark .vm-glass-card,
+  .dark .vm-glass-panel,
+  .dark .vm-glass-popover,
+  .dark .vm-glass-modal,
+  .dark .vm-dashboard-hero,
+  .dark .vm-dashboard-panel,
+  .dark .vm-dashboard-kpi,
+  .dark .vm-filter-dock,
+  .dark .vm-users-hero,
+  .dark .vm-users-shell,
+  .dark .vm-users-filter-dock,
+  .dark .vm-teams-hero,
+  .dark .vm-teams-shell,
+  .dark .vm-team-card,
+  .dark .vm-cadastro-hero,
+  .dark .vm-cadastro-shell,
+  .dark .vm-cadastro-card,
+  .dark .vm-cadastro-list-card,
+  .dark .vm-profile-hero,
+  .dark .vm-profile-shell,
+  .dark .vm-settings-hero,
+  .dark .vm-settings-shell,
+  .dark .vm-settings-card,
+  .dark .vm-public-shell,
+  .dark .vm-public-section {
+    background:
+      radial-gradient(140% 115% at 8% -18%, var(--vm-liquid-specular), transparent 35%),
+      radial-gradient(95% 120% at 96% 8%, var(--vm-liquid-cyan), transparent 52%),
+      radial-gradient(90% 105% at 32% 112%, var(--vm-liquid-green), transparent 58%),
+      linear-gradient(145deg, rgba(255,255,255,.045), rgba(255,255,255,.008) 46%, rgba(255,255,255,.025) 100%),
+      var(--vm-liquid-bg) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.10),
+      inset 0 -1px 0 rgba(255,255,255,.018),
+      inset 1px 0 0 rgba(255,255,255,.035),
+      0 22px 56px var(--vm-liquid-depth),
+      0 4px 16px rgba(0,0,0,.18) !important;
+    -webkit-backdrop-filter: blur(36px) saturate(150%) brightness(.94) !important;
+    backdrop-filter: blur(36px) saturate(150%) brightness(.94) !important;
+  }
+
+  .vm-glass-nav::before,
+  .vm-glass-card::before,
+  .vm-glass-panel::before,
+  .vm-glass-popover::before,
+  .vm-glass-modal::before,
+  .vm-dashboard-hero::before,
+  .vm-dashboard-panel::before,
+  .vm-dashboard-kpi::before,
+  .vm-filter-dock::before,
+  .vm-users-hero::before,
+  .vm-users-shell::before,
+  .vm-users-filter-dock::before,
+  .vm-teams-hero::before,
+  .vm-teams-shell::before,
+  .vm-team-card::before,
+  .vm-cadastro-hero::before,
+  .vm-cadastro-shell::before,
+  .vm-cadastro-card::before,
+  .vm-cadastro-list-card::before,
+  .vm-profile-hero::before,
+  .vm-profile-shell::before,
+  .vm-settings-hero::before,
+  .vm-settings-shell::before,
+  .vm-settings-card::before,
+  .vm-public-shell::before,
+  .vm-public-section::before {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 1px;
+    border-radius: inherit;
+    pointer-events: none;
+    background:
+      linear-gradient(
+        112deg,
+        transparent 0%,
+        transparent 27%,
+        rgba(255,255,255,.08) 36%,
+        rgba(255,255,255,.42) 44%,
+        rgba(255,255,255,.10) 53%,
+        transparent 64%,
+        transparent 100%
+      );
+    opacity: .58;
+    mix-blend-mode: screen;
+    transform: translateX(-12%);
+    transition: opacity 180ms ease, transform 320ms cubic-bezier(.2,.8,.2,1);
+  }
+
+  .dark .vm-glass-nav::before,
+  .dark .vm-glass-card::before,
+  .dark .vm-glass-panel::before,
+  .dark .vm-glass-popover::before,
+  .dark .vm-glass-modal::before,
+  .dark .vm-dashboard-hero::before,
+  .dark .vm-dashboard-panel::before,
+  .dark .vm-dashboard-kpi::before,
+  .dark .vm-filter-dock::before,
+  .dark .vm-users-hero::before,
+  .dark .vm-users-shell::before,
+  .dark .vm-users-filter-dock::before,
+  .dark .vm-teams-hero::before,
+  .dark .vm-teams-shell::before,
+  .dark .vm-team-card::before,
+  .dark .vm-cadastro-hero::before,
+  .dark .vm-cadastro-shell::before,
+  .dark .vm-cadastro-card::before,
+  .dark .vm-cadastro-list-card::before,
+  .dark .vm-profile-hero::before,
+  .dark .vm-profile-shell::before,
+  .dark .vm-settings-hero::before,
+  .dark .vm-settings-shell::before,
+  .dark .vm-settings-card::before,
+  .dark .vm-public-shell::before,
+  .dark .vm-public-section::before {
+    opacity: .25;
+  }
+
+  .vm-glass-card:hover::before,
+  .vm-dashboard-kpi:hover::before,
+  .vm-team-card:hover::before,
+  .vm-cadastro-list-card:hover::before,
+  .vm-settings-card:hover::before {
+    opacity: .86;
+    transform: translateX(8%);
+  }
+
+  .vm-glass-field,
+  .vm-glass-secondary,
+  .vm-control-strip,
+  .vm-users-customizer,
+  .vm-dashboard-pill,
+  .vm-cadastro-tabs,
+  .vm-settings-tabs,
+  .vm-public-progress {
+    background:
+      linear-gradient(155deg, rgba(255,255,255,.32), rgba(255,255,255,.05) 45%, rgba(255,255,255,.14)),
+      rgba(234,244,239,.52) !important;
+    border-color: rgba(255,255,255,.54) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.62),
+      inset 0 -1px 0 rgba(30,41,59,.055),
+      0 8px 20px rgba(15,23,42,.08) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(150%) !important;
+    backdrop-filter: blur(24px) saturate(150%) !important;
+  }
+
+  .dark .vm-glass-field,
+  .dark .vm-glass-secondary,
+  .dark .vm-control-strip,
+  .dark .vm-users-customizer,
+  .dark .vm-dashboard-pill,
+  .dark .vm-cadastro-tabs,
+  .dark .vm-settings-tabs,
+  .dark .vm-public-progress {
+    background:
+      linear-gradient(155deg, rgba(255,255,255,.055), rgba(255,255,255,.008) 48%, rgba(255,255,255,.028)),
+      rgba(12,22,38,.50) !important;
+    border-color: rgba(255,255,255,.11) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.09),
+      inset 0 -1px 0 rgba(255,255,255,.014),
+      0 10px 26px rgba(0,0,0,.22) !important;
+    -webkit-backdrop-filter: blur(26px) saturate(140%) !important;
+    backdrop-filter: blur(26px) saturate(140%) !important;
+  }
+
+  .vm-glass-primary {
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(120% 100% at 15% 0%, rgba(255,255,255,.34), transparent 42%),
+      linear-gradient(145deg, rgba(52,211,153,.92), rgba(5,150,105,.84) 52%, rgba(4,120,87,.94)) !important;
+    border: 1px solid rgba(255,255,255,.30) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.36),
+      inset 0 -1px 0 rgba(4,120,87,.35),
+      0 12px 30px rgba(5,150,105,.28),
+      0 1px 8px rgba(16,185,129,.18) !important;
+    -webkit-backdrop-filter: blur(18px) saturate(165%);
+    backdrop-filter: blur(18px) saturate(165%);
+  }
+
+  .vm-glass-primary:hover:not(:disabled) {
+    transform: translateY(-1px) scale(1.008);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.42),
+      inset 0 -1px 0 rgba(4,120,87,.38),
+      0 16px 34px rgba(5,150,105,.32),
+      0 0 26px rgba(52,211,153,.15) !important;
+  }
+
+  .vm-glass-nav {
+    background:
+      radial-gradient(120% 120% at 18% -30%, rgba(255,255,255,.52), transparent 38%),
+      linear-gradient(180deg, rgba(247,252,249,.74), rgba(232,243,237,.46)) !important;
+    border-bottom-color: rgba(255,255,255,.62) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.82),
+      inset 0 -1px 0 rgba(51,65,85,.08),
+      0 10px 34px rgba(15,23,42,.12) !important;
+  }
+
+  .dark .vm-glass-nav {
+    background:
+      radial-gradient(120% 120% at 18% -30%, rgba(255,255,255,.08), transparent 40%),
+      linear-gradient(180deg, rgba(19,33,54,.70), rgba(8,17,31,.54)) !important;
+    border-bottom-color: rgba(255,255,255,.10) !important;
+  }
+
+  .vm-glass-popover,
+  .vm-glass-modal {
+    --vm-liquid-bg: rgba(242,249,246,.66);
+    -webkit-backdrop-filter: blur(44px) saturate(175%) brightness(1.03) !important;
+    backdrop-filter: blur(44px) saturate(175%) brightness(1.03) !important;
+  }
+
+  .dark .vm-glass-popover,
+  .dark .vm-glass-modal {
+    --vm-liquid-bg: rgba(9,18,32,.60);
+    -webkit-backdrop-filter: blur(46px) saturate(150%) brightness(.92) !important;
+    backdrop-filter: blur(46px) saturate(150%) brightness(.92) !important;
+  }
+
+  .vm-modal-overlay {
+    background:
+      radial-gradient(circle at 50% 20%, rgba(16,185,129,.08), transparent 40%),
+      rgba(15,23,42,.30) !important;
+    -webkit-backdrop-filter: blur(16px) saturate(125%) !important;
+    backdrop-filter: blur(16px) saturate(125%) !important;
+  }
+
+  .dark .vm-modal-overlay {
+    background:
+      radial-gradient(circle at 50% 20%, rgba(16,185,129,.07), transparent 42%),
+      rgba(2,6,23,.62) !important;
+  }
+
+  .vm-app-bg {
+    background:
+      radial-gradient(950px circle at 6% -12%, rgba(16,185,129,.19), transparent 45%),
+      radial-gradient(760px circle at 94% 2%, rgba(45,212,191,.10), transparent 45%),
+      radial-gradient(640px circle at 50% 105%, rgba(16,185,129,.065), transparent 56%),
+      linear-gradient(180deg, #dce8e2 0%, #e8f0ec 46%, #dfeae4 100%) !important;
+  }
+
+  .dark .vm-app-bg {
+    background:
+      radial-gradient(950px circle at 6% -12%, rgba(16,185,129,.18), transparent 45%),
+      radial-gradient(760px circle at 94% 2%, rgba(14,116,144,.12), transparent 45%),
+      radial-gradient(640px circle at 50% 105%, rgba(16,185,129,.07), transparent 56%),
+      linear-gradient(180deg, #06101d 0%, #0a1525 48%, #07111f 100%) !important;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .vm-dashboard-kpi,
+    .vm-team-card,
+    .vm-cadastro-list-card,
+    .vm-settings-card {
+      transition:
+        transform 220ms cubic-bezier(.2,.8,.2,1),
+        box-shadow 220ms cubic-bezier(.2,.8,.2,1),
+        border-color 180ms ease;
+    }
+  }
+
+  @supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+    .vm-glass-nav,
+    .vm-glass-card,
+    .vm-glass-panel,
+    .vm-glass-popover,
+    .vm-glass-modal,
+    .vm-dashboard-hero,
+    .vm-dashboard-panel,
+    .vm-dashboard-kpi,
+    .vm-filter-dock,
+    .vm-users-hero,
+    .vm-users-shell,
+    .vm-users-filter-dock,
+    .vm-teams-hero,
+    .vm-teams-shell,
+    .vm-team-card,
+    .vm-cadastro-hero,
+    .vm-cadastro-shell,
+    .vm-cadastro-card,
+    .vm-cadastro-list-card,
+    .vm-profile-hero,
+    .vm-profile-shell,
+    .vm-settings-hero,
+    .vm-settings-shell,
+    .vm-settings-card,
+    .vm-public-shell,
+    .vm-public-section {
+      background: rgba(241,247,244,.96) !important;
+    }
+
+    .dark .vm-glass-nav,
+    .dark .vm-glass-card,
+    .dark .vm-glass-panel,
+    .dark .vm-glass-popover,
+    .dark .vm-glass-modal,
+    .dark .vm-dashboard-hero,
+    .dark .vm-dashboard-panel,
+    .dark .vm-dashboard-kpi,
+    .dark .vm-filter-dock,
+    .dark .vm-users-hero,
+    .dark .vm-users-shell,
+    .dark .vm-users-filter-dock,
+    .dark .vm-teams-hero,
+    .dark .vm-teams-shell,
+    .dark .vm-team-card,
+    .dark .vm-cadastro-hero,
+    .dark .vm-cadastro-shell,
+    .dark .vm-cadastro-card,
+    .dark .vm-cadastro-list-card,
+    .dark .vm-profile-hero,
+    .dark .vm-profile-shell,
+    .dark .vm-settings-hero,
+    .dark .vm-settings-shell,
+    .dark .vm-settings-card,
+    .dark .vm-public-shell,
+    .dark .vm-public-section {
+      background: rgba(15,23,42,.96) !important;
+    }
+  }
+}
