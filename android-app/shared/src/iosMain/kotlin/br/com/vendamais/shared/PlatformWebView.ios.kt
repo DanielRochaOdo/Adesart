@@ -20,7 +20,6 @@ actual fun PlatformWebView(url: String, modifier: Modifier) {
         factory = {
             val configuration = WKWebViewConfiguration().apply {
                 websiteDataStore = WKWebsiteDataStore.defaultDataStore()
-                preferences.javaScriptEnabled = true
             }
 
             WKWebView(
