@@ -1886,3 +1886,170 @@
     border-color: var(--vm-border);
   }
 }
+
+
+/* ============================================================
+   Venda+ Glass Lab — Scrollbars + modal density refinements
+   ============================================================ */
+@layer utilities {
+  .vm-app-bg,
+  .vm-app-bg * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(71, 85, 105, 0.34) rgba(255, 255, 255, 0.10);
+  }
+
+  .dark .vm-app-bg,
+  .dark .vm-app-bg * {
+    scrollbar-color: rgba(148, 163, 184, 0.30) rgba(15, 23, 42, 0.20);
+  }
+
+  .vm-app-bg :not(.dashboard-scrollbar-hidden)::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .vm-app-bg :not(.dashboard-scrollbar-hidden)::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    box-shadow: inset 0 0 0 1px rgba(30, 41, 59, 0.04);
+  }
+
+  .vm-app-bg :not(.dashboard-scrollbar-hidden)::-webkit-scrollbar-thumb {
+    min-height: 36px;
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background:
+      linear-gradient(180deg, rgba(100, 116, 139, 0.52), rgba(71, 85, 105, 0.38))
+      padding-box;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.24),
+      0 2px 8px rgba(15,23,42,.08);
+  }
+
+  .vm-app-bg :not(.dashboard-scrollbar-hidden)::-webkit-scrollbar-thumb:hover {
+    background:
+      linear-gradient(180deg, rgba(16, 185, 129, 0.55), rgba(5, 150, 105, 0.42))
+      padding-box;
+  }
+
+  .vm-app-bg :not(.dashboard-scrollbar-hidden)::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
+  .dark .vm-app-bg :not(.dashboard-scrollbar-hidden)::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.16);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.025);
+  }
+
+  .dark .vm-app-bg :not(.dashboard-scrollbar-hidden)::-webkit-scrollbar-thumb {
+    background:
+      linear-gradient(180deg, rgba(148, 163, 184, 0.34), rgba(71, 85, 105, 0.30))
+      padding-box;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.06),
+      0 3px 10px rgba(0,0,0,.20);
+  }
+
+  .dark .vm-app-bg :not(.dashboard-scrollbar-hidden)::-webkit-scrollbar-thumb:hover {
+    background:
+      linear-gradient(180deg, rgba(52, 211, 153, 0.48), rgba(16, 185, 129, 0.35))
+      padding-box;
+  }
+
+  .vm-modal-overlay {
+    padding: clamp(.5rem, 1.4vw, 1rem);
+  }
+
+  .vm-glass-modal {
+    max-height: calc(100dvh - 1rem);
+  }
+
+  @media (min-width: 640px) {
+    .vm-glass-modal {
+      max-height: calc(100dvh - 2rem);
+    }
+  }
+
+  .vm-modal-compact {
+    font-size: 0.875rem;
+    line-height: 1.35;
+  }
+
+  .vm-modal-compact .vm-page-title {
+    letter-spacing: -0.01em;
+  }
+
+  .vm-link-stat-grid {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.01)),
+      rgba(224, 235, 229, 0.72);
+    border-bottom: 1px solid var(--vm-border);
+  }
+
+  .dark .vm-link-stat-grid {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.018), transparent),
+      rgba(8, 17, 31, 0.62);
+  }
+
+  .vm-link-stat-card {
+    min-width: 0;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.01)),
+      rgba(244, 248, 246, 0.72);
+    border: 1px solid var(--vm-border);
+    border-radius: 14px;
+    padding: .75rem .9rem;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.50),
+      0 8px 20px rgba(15,23,42,.045);
+  }
+
+  .dark .vm-link-stat-card {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.024), transparent),
+      rgba(15,23,42,.72);
+    border-color: rgba(148,163,184,.14);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.025),
+      0 10px 24px rgba(0,0,0,.16);
+  }
+
+  .vm-link-stat-label {
+    color: #526173;
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: .07em;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  .dark .vm-link-stat-label {
+    color: #a8b5c4;
+  }
+
+  .vm-link-stat-value {
+    margin-top: .28rem;
+    color: var(--vm-text);
+    font-size: 1.05rem;
+    font-weight: 750;
+    line-height: 1.15;
+  }
+
+  .vm-link-stat-value-small {
+    font-size: .78rem;
+    line-height: 1.3;
+  }
+
+  .vm-history-toolbar {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.12), transparent),
+      rgba(232, 240, 236, 0.76);
+  }
+
+  .dark .vm-history-toolbar {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.018), transparent),
+      rgba(10,18,32,.74);
+  }
+}
