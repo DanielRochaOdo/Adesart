@@ -1167,7 +1167,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
       <div className="vm-glass-modal my-8 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl">
         <div className="vm-glass-modal-bar sticky top-0 flex items-center justify-between border-b p-6">
           <div>
-            <h2 className="text-xl font-bold text-slate-800">
+            <h2 className="vm-page-title text-xl font-bold">
               {cadastroAtual.nome || 'Editar Cadastro'}
             </h2>
             <p className="text-sm text-slate-600 mt-1">
@@ -1249,7 +1249,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
               </div>
 
               <div className="border-t border-slate-200/80 pt-6 dark:border-white/10">
-                <h3 className="font-semibold text-slate-800 mb-4">Contatos</h3>
+                <h3 className="vm-page-title mb-4 font-semibold">Contatos</h3>
                 <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <h4 className="text-sm font-medium text-blue-900 mb-3">Adicionar Contato</h4>
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
@@ -1293,7 +1293,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
                     formData.contatos.map((contato, index) => (
                       <div
                         key={index}
-                        className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg"
+                        className="vm-cadastro-subcard flex items-center gap-3 rounded-xl p-3"
                       >
                         <input
                           type="checkbox"
@@ -1305,7 +1305,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
                           <span className="text-xs font-medium text-slate-500 uppercase">
                             {contato.tipo}
                           </span>
-                          <p className="text-sm text-slate-800">
+                          <p className="text-sm text-slate-800 dark:text-slate-200">
                             {contato.tipo === 'email' ? contato.valor : formatPhone(contato.valor)}
                           </p>
                         </div>
@@ -1326,7 +1326,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
               </div>
 
               <div className="border-t border-slate-200/80 pt-6 dark:border-white/10">
-                <h3 className="font-semibold text-slate-800 mb-4">Endereço</h3>
+                <h3 className="vm-page-title mb-4 font-semibold">Endereço</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="relative">
                     <div>
@@ -1452,7 +1452,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
 
               {loadingPlanos ? (
                 <div className="border-t border-slate-200/80 pt-6 dark:border-white/10">
-                  <div className="flex items-center justify-center py-12 bg-slate-50 rounded-lg border border-slate-200">
+                  <div className="vm-cadastro-subcard flex items-center justify-center rounded-2xl py-12">
                     <div className="text-center">
                       <Loader2 className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-3" />
                       <p className="text-sm font-medium text-slate-700">Carregando planos da empresa...</p>
@@ -1506,7 +1506,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
               </div>
 
               <div className="border-t border-slate-200/80 pt-6 dark:border-white/10">
-                <h3 className="font-semibold text-slate-800 mb-4">Documento</h3>
+                <h3 className="vm-page-title mb-4 font-semibold">Documento</h3>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">
