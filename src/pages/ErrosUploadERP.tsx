@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -6,11 +6,14 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  FileText,
   FileWarning,
   Loader2,
   RefreshCw,
+  RotateCcw,
   Search,
   Upload,
+  UserRound,
   Wand2,
 } from 'lucide-react';
 import { Layout } from '../components/Layout';
@@ -179,6 +182,7 @@ export function ErrosUploadERP() {
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [page, setPage] = useState(1);
+  const [sortBy, setSortBy] = useState<'recent' | 'oldest' | 'attempts'>('recent');
   const [response, setResponse] = useState<ErrorSearchResponse>({
     summary: EMPTY_SUMMARY,
     pagination: { page: 1, page_size: 50, total: 0, total_pages: 1 },
@@ -405,35 +409,70 @@ export function ErrosUploadERP() {
 
   const summaryCards = useMemo(
     () => [
-      { key: '', label: 'Todos os erros', value: response.summary.total },
+      {
+        key: '',
+        label: 'Todos os erros',
+        value: response.summary.total,
+        description: 'Total de registros',
+        icon: FileText,
+      },
       {
         key: 'FILE_NOT_FOUND',
         label: 'Sem arquivo',
         value: response.summary.file_not_found,
+        description: 'Arquivos ausentes',
+        icon: FileWarning,
       },
       {
         key: 'FILE_TOO_LARGE',
         label: 'Acima de 5 MB',
         value: response.summary.file_too_large,
+        description: 'Tamanho excedido',
+        icon: AlertTriangle,
       },
       {
         key: 'ERP_FILE_LOCKED',
         label: 'Bloqueado no ERP',
         value: response.summary.erp_file_locked,
+        description: 'Regra de negócio',
+        icon: AlertTriangle,
       },
       {
         key: 'ERP_REJECTED',
         label: 'Rejeitado pelo ERP',
         value: response.summary.erp_rejected,
+        description: 'Validação do ERP',
+        icon: AlertTriangle,
       },
       {
         key: 'PRIMARY_DEPENDENT_NOT_FOUND',
-        label: 'Dependente não identificado',
+        label: 'CPF principal não localizado',
         value: response.summary.primary_dependent_not_found,
+        description: 'Não encontrado',
+        icon: UserRound,
       },
     ],
     [response.summary],
   );
+
+  const sortedItems = useMemo(() => {
+    const items = [...response.items];
+    if (sortBy === 'oldest') {
+      return items.sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
+      );
+    }
+    if (sortBy === 'attempts') {
+      return items.sort(
+        (a, b) =>
+          b.attempts - a.attempts ||
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+      );
+    }
+    return items.sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+  }, [response.items, sortBy]);
 
   if (!['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(profile?.role ?? '')) {
     return (
@@ -496,74 +535,107 @@ export function ErrosUploadERP() {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
           {summaryCards.map((card) => {
             const active = category === card.key;
+            const Icon = card.icon;
             return (
               <button
                 key={card.key || 'all'}
                 type="button"
                 onClick={() => updateCategory(card.key)}
-                className={`rounded-xl border p-4 text-left transition ${
+                className={`group rounded-xl border p-3 text-left transition ${
                   active
-                    ? 'border-red-300 bg-red-50 ring-1 ring-red-200'
-                    : 'border-slate-200 bg-white hover:border-slate-300'
+                    ? 'border-red-300 bg-red-50 ring-1 ring-red-200 dark:border-red-900/70 dark:bg-red-950/40'
+                    : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600'
                 }`}
               >
-                <p className="text-xs font-medium text-slate-500">{card.label}</p>
-                <p className="mt-1 text-2xl font-bold text-slate-800">{card.value}</p>
+                <div className="flex items-start gap-3">
+                  <span className={`rounded-lg p-2 ${
+                    active
+                      ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+                      : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'
+                  }`}>
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                      {card.label}
+                    </p>
+                    <p className="mt-0.5 text-2xl font-bold text-slate-800 dark:text-slate-100">
+                      {card.value}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-400">
+                      {card.description}
+                    </p>
+                  </div>
+                </div>
               </button>
             );
           })}
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-            <Select
-              value={scope}
-              onChange={(e) => updateScope(e.target.value)}
-              aria-label="Escopo dos erros"
-            >
-              {SCOPE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </Select>
-            <Select
-              value={category}
-              onChange={(e) => updateCategory(e.target.value)}
-              aria-label="Causa do erro"
-            >
-              {CATEGORY_OPTIONS.map((option) => (
-                <option key={option.value || 'all'} value={option.value}>{option.label}</option>
-              ))}
-            </Select>
-            <input
-              value={cpf}
-              onChange={(e) => setCpf(e.target.value)}
-              placeholder="CPF"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            />
-            <input
-              value={empresa}
-              onChange={(e) => setEmpresa(e.target.value)}
-              placeholder="Empresa"
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="date"
-              value={dataInicio}
-              onChange={(e) => setDataInicio(e.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
-            />
-            <div className="flex gap-2">
-              <input
-                type="date"
-                value={dataFim}
-                onChange={(e) => setDataFim(e.target.value)}
-                className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
-              />
-              <Button onClick={handleSearch} className="px-3">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1.3fr_1fr_1.2fr_1fr_1fr_auto]">
+            <label className="space-y-1">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Escopo / Status</span>
+              <Select value={scope} onChange={(e) => updateScope(e.target.value)} aria-label="Escopo dos erros">
+                {SCOPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </Select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Causa</span>
+              <Select value={category} onChange={(e) => updateCategory(e.target.value)} aria-label="Causa do erro">
+                {CATEGORY_OPTIONS.map((option) => (
+                  <option key={option.value || 'all'} value={option.value}>{option.label}</option>
+                ))}
+              </Select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">CPF</span>
+              <input value={cpf} onChange={(e) => setCpf(e.target.value)} placeholder="Digite o CPF" className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950" />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Empresa</span>
+              <input value={empresa} onChange={(e) => setEmpresa(e.target.value)} placeholder="Digite a empresa" className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950" />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Data inicial</span>
+              <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950" />
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Data final</span>
+              <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950" />
+            </label>
+            <div className="flex items-end">
+              <Button onClick={handleSearch} className="h-10 w-full gap-2 px-4 xl:w-auto">
                 <Search className="h-4 w-4" />
+                Buscar
               </Button>
             </div>
           </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-base font-semibold text-slate-800 dark:text-slate-100">
+              {response.pagination.total} registro(s) encontrado(s)
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Dados completos organizados em uma linha principal e detalhe técnico logo abaixo.
+            </p>
+          </div>
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400">
+            Ordenar por
+            <select
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value as 'recent' | 'oldest' | 'attempts')}
+              className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+            >
+              <option value="recent">Data (mais recente)</option>
+              <option value="oldest">Data (mais antiga)</option>
+              <option value="attempts">Mais tentativas</option>
+            </select>
+          </label>
         </div>
 
         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -583,155 +655,185 @@ export function ErrosUploadERP() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="min-w-[1750px] w-full text-left text-sm">
-                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+              <table className="w-full min-w-[1540px] text-left text-sm">
+                <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500 dark:bg-slate-950/60 dark:text-slate-400">
                   <tr>
-                    <th className="px-4 py-3">Data</th>
-                    <th className="px-4 py-3">Cliente</th>
-                    <th className="px-4 py-3">Empresa</th>
-                    <th className="px-4 py-3">Vendedor</th>
-                    <th className="px-4 py-3">Adesionista</th>
-                    <th className="px-4 py-3">Arquivo</th>
-                    <th className="px-4 py-3">Dependente destino</th>
-                    <th className="px-4 py-3">Causa</th>
-                    <th className="px-4 py-3">Detalhe técnico</th>
-                    <th className="px-4 py-3">Tentativas</th>
-                    <th className="px-4 py-3">Ações</th>
+                    <th className="px-3 py-3">Data</th>
+                    <th className="px-3 py-3">Cliente</th>
+                    <th className="px-3 py-3">Empresa</th>
+                    <th className="px-3 py-3">Vendedor</th>
+                    <th className="px-3 py-3">Adesionista</th>
+                    <th className="px-3 py-3">Arquivo</th>
+                    <th className="px-3 py-3">Dependente destino</th>
+                    <th className="px-3 py-3">Causa</th>
+                    <th className="px-3 py-3 text-center">Tentativas</th>
+                    <th className="px-3 py-3">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {response.items.map((item) => (
-                    <tr key={item.id} className="border-t border-slate-100 align-top">
-                      <td className="whitespace-nowrap px-4 py-4 text-slate-600">
-                        {formatDateTime(item.created_at)}
-                        {item.is_legacy_failure && (
-                          <div className="mt-1 text-xs font-medium text-slate-400">
-                            Passivo histórico
+                  {sortedItems.map((item) => (
+                    <Fragment key={item.id}>
+                      <tr className="border-t border-slate-100 align-top dark:border-slate-800">
+                        <td className="whitespace-nowrap px-3 py-3 text-xs text-slate-600 dark:text-slate-300">
+                          {formatDateTime(item.created_at)}
+                          {item.is_legacy_failure && (
+                            <div className="mt-1 text-[11px] font-medium text-slate-400">
+                              Passivo histórico
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="max-w-44 font-semibold text-slate-800 dark:text-slate-100">
+                            {item.cliente_nome || 'Não informado'}
                           </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="max-w-56 font-medium text-slate-800">
-                          {item.cliente_nome || 'Não informado'}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          {item.cliente_cpf ? formatCPF(item.cliente_cpf) : '-'}
-                        </div>
-                      </td>
-                      <td className="max-w-56 px-4 py-4 text-slate-600">
-                        {item.empresa_nome || '-'}
-                      </td>
-                      <td className="max-w-56 px-4 py-4 text-slate-600">
-                        <div className="truncate" title={item.vendedor_nome || undefined}>
-                          {item.vendedor_nome || '—'}
-                        </div>
-                      </td>
-                      <td className="max-w-56 px-4 py-4 text-slate-600">
-                        <div className="truncate" title={item.adesionista_nome || undefined}>
-                          {item.adesionista_nome || '—'}
-                        </div>
-                      </td>
-                      <td className="max-w-72 px-4 py-4">
-                        <div className="break-all font-medium text-slate-700">
-                          {item.arquivo_nome || '-'}
-                        </div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          {formatBytes(item.file_size_bytes)} ·{' '}
-                          {item.file_exists ? 'arquivo disponível' : 'arquivo ausente'}
-                        </div>
-                      </td>
-                      <td className="max-w-56 px-4 py-4 text-slate-600">
-                        <div>{item.target_dependente_nome || '-'}</div>
-                        <div className="mt-1 text-xs text-slate-500">
-                          {item.target_dependente_cpf
-                            ? formatCPF(item.target_dependente_cpf)
-                            : `ERP ID ${item.id_dependente || '-'}`}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className="inline-flex rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700">
-                          {categoryLabel(item.error_category)}
-                        </span>
-                        {item.error_resolution && (
-                          <div className="mt-2 text-xs font-medium text-emerald-600">
-                            {item.error_resolution}
+                          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            {item.cliente_cpf ? formatCPF(item.cliente_cpf) : '—'}
                           </div>
-                        )}
-                      </td>
-                      <td className="max-w-md px-4 py-4 text-xs text-slate-600">
-                        <div className="font-mono text-[11px] text-slate-500">
-                          {[item.last_error_code, item.last_status_code && `HTTP ${item.last_status_code}`]
-                            .filter(Boolean)
-                            .join(' · ') || '-'}
-                        </div>
-                        <div className="mt-1 break-words">{item.last_error || '-'}</div>
-                      </td>
-                      <td className="px-4 py-4 text-center text-slate-700">
-                        {item.attempts}
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex min-w-48 flex-col gap-2">
-                          {item.can_reconcile && (
-                            <Button
-                              variant="secondary"
-                              disabled={busyId === item.id}
-                              onClick={() => handleSync(item)}
-                              className="justify-center"
-                            >
-                              <RefreshCw className="mr-2 h-4 w-4" />
-                              Sincronizar
-                            </Button>
-                          )}
-
-                          {item.can_upload_replacement && (
-                            <Button
-                              disabled={busyId === item.id}
-                              onClick={() => chooseReplacement(item)}
-                              className="justify-center"
-                            >
-                              <Upload className="mr-2 h-4 w-4" />
-                              Enviar novo arquivo
-                            </Button>
-                          )}
-
-                          {item.can_compress && (
-                            <Button
-                              disabled={busyId === item.id}
-                              onClick={() => handleCompress(item)}
-                              className="justify-center"
-                            >
-                              {busyId === item.id ? (
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              ) : (
-                                <Wand2 className="mr-2 h-4 w-4" />
-                              )}
-                              Comprimir e reenviar
-                            </Button>
-                          )}
-
-                          {item.can_reprocess && (
-                            <Button
-                              variant="secondary"
-                              disabled={busyId === item.id}
-                              onClick={() => handleReprocess(item)}
-                              className="justify-center"
-                            >
-                              Tentar novamente
-                            </Button>
-                          )}
-
-                          {!item.can_upload_replacement &&
-                            !item.can_compress &&
-                            !item.can_reprocess &&
-                            !item.can_reconcile && (
-                              <div className="flex items-center gap-2 text-xs text-slate-400">
-                                <FileWarning className="h-4 w-4" />
-                                Sem ação automática
+                        </td>
+                        <td className="max-w-36 px-3 py-3 text-sm text-slate-600 dark:text-slate-300">
+                          {item.empresa_nome || '—'}
+                        </td>
+                        <td className="max-w-44 px-3 py-3">
+                          <div className="truncate text-sm text-slate-700 dark:text-slate-200" title={item.vendedor_nome || undefined}>
+                            {item.vendedor_nome || '—'}
+                          </div>
+                        </td>
+                        <td className="max-w-44 px-3 py-3">
+                          <div className="truncate text-sm text-slate-700 dark:text-slate-200" title={item.adesionista_nome || undefined}>
+                            {item.adesionista_nome || '—'}
+                          </div>
+                        </td>
+                        <td className="max-w-64 px-3 py-3">
+                          <div className="flex items-start gap-2">
+                            <FileText className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                            <div className="min-w-0">
+                              <div className="break-all text-xs font-semibold text-slate-700 dark:text-slate-200">
+                                {item.arquivo_nome || '—'}
                               </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+                                <span>{formatBytes(item.file_size_bytes)}</span>
+                                <span>·</span>
+                                <span className={`rounded-full px-1.5 py-0.5 ${
+                                  item.file_exists
+                                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                    : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300'
+                                }`}>
+                                  {item.file_exists ? 'disponível' : 'arquivo ausente'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="max-w-44 px-3 py-3 text-slate-700 dark:text-slate-200">
+                          <div className="font-medium">{item.target_dependente_nome || '—'}</div>
+                          <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            {item.target_dependente_cpf
+                              ? formatCPF(item.target_dependente_cpf)
+                              : `ERP ID ${item.id_dependente || '—'}`}
+                          </div>
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className="inline-flex max-w-40 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700 dark:bg-red-950/60 dark:text-red-200">
+                            {categoryLabel(item.error_category)}
+                          </span>
+                          {item.error_resolution && (
+                            <div className="mt-2 text-xs font-medium text-emerald-600 dark:text-emerald-300">
+                              {item.error_resolution}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 text-center font-semibold tabular-nums text-slate-700 dark:text-slate-200">
+                          {item.attempts}
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="flex min-w-32 flex-wrap items-center gap-1.5">
+                            {item.can_reconcile && (
+                              <button
+                                type="button"
+                                disabled={busyId === item.id}
+                                onClick={() => handleSync(item)}
+                                title="Sincronizar"
+                                aria-label="Sincronizar este erro"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </button>
                             )}
-                        </div>
-                      </td>
-                    </tr>
+                            {item.can_upload_replacement && (
+                              <button
+                                type="button"
+                                disabled={busyId === item.id}
+                                onClick={() => chooseReplacement(item)}
+                                title="Enviar novo arquivo"
+                                aria-label="Enviar novo arquivo"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 text-emerald-600 transition hover:bg-emerald-50 disabled:opacity-40 dark:border-emerald-900/60 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+                              >
+                                <Upload className="h-4 w-4" />
+                              </button>
+                            )}
+                            {item.can_compress && (
+                              <button
+                                type="button"
+                                disabled={busyId === item.id}
+                                onClick={() => handleCompress(item)}
+                                title="Comprimir e reenviar"
+                                aria-label="Comprimir e reenviar"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-amber-200 text-amber-600 transition hover:bg-amber-50 disabled:opacity-40 dark:border-amber-900/60 dark:text-amber-300 dark:hover:bg-amber-950/30"
+                              >
+                                {busyId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                              </button>
+                            )}
+                            {item.can_reprocess && (
+                              <button
+                                type="button"
+                                disabled={busyId === item.id}
+                                onClick={() => handleReprocess(item)}
+                                title="Tentar novamente"
+                                aria-label="Tentar novamente"
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                              >
+                                <RotateCcw className="h-4 w-4" />
+                              </button>
+                            )}
+                            {!item.can_upload_replacement && !item.can_compress && !item.can_reprocess && !item.can_reconcile && (
+                              <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+                                <FileWarning className="h-3.5 w-3.5" />
+                                Sem ação
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      <tr className="border-t border-slate-100 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-950/35">
+                        <td colSpan={10} className="px-3 py-2.5">
+                          <div className="grid gap-3 text-xs lg:grid-cols-[1fr_auto_auto] lg:items-center">
+                            <div className="min-w-0">
+                              <div className="mb-0.5 flex items-center gap-2 font-semibold text-slate-600 dark:text-slate-300">
+                                <FileWarning className="h-3.5 w-3.5" />
+                                Detalhe técnico
+                              </div>
+                              <div className="break-words text-slate-500 dark:text-slate-400">
+                                {item.last_error || 'Sem detalhe técnico adicional.'}
+                              </div>
+                            </div>
+                            <div className="border-l border-slate-200 pl-3 dark:border-slate-700">
+                              <div className="text-[10px] uppercase tracking-wide text-slate-400">Código do erro</div>
+                              <div className="mt-0.5 font-mono text-[11px] text-slate-600 dark:text-slate-300">
+                                {[item.last_error_code, item.last_status_code && `HTTP ${item.last_status_code}`]
+                                  .filter(Boolean)
+                                  .join(' · ') || '—'}
+                              </div>
+                            </div>
+                            <div className="border-l border-slate-200 pl-3 dark:border-slate-700">
+                              <div className="text-[10px] uppercase tracking-wide text-slate-400">Última tentativa</div>
+                              <div className="mt-0.5 whitespace-nowrap text-[11px] text-slate-600 dark:text-slate-300">
+                                {formatDateTime(item.last_attempt_at || item.finished_at || item.created_at)}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    </Fragment>
                   ))}
                 </tbody>
               </table>

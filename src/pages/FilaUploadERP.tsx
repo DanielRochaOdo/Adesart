@@ -551,18 +551,12 @@ export function FilaUploadERP() {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <div
-                            className="max-w-48 truncate text-sm text-slate-600"
-                            title={item.cadastro?.vendedor_nome || undefined}
-                          >
+                          <div className="max-w-48 truncate text-sm text-slate-600" title={item.cadastro?.vendedor_nome || undefined}>
                             {item.cadastro?.vendedor_nome || '—'}
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <div
-                            className="max-w-48 truncate text-sm text-slate-600"
-                            title={item.cadastro?.adesionista_nome || undefined}
-                          >
+                          <div className="max-w-48 truncate text-sm text-slate-600" title={item.cadastro?.adesionista_nome || undefined}>
                             {item.cadastro?.adesionista_nome || '—'}
                           </div>
                         </td>
