@@ -357,34 +357,34 @@ export function UserLinkHistoryModal({ user, onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 p-4"
+      className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-6xl rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+        className="vm-glass-modal w-full max-w-6xl overflow-hidden rounded-3xl"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4 dark:border-slate-700">
+        <div className="vm-glass-modal-bar flex items-start justify-between border-b px-5 py-4">
           <div>
-            <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">
+            <h2 className="vm-page-title text-xl font-bold">
               Histórico de links
             </h2>
-            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            <p className="vm-muted-text mt-1 text-sm">
               {user.name} · {user.email}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+            className="vm-glass-nav-item rounded-lg p-2"
             aria-label="Fechar histórico de links"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="border-b border-slate-200 px-5 py-3 dark:border-slate-700">
-          <label className="flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 dark:border-slate-700 dark:bg-slate-950">
+        <div className="border-b border-slate-200/70 px-5 py-3 dark:border-white/10">
+          <label className="vm-glass-field flex h-10 items-center gap-2 rounded-xl border px-3">
             <Search className="h-4 w-4 shrink-0 text-slate-400" />
             <input
               type="search"
@@ -409,7 +409,7 @@ export function UserLinkHistoryModal({ user, onClose }: Props) {
               Carregando links...
             </div>
           ) : filteredGroups.length === 0 ? (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:bg-slate-950/40 dark:text-slate-400">
+            <div className="vm-dashboard-subpanel rounded-2xl p-8 text-center text-sm text-slate-500 dark:text-slate-400">
               {searchTerm.trim()
                 ? 'Nenhuma empresa encontrada para esta busca.'
                 : 'Este usuário ainda não criou links.'}
@@ -422,7 +422,7 @@ export function UserLinkHistoryModal({ user, onClose }: Props) {
                 return (
                   <div
                     key={group.key}
-                    className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"
+                    className="vm-users-customizer overflow-hidden rounded-2xl"
                   >
                     <button
                       type="button"
@@ -432,7 +432,7 @@ export function UserLinkHistoryModal({ user, onClose }: Props) {
                         );
                         setSelectedLinkId(null);
                       }}
-                      className="grid min-h-12 w-full grid-cols-[84px_1fr_auto_auto_28px] items-center gap-3 bg-white px-3 py-2 text-left transition hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800/70"
+                      className="grid min-h-12 w-full grid-cols-[84px_1fr_auto_auto_28px] items-center gap-3 px-3 py-2 text-left transition hover:bg-white/30 dark:hover:bg-white/[0.04]"
                     >
                       <span className="text-sm font-bold tabular-nums text-slate-800 dark:text-slate-100">
                         {group.empresaCodigo}
@@ -454,7 +454,7 @@ export function UserLinkHistoryModal({ user, onClose }: Props) {
                     </button>
 
                     {companyExpanded && (
-                      <div className="border-t border-slate-200 bg-slate-50/80 p-2 dark:border-slate-700 dark:bg-slate-950/40">
+                      <div className="vm-users-customizer-content border-t p-2">
                         <div className="space-y-2">
                           {group.links.map((link, index) => {
                             const loaded = historyByLinkId[link.id];
@@ -465,7 +465,7 @@ export function UserLinkHistoryModal({ user, onClose }: Props) {
                             return (
                               <div
                                 key={link.id}
-                                className="overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
+                                className="vm-column-chip overflow-hidden rounded-xl"
                               >
                                 <div className="grid gap-2 px-3 py-2 md:grid-cols-[64px_170px_170px_1fr_auto] md:items-center">
                                   <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
@@ -501,7 +501,7 @@ export function UserLinkHistoryModal({ user, onClose }: Props) {
                                       type="button"
                                       onClick={() => void loadHistory(link)}
                                       disabled={historyLoading || deleting}
-                                      className="rounded-lg p-2 text-slate-600 hover:bg-slate-100 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-800"
+                                      className="vm-user-action vm-user-action-neutral disabled:opacity-50"
                                       title="Ver resumo do histórico"
                                       aria-label={`Ver histórico do link ${link.empresa_codigo}`}
                                     >
@@ -516,7 +516,7 @@ export function UserLinkHistoryModal({ user, onClose }: Props) {
                                       type="button"
                                       onClick={() => void exportHistory(link)}
                                       disabled={historyLoading || deleting}
-                                      className="rounded-lg p-2 text-emerald-600 hover:bg-emerald-50 disabled:opacity-50 dark:hover:bg-emerald-950/30"
+                                      className="vm-user-action text-emerald-600 hover:border-emerald-500/20 hover:bg-emerald-500/10 disabled:opacity-50 dark:text-emerald-300"
                                       title="Exportar histórico detalhado"
                                       aria-label={`Exportar histórico do link ${link.empresa_codigo}`}
                                     >
@@ -528,7 +528,7 @@ export function UserLinkHistoryModal({ user, onClose }: Props) {
                                         type="button"
                                         onClick={() => void permanentlyDelete(link)}
                                         disabled={deleting || historyLoading}
-                                        className="rounded-lg p-2 text-red-600 hover:bg-red-50 disabled:opacity-50 dark:hover:bg-red-950/30"
+                                        className="vm-user-action text-red-600 hover:border-red-500/20 hover:bg-red-500/10 disabled:opacity-50 dark:text-red-300"
                                         title="Excluir definitivamente"
                                         aria-label={`Excluir definitivamente o link ${link.empresa_codigo}`}
                                       >
@@ -543,7 +543,7 @@ export function UserLinkHistoryModal({ user, onClose }: Props) {
                                 </div>
 
                                 {expanded && loaded && (
-                                  <div className="grid grid-cols-3 gap-2 border-t border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-700 dark:bg-slate-950/50">
+                                  <div className="vm-dashboard-subpanel grid grid-cols-3 gap-2 border-t px-3 py-2">
                                     <div className="text-center">
                                       <p className="text-[11px] text-slate-500 dark:text-slate-400">
                                         Visitas por sessão
@@ -583,7 +583,7 @@ export function UserLinkHistoryModal({ user, onClose }: Props) {
           )}
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-3 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between">
+        <div className="vm-glass-modal-bar flex flex-col gap-3 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="text-xs text-slate-500 dark:text-slate-400">
             {filteredGroups.length > 0
               ? `Mostrando ${pageStart + 1}-${Math.min(
@@ -598,7 +598,7 @@ export function UserLinkHistoryModal({ user, onClose }: Props) {
               type="button"
               onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
               disabled={currentPage <= 1}
-              className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-300"
+              className="vm-glass-secondary inline-flex h-9 items-center gap-1 rounded-lg px-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronLeft className="h-4 w-4" />
               Anterior
@@ -612,7 +612,7 @@ export function UserLinkHistoryModal({ user, onClose }: Props) {
               type="button"
               onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
               disabled={currentPage >= totalPages}
-              className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-600 disabled:cursor-not-allowed disabled:opacity-40 dark:border-slate-700 dark:text-slate-300"
+              className="vm-glass-secondary inline-flex h-9 items-center gap-1 rounded-lg px-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
             >
               Próxima
               <ChevronRight className="h-4 w-4" />
