@@ -53,3 +53,31 @@ object VendaSizing {
     val bottomNavigation = 72.dp
     val topBar = 64.dp
 }
+
+
+/**
+ * Intensidades globais do glassmorphism nativo.
+ *
+ * O Android não replica CSS/backdrop-filter literalmente. Em Compose a mesma
+ * hierarquia visual é obtida combinando transparência, gradientes, borda
+ * hairline, elevação e glow. Estes valores são compartilhados por todas as
+ * telas para evitar variações entre módulos.
+ */
+object VendaGlass {
+    const val lightSurfaceAlpha = 0.86f
+    const val lightSurfaceStrongAlpha = 0.94f
+    const val lightSunkenAlpha = 0.78f
+
+    const val darkSurfaceAlpha = 0.74f
+    const val darkSurfaceStrongAlpha = 0.88f
+    const val darkSunkenAlpha = 0.66f
+
+    const val lightBorderAlpha = 0.18f
+    const val darkBorderAlpha = 0.10f
+    const val lightHighlightAlpha = 0.62f
+    const val darkHighlightAlpha = 0.035f
+
+    val cardElevation = 10.dp
+    val raisedElevation = 14.dp
+    val modalElevation = 20.dp
+}
