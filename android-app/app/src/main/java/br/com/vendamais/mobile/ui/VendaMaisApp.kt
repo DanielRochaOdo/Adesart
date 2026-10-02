@@ -545,24 +545,31 @@ private fun AppHeaderBar(
     val glassBrush = if (dark) {
         Brush.verticalGradient(
             listOf(
-                Color(0xFF172338).copy(alpha = 0.92f),
-                Color(0xFF0E192A).copy(alpha = 0.82f),
+                Color(0xFF182A45).copy(alpha = 0.72f),
+                Color(0xFF081321).copy(alpha = 0.58f),
             ),
         )
     } else {
         Brush.verticalGradient(
             listOf(
-                Color(0xFFF9FCFA).copy(alpha = 0.94f),
-                Color(0xFFEAF2EE).copy(alpha = 0.84f),
+                Color(0xFFF8FCFA).copy(alpha = 0.76f),
+                Color(0xFFDCEBE4).copy(alpha = 0.56f),
             ),
         )
     }
+    val specularBrush = Brush.linearGradient(
+        colors = listOf(
+            Color.Transparent,
+            if (dark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.62f),
+            Color.Transparent,
+        ),
+    )
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
             .shadow(
-                elevation = if (dark) 14.dp else 10.dp,
+                elevation = if (dark) 20.dp else 15.dp,
                 shape = shape,
                 ambientColor = if (dark) Color.Black.copy(alpha = 0.40f) else Color(0xFF0F172A).copy(alpha = 0.13f),
                 spotColor = if (dark) Color.Black.copy(alpha = 0.42f) else Color(0xFF0F172A).copy(alpha = 0.10f),
@@ -570,10 +577,15 @@ private fun AppHeaderBar(
             .background(glassBrush, shape)
             .border(
                 1.dp,
-                if (dark) Color.White.copy(alpha = 0.08f) else Color(0xFF334155).copy(alpha = 0.12f),
+                if (dark) Color.White.copy(alpha = 0.13f) else Color.White.copy(alpha = 0.64f),
                 shape,
             ),
     ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(specularBrush, shape),
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -628,24 +640,31 @@ private fun MagicBottomNavigationBar(
     val glassBrush = if (dark) {
         Brush.verticalGradient(
             listOf(
-                Color(0xFF152136).copy(alpha = 0.88f),
-                Color(0xFF0B1525).copy(alpha = 0.82f),
+                Color(0xFF172940).copy(alpha = 0.70f),
+                Color(0xFF081321).copy(alpha = 0.56f),
             ),
         )
     } else {
         Brush.verticalGradient(
             listOf(
-                Color(0xFFF8FBF9).copy(alpha = 0.92f),
-                Color(0xFFE8F0EC).copy(alpha = 0.84f),
+                Color(0xFFF8FCFA).copy(alpha = 0.74f),
+                Color(0xFFDDEBE4).copy(alpha = 0.54f),
             ),
         )
     }
+    val navSpecularBrush = Brush.linearGradient(
+        colors = listOf(
+            Color.Transparent,
+            if (dark) Color.White.copy(alpha = 0.07f) else Color.White.copy(alpha = 0.58f),
+            Color.Transparent,
+        ),
+    )
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
             .shadow(
-                elevation = if (dark) 16.dp else 11.dp,
+                elevation = if (dark) 22.dp else 16.dp,
                 shape = shape,
                 ambientColor = if (dark) Color.Black.copy(alpha = 0.42f) else Color(0xFF0F172A).copy(alpha = 0.14f),
                 spotColor = if (dark) Color.Black.copy(alpha = 0.44f) else Color(0xFF0F172A).copy(alpha = 0.11f),
@@ -653,10 +672,15 @@ private fun MagicBottomNavigationBar(
             .background(glassBrush, shape)
             .border(
                 1.dp,
-                if (dark) Color.White.copy(alpha = 0.08f) else Color(0xFF334155).copy(alpha = 0.12f),
+                if (dark) Color.White.copy(alpha = 0.13f) else Color.White.copy(alpha = 0.62f),
                 shape,
             ),
     ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(navSpecularBrush, shape),
+        )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -687,9 +711,9 @@ private fun MagicBottomNavigationBar(
                     Surface(
                         modifier = Modifier.size(width = 44.dp, height = 32.dp),
                         shape = RoundedCornerShape(16.dp),
-                        color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (dark) 0.72f else 0.82f) else Color.Transparent,
+                        color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (dark) 0.54f else 0.62f) else Color.Transparent,
                         border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)) else null,
-                        shadowElevation = if (selected) 3.dp else 0.dp,
+                        shadowElevation = if (selected) 7.dp else 0.dp,
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
