@@ -44,6 +44,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -244,6 +245,11 @@ fun VendaMetricCard(
 ) {
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val shape = RoundedCornerShape(VendaRadius.lg)
+    val resolvedContentColor = if (dark && contentColor.luminance() < 0.55f) {
+        lerp(contentColor, Color.White, 0.58f)
+    } else {
+        contentColor
+    }
     val baseColor = if (containerColor == MaterialTheme.colorScheme.surface) {
         if (dark) Color(0xFF142135) else Color(0xFFF1F7F4)
     } else {
@@ -278,13 +284,13 @@ fun VendaMetricCard(
             text = value,
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
-            color = contentColor,
+            color = resolvedContentColor,
         )
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.SemiBold,
-            color = contentColor,
+            color = resolvedContentColor,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
