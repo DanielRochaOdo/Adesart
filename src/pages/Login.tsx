@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Input } from '../components/Input';
 import { Button } from '../components/Button';
-import { Briefcase } from 'lucide-react';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -32,12 +31,15 @@ export function Login() {
   return (
     <div className="vm-glass-login-shell min-h-screen flex items-center justify-center px-3 py-6 sm:px-4 sm:py-8">
       <div className="w-full max-w-md">
-        <div className="text-center mb-5 sm:mb-8">
-          <div className="vm-glass-primary mb-3 inline-flex h-12 w-12 items-center justify-center rounded-2xl sm:mb-4 sm:h-16 sm:w-16">
-            <Briefcase className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
+        <div className="mb-5 text-center sm:mb-8">
+          <div className="mx-auto mb-3 flex h-28 w-28 items-center justify-center rounded-[30px] sm:mb-4 sm:h-32 sm:w-32">
+            <img
+              src="/venda-plus-logo.webp"
+              alt="Venda+"
+              className="h-full w-full object-contain drop-shadow-[0_18px_35px_rgba(5,150,105,.24)]"
+            />
           </div>
-          <h1 className="mb-1 text-2xl font-bold text-slate-800 dark:text-slate-100 sm:mb-2 sm:text-3xl">Venda+</h1>
-          <p className="text-xs text-slate-600 dark:text-slate-300 sm:text-base">Sistema de Gestão ERP</p>
+          <p className="vm-muted-text text-xs sm:text-base">Sistema de Gestão ERP</p>
         </div>
 
         <div className="vm-glass-modal rounded-xl p-5 sm:rounded-2xl sm:p-8">
