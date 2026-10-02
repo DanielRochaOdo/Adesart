@@ -1434,3 +1434,191 @@
     box-shadow: inset 3px 0 0 rgba(52,211,153,.38);
   }
 }
+
+
+/* ============================================================
+   Venda+ Glass Lab — Teams / aggressive Reflect direction
+   ============================================================ */
+@layer utilities {
+  .vm-teams-hero {
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(540px circle at 7% -46%, rgba(16,185,129,.24), transparent 66%),
+      radial-gradient(420px circle at 92% -52%, rgba(20,184,166,.11), transparent 65%),
+      linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,.015)),
+      var(--vm-glass-layer-strong);
+    border: 1px solid var(--vm-border);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.60),
+      0 22px 58px rgba(15,23,42,.10);
+    -webkit-backdrop-filter: blur(22px) saturate(132%);
+    backdrop-filter: blur(22px) saturate(132%);
+  }
+
+  .dark .vm-teams-hero {
+    background:
+      radial-gradient(540px circle at 7% -46%, rgba(16,185,129,.20), transparent 66%),
+      radial-gradient(420px circle at 92% -52%, rgba(14,116,144,.13), transparent 65%),
+      linear-gradient(180deg, rgba(255,255,255,.024), transparent),
+      rgba(10,18,32,.76);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.035),
+      0 24px 64px rgba(0,0,0,.26);
+  }
+
+  .vm-teams-shell {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.012)),
+      rgba(235,243,239,.76);
+    border: 1px solid var(--vm-border);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.54),
+      0 18px 46px rgba(15,23,42,.075);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    backdrop-filter: blur(16px) saturate(120%);
+  }
+
+  .dark .vm-teams-shell {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.022), transparent),
+      rgba(10,18,32,.68);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.025),
+      0 20px 48px rgba(0,0,0,.20);
+  }
+
+  .vm-team-card {
+    position: relative;
+    overflow: hidden;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.27), rgba(255,255,255,.014)),
+      rgba(239,246,242,.79);
+    border: 1px solid var(--vm-border);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.58),
+      0 14px 34px rgba(15,23,42,.07);
+    -webkit-backdrop-filter: blur(14px) saturate(120%);
+    backdrop-filter: blur(14px) saturate(120%);
+    transition:
+      transform 170ms ease,
+      border-color 170ms ease,
+      box-shadow 170ms ease;
+  }
+
+  .vm-team-card::after {
+    content: "";
+    position: absolute;
+    width: 150px;
+    height: 150px;
+    right: -62px;
+    top: -72px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(16,185,129,.14), transparent 70%);
+    pointer-events: none;
+  }
+
+  .vm-team-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(5,150,105,.27);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.66),
+      0 22px 46px rgba(15,23,42,.105),
+      0 0 0 1px rgba(16,185,129,.035);
+  }
+
+  .dark .vm-team-card {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.025), transparent),
+      rgba(15,23,42,.66);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.025),
+      0 16px 38px rgba(0,0,0,.20);
+  }
+
+  .dark .vm-team-card:hover {
+    border-color: rgba(52,211,153,.17);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.035),
+      0 24px 50px rgba(0,0,0,.28),
+      0 0 30px rgba(16,185,129,.045);
+  }
+
+  .vm-team-member-card {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.17), rgba(255,255,255,.01)),
+      rgba(220,232,226,.72);
+    border: 1px solid var(--vm-border);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.46),
+      0 8px 22px rgba(15,23,42,.045);
+    transition:
+      border-color 140ms ease,
+      background-color 140ms ease,
+      transform 140ms ease;
+  }
+
+  .vm-team-member-card:hover {
+    transform: translateY(-1px);
+    border-color: rgba(5,150,105,.23);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.20), rgba(255,255,255,.015)),
+      rgba(213,228,220,.83);
+  }
+
+  .dark .vm-team-member-card {
+    background: rgba(15,23,42,.58);
+    border-color: var(--vm-border);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.02),
+      0 10px 24px rgba(0,0,0,.13);
+  }
+
+  .dark .vm-team-member-card:hover {
+    background: rgba(30,41,59,.66);
+    border-color: rgba(52,211,153,.14);
+  }
+
+  .vm-team-status {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+
+  .vm-team-edit {
+    color: var(--vm-text-secondary);
+    border: 1px solid transparent;
+    background: transparent;
+    transition:
+      background-color 140ms ease,
+      border-color 140ms ease,
+      color 140ms ease,
+      transform 140ms ease;
+  }
+
+  .vm-team-edit:hover {
+    transform: translateY(-1px);
+    color: var(--vm-text);
+    background: rgba(71,85,105,.08);
+    border-color: rgba(71,85,105,.13);
+  }
+
+  .dark .vm-team-edit:hover {
+    background: rgba(255,255,255,.055);
+    border-color: rgba(255,255,255,.07);
+  }
+
+  .vm-team-modal-list {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,.01)),
+      rgba(228,238,233,.68);
+    border: 1px solid var(--vm-border);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.42);
+  }
+
+  .dark .vm-team-modal-list {
+    background: rgba(9,17,31,.55);
+    border-color: var(--vm-border);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+  }
+}
