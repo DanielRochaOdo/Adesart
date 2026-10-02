@@ -143,13 +143,13 @@ export function EditUserModal({ user, onClose, onSuccess, canEditRole, canEditEx
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between">
-          <h2 className="text-xl font-bold text-slate-800">Editar Usuário</h2>
+    <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
+      <div className="vm-glass-modal my-8 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl">
+        <div className="vm-glass-modal-bar sticky top-0 flex items-center justify-between border-b p-6">
+          <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Editar Usuário</h2>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 transition-colors"
+            className="rounded-lg p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-white/[0.08] dark:hover:text-white"
           >
             <X className="w-5 h-5" />
           </button>
@@ -236,7 +236,7 @@ export function EditUserModal({ user, onClose, onSuccess, canEditRole, canEditEx
               step="0.01"
               disabled={!canEditLemmitLimit}
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
               Valor em reais (R$) que o usuário pode gastar por mês com consultas Lemmit. Cada consulta custa R$ 0,12. Deixe em branco para ilimitado ou digite 0 para bloquear consultas.
             </p>
           </div>
@@ -249,13 +249,13 @@ export function EditUserModal({ user, onClose, onSuccess, canEditRole, canEditEx
               onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
               className="w-4 h-4 text-emerald-600 border-slate-300 rounded focus:ring-emerald-500"
             />
-            <label htmlFor="is_active" className="text-sm font-medium text-slate-700">
+            <label htmlFor="is_active" className="text-sm font-medium text-slate-700 dark:text-slate-200">
               Usuário ativo
             </label>
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <div className="rounded-lg border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-200">
               {error}
             </div>
           )}

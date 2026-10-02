@@ -1503,8 +1503,8 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="vm-glass-modal max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-3xl">
         <div className="sticky top-0 bg-emerald-600 text-white px-6 py-4 flex items-center justify-between rounded-t-xl z-10">
           <h2 className="text-xl font-bold">Continuar Inclusão de Dependentes</h2>
           <button
@@ -1608,7 +1608,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
 
           <div className="border-t border-slate-200 pt-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-slate-800">Dependentes</h3>
+              <h3 className="vm-page-title text-lg font-semibold">Dependentes</h3>
               <Button
                 onClick={adicionarDependente}
                 variant="secondary"
@@ -1621,7 +1621,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
             </div>
 
             {dependentes.map((dep, index) => (
-              <div key={dep.id} className="mb-6 p-4 bg-slate-50 rounded-lg border border-slate-200">
+              <div key={dep.id} className="vm-cadastro-subcard mb-6 rounded-2xl p-4">
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="font-semibold text-slate-700">Dependente {index + 1}</h4>
                   {dependentes.length > 1 && (
@@ -1848,9 +1848,9 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
 
             <div className="space-y-4">
               {dependentes.map((dep, index) => (
-                <div key={`anexo-${dep.id}`} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <div key={`anexo-${dep.id}`} className="vm-cadastro-subcard rounded-2xl p-4">
                   <div className="mb-3">
-                    <h4 className="font-medium text-slate-800">{dep.nome || `Dependente ${index + 1}`}</h4>
+                    <h4 className="vm-page-title font-semibold">{dep.nome || `Dependente ${index + 1}`}</h4>
                     <p className="text-sm text-slate-600">
                       Plano {dep.plano || '-'}{dep.planoValor ? ` • R$ ${dep.planoValor}` : ''}
                     </p>
@@ -1925,7 +1925,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
           </div>
           )}
 
-          <div className="sticky bottom-0 bg-slate-50 px-6 py-4 flex justify-between gap-3 border-t border-slate-200 rounded-b-xl">
+          <div className="vm-glass-modal-bar sticky bottom-0 flex justify-between gap-3 border-t px-6 py-4">
           <Button
             onClick={handleSalvarRascunho}
             variant="secondary"

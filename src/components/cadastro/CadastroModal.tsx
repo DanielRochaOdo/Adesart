@@ -1138,8 +1138,8 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
 
   if (!initialLoadComplete) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-xl shadow-xl p-8">
+      <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="vm-glass-modal rounded-2xl p-8">
           <div className="flex flex-col items-center gap-4">
             <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
             <p className="text-slate-700 font-medium">Carregando cadastro...</p>
@@ -1151,8 +1151,8 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
 
   if (!cadastroAtual || !cadastroAtual.id) {
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-xl shadow-xl p-8">
+      <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="vm-glass-modal rounded-2xl p-8">
           <div className="flex flex-col items-center gap-4">
             <p className="text-red-700 font-medium">Erro: Dados do cadastro nÃ£o disponÃ­veis</p>
             <Button onClick={onClose}>Fechar</Button>
@@ -1163,11 +1163,11 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full my-8 max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between">
+    <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
+      <div className="vm-glass-modal my-8 max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl">
+        <div className="vm-glass-modal-bar sticky top-0 flex items-center justify-between border-b p-6">
           <div>
-            <h2 className="text-xl font-bold text-slate-800">
+            <h2 className="vm-page-title text-xl font-bold">
               {cadastroAtual.nome || 'Editar Cadastro'}
             </h2>
             <p className="text-sm text-slate-600 mt-1">
@@ -1248,8 +1248,8 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
                 )}
               </div>
 
-              <div className="border-t border-slate-200 pt-6">
-                <h3 className="font-semibold text-slate-800 mb-4">Contatos</h3>
+              <div className="border-t border-slate-200/80 pt-6 dark:border-white/10">
+                <h3 className="vm-page-title mb-4 font-semibold">Contatos</h3>
                 <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <h4 className="text-sm font-medium text-blue-900 mb-3">Adicionar Contato</h4>
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-2">
@@ -1293,7 +1293,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
                     formData.contatos.map((contato, index) => (
                       <div
                         key={index}
-                        className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg"
+                        className="vm-cadastro-subcard flex items-center gap-3 rounded-xl p-3"
                       >
                         <input
                           type="checkbox"
@@ -1305,7 +1305,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
                           <span className="text-xs font-medium text-slate-500 uppercase">
                             {contato.tipo}
                           </span>
-                          <p className="text-sm text-slate-800">
+                          <p className="text-sm text-slate-800 dark:text-slate-200">
                             {contato.tipo === 'email' ? contato.valor : formatPhone(contato.valor)}
                           </p>
                         </div>
@@ -1325,8 +1325,8 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
                 </div>
               </div>
 
-              <div className="border-t border-slate-200 pt-6">
-                <h3 className="font-semibold text-slate-800 mb-4">Endereço</h3>
+              <div className="border-t border-slate-200/80 pt-6 dark:border-white/10">
+                <h3 className="vm-page-title mb-4 font-semibold">Endereço</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="relative">
                     <div>
@@ -1451,8 +1451,8 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
               </div>
 
               {loadingPlanos ? (
-                <div className="border-t border-slate-200 pt-6">
-                  <div className="flex items-center justify-center py-12 bg-slate-50 rounded-lg border border-slate-200">
+                <div className="border-t border-slate-200/80 pt-6 dark:border-white/10">
+                  <div className="vm-cadastro-subcard flex items-center justify-center rounded-2xl py-12">
                     <div className="text-center">
                       <Loader2 className="w-8 h-8 text-emerald-600 animate-spin mx-auto mb-3" />
                       <p className="text-sm font-medium text-slate-700">Carregando planos da empresa...</p>
@@ -1461,7 +1461,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
                   </div>
                 </div>
               ) : planosEmpresa.length === 0 ? (
-                <div className="border-t border-slate-200 pt-6">
+                <div className="border-t border-slate-200/80 pt-6 dark:border-white/10">
                   <div className="py-12 bg-amber-50 rounded-lg border border-amber-200">
                     <div className="text-center">
                       <p className="text-sm font-medium text-amber-700">Nenhum plano disponível para esta empresa</p>
@@ -1505,8 +1505,8 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
                 </div>
               </div>
 
-              <div className="border-t border-slate-200 pt-6">
-                <h3 className="font-semibold text-slate-800 mb-4">Documento</h3>
+              <div className="border-t border-slate-200/80 pt-6 dark:border-white/10">
+                <h3 className="vm-page-title mb-4 font-semibold">Documento</h3>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">

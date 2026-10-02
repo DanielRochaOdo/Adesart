@@ -72,8 +72,8 @@ export function StatsByVendedorModal({
   });
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="vm-glass-modal flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl">
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <h2 className="text-xl font-bold text-slate-800">{title}</h2>
           <button
@@ -95,7 +95,7 @@ export function StatsByVendedorModal({
               {sortedStats.map((stat) => (
                 <div
                   key={stat.vendedor_id}
-                  className={`${getBgColorByType()} border border-slate-200 rounded-lg p-4 transition-all hover:shadow-md`}
+                  className={`${getBgColorByType()} border border-slate-200 rounded-lg p-4 transition-all hover:-translate-y-0.5 hover:shadow-md`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
@@ -118,10 +118,10 @@ export function StatsByVendedorModal({
           )}
         </div>
 
-        <div className="p-4 border-t border-slate-200 bg-slate-50">
+        <div className="vm-glass-modal-bar border-t p-4">
           <button
             onClick={onClose}
-            className="w-full py-2 px-4 bg-slate-600 text-white rounded-lg hover:bg-slate-700 transition-colors font-medium"
+            className="vm-glass-secondary w-full rounded-lg px-4 py-2 font-medium text-slate-700 transition dark:text-slate-200"
           >
             Fechar
           </button>

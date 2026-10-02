@@ -35,9 +35,9 @@ export function ExcluirCadastroModal({ onClose, onConfirm, titularNome }: Exclui
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-        <div className="flex items-center justify-between p-6 border-b border-slate-200">
+    <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="vm-glass-modal w-full max-w-md rounded-2xl">
+        <div className="vm-glass-modal-bar flex items-center justify-between border-b p-6">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-red-100 rounded-lg">
               <AlertTriangle className="w-6 h-6 text-red-600" />
@@ -58,7 +58,7 @@ export function ExcluirCadastroModal({ onClose, onConfirm, titularNome }: Exclui
             <p className="text-slate-700 mb-4">
               Você está prestes a excluir a adesão de:
             </p>
-            <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+            <div className="vm-cadastro-subcard rounded-xl p-3">
               <p className="font-semibold text-slate-900">{titularNome}</p>
             </div>
           </div>

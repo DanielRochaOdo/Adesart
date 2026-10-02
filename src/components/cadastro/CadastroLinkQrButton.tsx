@@ -103,17 +103,17 @@ export function CadastroLinkQrButton({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4"
+          className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4"
           onClick={() => setOpen(false)}
         >
           <div
-            className="w-full max-w-sm sm:max-w-md max-h-[92vh] bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden"
+            className="vm-glass-modal max-h-[92vh] w-full max-w-sm overflow-hidden rounded-3xl sm:max-w-md"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-4 px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-200">
+            <div className="vm-glass-modal-bar flex items-start justify-between gap-4 border-b px-4 py-4 sm:px-6 sm:py-5">
               <div>
-                <h3 className="text-base sm:text-lg font-semibold text-slate-800">QR Code do Link</h3>
-                <p className="text-xs sm:text-sm text-slate-600 mt-1">
+                <h3 className="vm-page-title text-base font-semibold sm:text-lg">QR Code do Link</h3>
+                <p className="vm-muted-text mt-1 text-xs sm:text-sm">
                   Escaneie para abrir a página de adesão.
                 </p>
               </div>
@@ -121,7 +121,7 @@ export function CadastroLinkQrButton({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors"
+                className="vm-glass-nav-item rounded-lg p-2"
                 aria-label="Fechar QR Code"
               >
                 <X className="w-5 h-5" />
@@ -130,12 +130,12 @@ export function CadastroLinkQrButton({
 
             <div className="px-4 sm:px-6 py-4 sm:py-6 space-y-4 overflow-y-auto max-h-[calc(92vh-78px)]">
               {empresaNome && (
-                <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 sm:px-4 py-3 text-sm text-slate-700">
+                <div className="vm-cadastro-subcard rounded-xl px-3 py-3 text-sm text-slate-700 dark:text-slate-200 sm:px-4">
                   {empresaNome}
                 </div>
               )}
 
-              <div className="flex items-center justify-center min-h-[240px] sm:min-h-72 bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-6">
+              <div className="vm-cadastro-subcard flex min-h-[240px] items-center justify-center rounded-2xl p-4 sm:min-h-72 sm:p-6">
                 {loading ? (
                   <div className="text-center text-slate-600">
                     <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-emerald-600" />
@@ -153,7 +153,7 @@ export function CadastroLinkQrButton({
               </div>
 
               {url && (
-                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 sm:p-4 text-[11px] sm:text-xs text-slate-600 break-all">
+                <div className="vm-cadastro-subcard break-all rounded-xl p-3 text-[11px] text-slate-600 dark:text-slate-300 sm:p-4 sm:text-xs">
                   {url}
                 </div>
               )}

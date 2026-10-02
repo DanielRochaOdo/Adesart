@@ -203,7 +203,7 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
 
   if (completos.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12">
+      <div className="vm-cadastro-card rounded-3xl p-12">
         <div className="text-center">
           <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-500">Nenhum atendimento completo</p>
@@ -237,10 +237,10 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
 
   return (
     <>
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4">
+      <div className="vm-cadastro-card mb-4 rounded-3xl p-4">
         <div className="flex items-center gap-2 mb-3">
           <Search className="w-5 h-5 text-slate-500" />
-          <h3 className="font-semibold text-slate-800">Filtros</h3>
+          <h3 className="vm-page-title font-semibold">Filtros</h3>
           {temFiltrosAtivos && (
             <button
               onClick={limparFiltros}
@@ -390,14 +390,14 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
             Filtrar
           </Button>
 
-          <div className="text-sm text-slate-600">
+          <div className="vm-muted-text text-sm">
             Mostrando {cadastrosFiltrados.length} de {cadastrosPorPeriodo.length} {cadastrosPorPeriodo.length === 1 ? 'cadastro' : 'cadastros'}
           </div>
         </div>
       </div>
 
       {cadastrosFiltrados.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12">
+        <div className="vm-cadastro-card rounded-3xl p-12">
           <div className="text-center">
             <Search className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-500">Nenhum cadastro encontrado com os filtros aplicados</p>
@@ -412,17 +412,17 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
               return (
                 <div
                   key={empresaKey}
-                  className="bg-white rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow"
+                  className="vm-cadastro-list-card rounded-3xl"
                 >
-                  <div className="p-4 border-b border-slate-200 bg-gradient-to-r from-emerald-50 to-blue-50">
+                  <div className="vm-link-group-head border-b p-4">
                     <div className="flex items-start gap-3">
                       <Building2 className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-1" />
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-semibold text-slate-800 truncate">
+                        <h3 className="vm-page-title truncate font-semibold">
                           {empresa.empresaNome}
                         </h3>
                         {empresa.empresaCnpj && (
-                          <p className="text-xs text-slate-600 mt-1">
+                          <p className="vm-muted-text mt-1 text-xs">
                             CNPJ: {empresa.empresaCnpj}
                           </p>
                         )}
@@ -442,10 +442,10 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
                       {empresa.cadastros.map((cadastro, idx) => (
                         <div
                           key={`${empresaKey}-${cadastro.id}-${idx}`}
-                          className="flex items-center justify-between p-2 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
+                          className="vm-cadastro-subcard flex items-center justify-between rounded-xl p-2"
                         >
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-slate-800 truncate">
+                            <p className="vm-page-title truncate text-sm font-semibold">
                               {cadastro.nome || (cadastro.cpf ? formatCPF(cadastro.cpf) : 'Sem identificação')}
                             </p>
                             <p className="text-xs text-slate-500">
@@ -473,7 +473,7 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="p-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="vm-glass-secondary rounded-lg p-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <ChevronLeft className="w-5 h-5" />
               </button>
@@ -483,7 +483,7 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
                   <>
                     <button
                       onClick={() => setCurrentPage(1)}
-                      className="px-3 py-1.5 rounded-lg font-medium text-sm text-slate-600 hover:bg-slate-100 transition-colors"
+                      className="vm-glass-secondary rounded-lg px-3 py-1.5 text-sm font-medium"
                     >
                       1
                     </button>
@@ -500,7 +500,7 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
                     className={`px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${
                       currentPage === page
                         ? 'bg-emerald-600 text-white'
-                        : 'text-slate-600 hover:bg-slate-100'
+                        : 'vm-glass-secondary'
                     }`}
                   >
                     {page}
@@ -514,7 +514,7 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
                     )}
                     <button
                       onClick={() => setCurrentPage(totalPages)}
-                      className="px-3 py-1.5 rounded-lg font-medium text-sm text-slate-600 hover:bg-slate-100 transition-colors"
+                      className="vm-glass-secondary rounded-lg px-3 py-1.5 text-sm font-medium"
                     >
                       {totalPages}
                     </button>
@@ -525,7 +525,7 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
               <button
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="p-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="vm-glass-secondary rounded-lg p-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <ChevronRight className="w-5 h-5" />
               </button>
@@ -535,187 +535,187 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
       )}
 
       {viewDetails && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-xl max-w-6xl w-full p-6 max-h-[90vh] overflow-y-auto">
+        <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="vm-glass-modal max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-3xl p-6">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-slate-800">Detalhes Completos do Cadastro</h3>
+              <h3 className="vm-page-title text-xl font-bold">Detalhes Completos do Cadastro</h3>
               <button
                 onClick={() => setViewDetails(null)}
-                className="text-slate-400 hover:text-slate-600"
+                className="vm-glass-nav-item rounded-lg p-1"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
 
             <div className="space-y-6">
-              <div className="border-b border-slate-200 pb-4">
-                <h4 className="font-bold text-lg text-slate-800 mb-3">Dados do Titular</h4>
+              <div className="border-b border-slate-200/70 pb-4 dark:border-white/10">
+                <h4 className="vm-page-title mb-3 text-lg font-bold">Dados do Titular</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Nome</p>
-                    <p className="text-slate-800">{viewDetails.nome || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Nome</p>
+                    <p className="vm-page-title">{viewDetails.nome || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">CPF</p>
-                    <p className="text-slate-800">{viewDetails.cpf ? formatCPF(viewDetails.cpf) : '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">CPF</p>
+                    <p className="vm-page-title">{viewDetails.cpf ? formatCPF(viewDetails.cpf) : '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Data de Nascimento</p>
-                    <p className="text-slate-800">{viewDetails.data_nascimento ? formatDate(viewDetails.data_nascimento) : '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Data de Nascimento</p>
+                    <p className="vm-page-title">{viewDetails.data_nascimento ? formatDate(viewDetails.data_nascimento) : '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Sexo</p>
-                    <p className="text-slate-800">{viewDetails.sexo || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Sexo</p>
+                    <p className="vm-page-title">{viewDetails.sexo || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Nome da Mãe</p>
-                    <p className="text-slate-800">{viewDetails.nome_mae || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Nome da Mãe</p>
+                    <p className="vm-page-title">{viewDetails.nome_mae || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Telefone</p>
-                    <p className="text-slate-800">{viewDetails.telefone || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Telefone</p>
+                    <p className="vm-page-title">{viewDetails.telefone || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Email</p>
-                    <p className="text-slate-800">{viewDetails.email || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Email</p>
+                    <p className="vm-page-title">{viewDetails.email || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Matrícula</p>
-                    <p className="text-slate-800">{viewDetails.matricula || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Matrícula</p>
+                    <p className="vm-page-title">{viewDetails.matricula || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Tipo</p>
-                    <p className="text-slate-800">{viewDetails.tipo_cadastro === 'cadastro' ? 'Cadastro' : 'Inclusão de Dependente'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Tipo</p>
+                    <p className="vm-page-title">{viewDetails.tipo_cadastro === 'cadastro' ? 'Cadastro' : 'Inclusão de Dependente'}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="border-b border-slate-200 pb-4">
-                <h4 className="font-bold text-lg text-slate-800 mb-3">Endereço</h4>
+              <div className="border-b border-slate-200/70 pb-4 dark:border-white/10">
+                <h4 className="vm-page-title mb-3 text-lg font-bold">Endereço</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div>
-                    <p className="text-sm font-medium text-slate-600">CEP</p>
-                    <p className="text-slate-800">{viewDetails.cep || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">CEP</p>
+                    <p className="vm-page-title">{viewDetails.cep || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Logradouro</p>
-                    <p className="text-slate-800">{viewDetails.logradouro || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Logradouro</p>
+                    <p className="vm-page-title">{viewDetails.logradouro || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Número</p>
-                    <p className="text-slate-800">{viewDetails.numero || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Número</p>
+                    <p className="vm-page-title">{viewDetails.numero || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Complemento</p>
-                    <p className="text-slate-800">{viewDetails.complemento || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Complemento</p>
+                    <p className="vm-page-title">{viewDetails.complemento || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Bairro</p>
-                    <p className="text-slate-800">{viewDetails.bairro || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Bairro</p>
+                    <p className="vm-page-title">{viewDetails.bairro || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Cidade</p>
-                    <p className="text-slate-800">{viewDetails.cidade || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Cidade</p>
+                    <p className="vm-page-title">{viewDetails.cidade || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">UF</p>
-                    <p className="text-slate-800">{viewDetails.uf || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">UF</p>
+                    <p className="vm-page-title">{viewDetails.uf || '-'}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="border-b border-slate-200 pb-4">
-                <h4 className="font-bold text-lg text-slate-800 mb-3">Empresa e Plano</h4>
+              <div className="border-b border-slate-200/70 pb-4 dark:border-white/10">
+                <h4 className="vm-page-title mb-3 text-lg font-bold">Empresa e Plano</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Empresa</p>
-                    <p className="text-slate-800">{viewDetails.empresa_nome || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Empresa</p>
+                    <p className="vm-page-title">{viewDetails.empresa_nome || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">CNPJ da Empresa</p>
-                    <p className="text-slate-800">{viewDetails.empresa_cnpj || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">CNPJ da Empresa</p>
+                    <p className="vm-page-title">{viewDetails.empresa_cnpj || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Código da Empresa</p>
-                    <p className="text-slate-800">{viewDetails.empresa_codigo || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Código da Empresa</p>
+                    <p className="vm-page-title">{viewDetails.empresa_codigo || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Plano</p>
-                    <p className="text-slate-800">{viewDetails.plano_nome || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Plano</p>
+                    <p className="vm-page-title">{viewDetails.plano_nome || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Código do Plano</p>
-                    <p className="text-slate-800">{viewDetails.plano_codigo || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Código do Plano</p>
+                    <p className="vm-page-title">{viewDetails.plano_codigo || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Código do Contrato</p>
-                    <p className="text-slate-800">{viewDetails.codigo_contrato || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Código do Contrato</p>
+                    <p className="vm-page-title">{viewDetails.codigo_contrato || '-'}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="border-b border-slate-200 pb-4">
-                <h4 className="font-bold text-lg text-slate-800 mb-3">Responsável e Vendedor</h4>
+              <div className="border-b border-slate-200/70 pb-4 dark:border-white/10">
+                <h4 className="vm-page-title mb-3 text-lg font-bold">Responsável e Vendedor</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Responsável Financeiro</p>
-                    <p className="text-slate-800">{viewDetails.responsavel_financeiro || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Responsável Financeiro</p>
+                    <p className="vm-page-title">{viewDetails.responsavel_financeiro || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Vendedor</p>
-                    <p className="text-slate-800">{viewDetails.vendedor_nome || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Vendedor</p>
+                    <p className="vm-page-title">{viewDetails.vendedor_nome || '-'}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Adesionista</p>
-                    <p className="text-slate-800">{viewDetails.adesionista || '-'}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Adesionista</p>
+                    <p className="vm-page-title">{viewDetails.adesionista || '-'}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="border-b border-slate-200 pb-4">
-                <h4 className="font-bold text-lg text-slate-800 mb-3">Datas</h4>
+              <div className="border-b border-slate-200/70 pb-4 dark:border-white/10">
+                <h4 className="vm-page-title mb-3 text-lg font-bold">Datas</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Data de Criação</p>
-                    <p className="text-slate-800">{new Date(viewDetails.created_at).toLocaleString('pt-BR')}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Data de Criação</p>
+                    <p className="vm-page-title">{new Date(viewDetails.created_at).toLocaleString('pt-BR')}</p>
                   </div>
 
                   <div>
-                    <p className="text-sm font-medium text-slate-600">Data de Atualização</p>
-                    <p className="text-slate-800">{new Date(viewDetails.updated_at).toLocaleString('pt-BR')}</p>
+                    <p className="vm-muted-text text-sm font-semibold">Data de Atualização</p>
+                    <p className="vm-page-title">{new Date(viewDetails.updated_at).toLocaleString('pt-BR')}</p>
                   </div>
 
                   {viewDetails.data_envio && (
                     <div>
-                      <p className="text-sm font-medium text-slate-600">Data de Envio ao ERP</p>
-                      <p className="text-slate-800">{new Date(viewDetails.data_envio).toLocaleString('pt-BR')}</p>
+                      <p className="vm-muted-text text-sm font-semibold">Data de Envio ao ERP</p>
+                      <p className="vm-page-title">{new Date(viewDetails.data_envio).toLocaleString('pt-BR')}</p>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="border-b border-slate-200 pb-4">
+              <div className="border-b border-slate-200/70 pb-4 dark:border-white/10">
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="font-bold text-lg text-slate-800">
                     Dependentes
@@ -790,7 +790,7 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
                     })}
                   </div>
                 ) : (
-                  <div className="bg-slate-50 rounded-lg p-6 text-center border-2 border-dashed border-slate-200">
+                  <div className="vm-cadastro-subcard rounded-2xl border-2 border-dashed p-6 text-center">
                     <User className="w-12 h-12 text-slate-300 mx-auto mb-2" />
                     <p className="text-slate-500 font-medium">Nenhum dependente cadastrado</p>
                     <p className="text-xs text-slate-400 mt-1">
@@ -804,8 +804,8 @@ export function CadastrosCompletosList({ cadastros }: CadastrosCompletosListProp
 
               {viewDetails.erp_response && (
                 <div>
-                  <h4 className="font-bold text-lg text-slate-800 mb-3">Resposta do ERP</h4>
-                  <div className="bg-slate-50 rounded-lg p-4 border border-slate-200">
+                  <h4 className="vm-page-title mb-3 text-lg font-bold">Resposta do ERP</h4>
+                  <div className="vm-cadastro-subcard rounded-2xl p-4">
                     <pre className="text-xs text-slate-700 overflow-x-auto whitespace-pre-wrap">
                       {JSON.stringify(viewDetails.erp_response, null, 2)}
                     </pre>

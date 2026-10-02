@@ -291,7 +291,7 @@ export function FilaUploadERP() {
   if (!['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(profile?.role ?? '')) {
     return (
       <Layout>
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12">
+        <div className="vm-settings-card rounded-2xl p-12">
           <div className="text-center">
             <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-3" />
             <p className="text-slate-600">Acesso permitido para Administrador, Cadastro e Gerente</p>
@@ -336,27 +336,30 @@ export function FilaUploadERP() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'success':
-        return 'bg-green-100 text-green-800 border-green-200';
+        return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
       case 'failed':
-        return 'bg-red-100 text-red-800 border-red-200';
+        return 'border-red-500/20 bg-red-500/10 text-red-700 dark:text-red-300';
       case 'processing':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
+        return 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300';
       case 'retry_wait':
-        return 'bg-amber-100 text-amber-800 border-amber-200';
+        return 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300';
       default:
-        return 'bg-slate-100 text-slate-800 border-slate-200';
+        return 'border-slate-400/20 bg-slate-500/10 text-slate-700 dark:text-slate-300';
     }
   };
 
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <header className="vm-settings-hero flex flex-col gap-5 rounded-3xl p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-slate-800">Fila de Upload ERP</h1>
-            <p className="text-slate-600 mt-2">Gerenciamento de uploads de documentos para o ERP</p>
+            <div className="mb-2 inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">
+              Integração ERP
+            </div>
+            <h1 className="vm-page-title text-2xl font-bold tracking-tight sm:text-3xl">Fila de Upload ERP</h1>
+            <p className="vm-muted-text mt-1 text-sm sm:text-base">Gerenciamento de uploads de documentos para o ERP</p>
           </div>
-          <div className="flex items-center gap-3 flex-wrap justify-end">
+          <div className="flex flex-wrap items-center justify-end gap-3">
             <Button
               onClick={() => navigate('/fila-upload-erp/erros?scope=current')}
               disabled={!queueHealth}
@@ -405,7 +408,7 @@ export function FilaUploadERP() {
               )}
             </Button>
           </div>
-        </div>
+        </header>
 
         {queueHealth && (
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-9 gap-3">
@@ -434,18 +437,18 @@ export function FilaUploadERP() {
                 key={card.label}
                 onClick={card.onClick}
                 disabled={!card.onClick}
-                className={`rounded-xl border p-3 text-left transition ${
+                className={`vm-settings-card rounded-2xl p-3 text-left transition ${
                   card.alert
-                    ? 'border-red-200 bg-red-50'
-                    : 'border-slate-200 bg-white'
-                } ${card.onClick ? 'cursor-pointer hover:border-slate-300 hover:shadow-sm' : 'cursor-default'}`}
+                    ? 'border-red-500/25 bg-red-500/10'
+                    : ''
+                } ${card.onClick ? 'cursor-pointer hover:-translate-y-0.5 hover:border-emerald-500/20' : 'cursor-default'}`}
               >
-                <p className="text-xs text-slate-500">{card.label}</p>
-                <p className={`mt-1 text-xl font-bold ${card.alert ? 'text-red-700' : 'text-slate-800'}`}>
+                <p className="vm-meta-text text-xs">{card.label}</p>
+                <p className={`mt-1 text-xl font-bold ${card.alert ? 'text-red-700 dark:text-red-300' : 'vm-page-title'}`}>
                   {Number(card.value)}
                 </p>
                 {card.onClick && (
-                  <p className="mt-1 text-[11px] font-medium text-slate-400">Ver detalhes</p>
+                  <p className="vm-meta-text mt-1 text-[11px] font-medium">Ver detalhes</p>
                 )}
               </button>
             ))}
@@ -453,14 +456,14 @@ export function FilaUploadERP() {
         )}
 
         {processingCount > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4">
             <div className="flex items-center gap-3">
               <Loader2 className="w-5 h-5 text-blue-600 animate-spin flex-shrink-0" />
               <div className="flex-1">
-                <p className="text-blue-900 font-medium">
+                <p className="font-semibold text-blue-800 dark:text-blue-200">
                   Processamento em andamento
                 </p>
-                <p className="text-blue-700 text-sm mt-1">
+                <p className="mt-1 text-sm text-blue-700 dark:text-blue-300">
                   {processingCount} item(ns) sendo enviado(s) para o ERP. A tela será atualizada automaticamente.
                 </p>
               </div>
@@ -468,7 +471,7 @@ export function FilaUploadERP() {
           </div>
         )}
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+        <div className="vm-settings-card rounded-2xl p-4">
           <div className="flex items-center justify-between gap-4">
             <Select
               label="Filtrar por Status"
@@ -486,20 +489,20 @@ export function FilaUploadERP() {
               <option value="failed">Falhou</option>
             </Select>
 
-            <div className="text-sm text-slate-600 mt-6">
+            <div className="vm-muted-text mt-6 text-sm">
               Total: {totalCount} {totalCount === 1 ? 'item' : 'itens'}
             </div>
           </div>
         </div>
 
         {loading ? (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12">
+          <div className="vm-settings-card rounded-2xl p-12">
             <div className="flex items-center justify-center">
               <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
             </div>
           </div>
         ) : items.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12">
+          <div className="vm-settings-card rounded-2xl p-12">
             <div className="text-center">
               <Clock className="w-12 h-12 text-slate-300 mx-auto mb-3" />
               <p className="text-slate-500">Nenhum item na fila</p>
@@ -508,7 +511,7 @@ export function FilaUploadERP() {
         ) : (
           <>
             <div className="space-y-3">
-              <div className="hidden rounded-xl border border-slate-200 bg-slate-950/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400 shadow-sm xl:grid xl:grid-cols-[110px_minmax(170px,1.2fr)_110px_minmax(150px,1fr)_minmax(150px,1fr)_90px_82px_105px_76px] xl:gap-3">
+              <div className="vm-settings-table-head hidden rounded-2xl border px-3 py-2 text-[10px] font-semibold uppercase tracking-wide xl:grid xl:grid-cols-[110px_minmax(170px,1.2fr)_110px_minmax(150px,1fr)_minmax(150px,1fr)_90px_82px_105px_76px] xl:gap-3">
                 <div>Status</div>
                 <div>Cliente</div>
                 <div>Empresa</div>
@@ -523,7 +526,7 @@ export function FilaUploadERP() {
               {items.map((item) => (
                 <article
                   key={item.id}
-                  className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"
+                  className="vm-settings-card overflow-hidden rounded-2xl"
                 >
                   <div className="grid gap-3 px-3 py-3 sm:grid-cols-2 xl:grid-cols-[110px_minmax(170px,1.2fr)_110px_minmax(150px,1fr)_minmax(150px,1fr)_90px_82px_105px_76px] xl:items-start">
                     <div>
@@ -538,7 +541,7 @@ export function FilaUploadERP() {
 
                     <div className="min-w-0">
                       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Cliente</p>
-                      <p className="break-words text-sm font-semibold leading-tight text-slate-800 dark:text-slate-100">
+                      <p className="vm-page-title break-words text-sm font-semibold leading-tight">
                         {item.cadastro?.nome || item.cliente_nome || 'N/A'}
                       </p>
                       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -552,35 +555,35 @@ export function FilaUploadERP() {
 
                     <div className="min-w-0">
                       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Empresa</p>
-                      <p className="break-words text-sm text-slate-700 dark:text-slate-200">
+                      <p className="vm-muted-text break-words text-sm">
                         {item.cadastro?.empresa_nome || item.empresa_nome || 'N/A'}
                       </p>
                     </div>
 
                     <div className="min-w-0">
                       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Vendedor</p>
-                      <p className="break-words text-sm text-slate-700 dark:text-slate-200">
+                      <p className="vm-muted-text break-words text-sm">
                         {item.cadastro?.vendedor_nome || '—'}
                       </p>
                     </div>
 
                     <div className="min-w-0">
                       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Adesionista</p>
-                      <p className="break-words text-sm text-slate-700 dark:text-slate-200">
+                      <p className="vm-muted-text break-words text-sm">
                         {item.cadastro?.adesionista_nome || '—'}
                       </p>
                     </div>
 
                     <div>
                       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Tipo</p>
-                      <span className="text-sm capitalize text-slate-700 dark:text-slate-200">
+                      <span className="vm-muted-text text-sm capitalize">
                         {item.tipo}
                       </span>
                     </div>
 
                     <div>
                       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Tentativas</p>
-                      <p className="text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100">
+                      <p className="vm-page-title text-sm font-semibold tabular-nums">
                         {item.attempts}/5
                       </p>
                       {item.next_attempt_at && item.status === 'retry_wait' && (
@@ -628,7 +631,7 @@ export function FilaUploadERP() {
                     </div>
                   </div>
 
-                  <div className="border-t border-slate-200 bg-slate-50/70 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-950/40">
+                  <div className="vm-settings-code border-t px-3 py-2.5">
                     <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                       <div className="min-w-0">
                         <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
@@ -659,7 +662,7 @@ export function FilaUploadERP() {
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="p-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="vm-glass-secondary rounded-lg p-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <ChevronLeft className="w-5 h-5" />
                 </button>
@@ -683,8 +686,8 @@ export function FilaUploadERP() {
                         onClick={() => setCurrentPage(page)}
                         className={`px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${
                           currentPage === page
-                            ? 'bg-emerald-600 text-white'
-                            : 'text-slate-600 hover:bg-slate-100'
+                            ? 'vm-glass-primary text-white'
+                            : 'vm-glass-secondary'
                         }`}
                       >
                         {page}
@@ -696,7 +699,7 @@ export function FilaUploadERP() {
                 <button
                   onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className="p-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="vm-glass-secondary rounded-lg p-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <ChevronRight className="w-5 h-5" />
                 </button>
@@ -706,7 +709,7 @@ export function FilaUploadERP() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
             <h3 className="font-semibold text-emerald-900 mb-2 flex items-center gap-2">
               <CheckCircle className="w-5 h-5" />
               Processamento Automático Ativo
@@ -719,7 +722,7 @@ export function FilaUploadERP() {
             </ul>
           </div>
 
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="rounded-2xl border border-blue-500/20 bg-blue-500/10 p-4">
             <h3 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
               <AlertTriangle className="w-5 h-5" />
               Informações Importantes

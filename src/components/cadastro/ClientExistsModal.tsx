@@ -9,8 +9,8 @@ interface ClientExistsModalProps {
 
 export function ClientExistsModal({ cpf, nome, onClose }: ClientExistsModalProps) {
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+    <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="vm-glass-modal w-full max-w-md rounded-3xl">
         <div className="p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -18,7 +18,7 @@ export function ClientExistsModal({ cpf, nome, onClose }: ClientExistsModalProps
                 <AlertCircle className="w-6 h-6 text-amber-600" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-slate-800">Cliente já cadastrado</h3>
+                <h3 className="vm-page-title text-lg font-semibold">Cliente já cadastrado</h3>
                 <p className="text-sm text-slate-600">CPF: {cpf}</p>
               </div>
             </div>

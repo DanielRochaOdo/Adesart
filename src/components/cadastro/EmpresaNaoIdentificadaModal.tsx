@@ -60,8 +60,8 @@ export function EmpresaNaoIdentificadaModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="vm-glass-modal max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl">
         <div className="sticky top-0 bg-amber-600 text-white px-6 py-4 flex items-center justify-between rounded-t-xl z-10">
           <div>
             <h2 className="text-xl font-bold">Empresa não identificada</h2>
@@ -96,7 +96,7 @@ export function EmpresaNaoIdentificadaModal({
             </div>
           )}
 
-          <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+          <div className="vm-cadastro-subcard rounded-2xl p-4">
             <h3 className="font-semibold text-slate-900 mb-4">Buscar Empresa</h3>
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
@@ -160,12 +160,12 @@ export function EmpresaNaoIdentificadaModal({
                   {empresas.map((empresa) => (
                     <div
                       key={empresa.codigo}
-                      className="p-4 rounded-lg border-2 border-slate-200 bg-white hover:border-emerald-400 hover:bg-emerald-50 cursor-pointer transition-all"
+                      className="vm-cadastro-result cursor-pointer rounded-2xl border-2 p-4"
                       onClick={() => handleSelecionarEmpresa(empresa)}
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
-                          <p className="font-semibold text-slate-800">
+                          <p className="vm-page-title font-semibold">
                             {empresa.nomeFantasia || empresa.razaoSocial}
                           </p>
                           <p className="text-sm text-slate-600 mt-1">

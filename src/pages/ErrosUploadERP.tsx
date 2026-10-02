@@ -477,7 +477,7 @@ export function ErrosUploadERP() {
   if (!['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(profile?.role ?? '')) {
     return (
       <Layout>
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-8 text-center text-amber-800">
+        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-8 text-center text-amber-700 dark:text-amber-300">
           Acesso permitido para Administrador, Cadastro e Gerente.
         </div>
       </Layout>
@@ -495,7 +495,7 @@ export function ErrosUploadERP() {
           onChange={handleReplacementSelected}
         />
 
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="vm-settings-hero flex flex-wrap items-start justify-between gap-4 rounded-3xl p-5 sm:p-6">
           <div>
             <button
               type="button"
@@ -527,7 +527,7 @@ export function ErrosUploadERP() {
         </div>
 
         {message && (
-          <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700 shadow-sm">
+          <div className="vm-settings-card rounded-2xl p-4 text-sm">
             {message}
           </div>
         )}
@@ -544,7 +544,7 @@ export function ErrosUploadERP() {
                 className={`group rounded-xl border p-3 text-left transition ${
                   active
                     ? 'border-red-300 bg-red-50 ring-1 ring-red-200 dark:border-red-900/70 dark:bg-red-950/40'
-                    : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600'
+                    : 'vm-settings-card hover:border-emerald-500/20'
                 }`}
               >
                 <div className="flex items-start gap-3">
@@ -559,7 +559,7 @@ export function ErrosUploadERP() {
                     <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
                       {card.label}
                     </p>
-                    <p className="mt-0.5 text-2xl font-bold text-slate-800 dark:text-slate-100">
+                    <p className="vm-page-title mt-0.5 text-2xl font-bold">
                       {card.value}
                     </p>
                     <p className="mt-0.5 text-[11px] text-slate-400">
@@ -572,7 +572,7 @@ export function ErrosUploadERP() {
           })}
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <div className="vm-settings-card rounded-2xl p-4">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1.3fr_1fr_1.2fr_1fr_1fr_auto]">
             <label className="space-y-1">
               <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Escopo / Status</span>
@@ -592,19 +592,19 @@ export function ErrosUploadERP() {
             </label>
             <label className="space-y-1">
               <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">CPF</span>
-              <input value={cpf} onChange={(e) => setCpf(e.target.value)} placeholder="Digite o CPF" className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950" />
+              <input value={cpf} onChange={(e) => setCpf(e.target.value)} placeholder="Digite o CPF" className="vm-glass-field h-10 w-full rounded-xl border px-3 text-sm" />
             </label>
             <label className="space-y-1">
               <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Empresa</span>
-              <input value={empresa} onChange={(e) => setEmpresa(e.target.value)} placeholder="Digite a empresa" className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950" />
+              <input value={empresa} onChange={(e) => setEmpresa(e.target.value)} placeholder="Digite a empresa" className="vm-glass-field h-10 w-full rounded-xl border px-3 text-sm" />
             </label>
             <label className="space-y-1">
               <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Data inicial</span>
-              <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950" />
+              <input type="date" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="vm-glass-field h-10 w-full rounded-xl border px-3 text-sm" />
             </label>
             <label className="space-y-1">
               <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">Data final</span>
-              <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm dark:border-slate-700 dark:bg-slate-950" />
+              <input type="date" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="vm-glass-field h-10 w-full rounded-xl border px-3 text-sm" />
             </label>
             <div className="flex items-end">
               <Button onClick={handleSearch} className="h-10 w-full gap-2 px-4 xl:w-auto">
@@ -617,10 +617,10 @@ export function ErrosUploadERP() {
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-base font-semibold text-slate-800 dark:text-slate-100">
+            <p className="vm-page-title text-base font-semibold">
               {response.pagination.total} registro(s) encontrado(s)
             </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="vm-meta-text text-xs">
               Dados completos organizados em uma linha principal e detalhe técnico logo abaixo.
             </p>
           </div>
@@ -629,7 +629,7 @@ export function ErrosUploadERP() {
             <select
               value={sortBy}
               onChange={(event) => setSortBy(event.target.value as 'recent' | 'oldest' | 'attempts')}
-              className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+              className="vm-glass-field h-9 rounded-xl border px-3 text-sm outline-none"
             >
               <option value="recent">Data (mais recente)</option>
               <option value="oldest">Data (mais antiga)</option>
@@ -640,14 +640,14 @@ export function ErrosUploadERP() {
 
         <div className="space-y-3">
           {loading ? (
-            <div className="flex min-h-64 items-center justify-center rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+            <div className="vm-settings-card flex min-h-64 items-center justify-center rounded-2xl">
               <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
             </div>
           ) : response.items.length === 0 ? (
-            <div className="flex min-h-64 flex-col items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm dark:border-slate-700 dark:bg-slate-900">
+            <div className="vm-settings-card flex min-h-64 flex-col items-center justify-center gap-3 rounded-2xl p-8 text-center">
               <CheckCircle2 className="h-10 w-10 text-emerald-500" />
               <div>
-                <p className="font-semibold text-slate-800 dark:text-slate-100">Nenhuma falha encontrada</p>
+                <p className="vm-page-title font-semibold">Nenhuma falha encontrada</p>
                 <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                   Não há registros para os filtros selecionados.
                 </p>
@@ -655,7 +655,7 @@ export function ErrosUploadERP() {
             </div>
           ) : (
             <>
-              <div className="hidden rounded-xl border border-slate-200 bg-slate-950/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400 shadow-sm xl:grid xl:grid-cols-[118px_minmax(170px,1.25fr)_105px_minmax(150px,1fr)_minmax(150px,1fr)_135px_72px_92px] xl:gap-3">
+              <div className="vm-settings-table-head hidden rounded-2xl border px-3 py-2 text-[10px] font-semibold uppercase tracking-wide xl:grid xl:grid-cols-[118px_minmax(170px,1.25fr)_105px_minmax(150px,1fr)_minmax(150px,1fr)_135px_72px_92px] xl:gap-3">
                 <div>Data</div>
                 <div>Cliente</div>
                 <div>Empresa</div>
@@ -669,7 +669,7 @@ export function ErrosUploadERP() {
               {sortedItems.map((item) => (
                 <article
                   key={item.id}
-                  className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"
+                  className="vm-settings-card overflow-hidden rounded-2xl"
                 >
                   <div className="grid gap-3 px-3 py-3 sm:grid-cols-2 xl:grid-cols-[118px_minmax(170px,1.25fr)_105px_minmax(150px,1fr)_minmax(150px,1fr)_135px_72px_92px] xl:items-start">
                     <div>
@@ -684,7 +684,7 @@ export function ErrosUploadERP() {
 
                     <div className="min-w-0">
                       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Cliente</p>
-                      <p className="break-words text-sm font-semibold leading-tight text-slate-800 dark:text-slate-100">
+                      <p className="vm-page-title break-words text-sm font-semibold leading-tight">
                         {item.cliente_nome || 'Não informado'}
                       </p>
                       <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -694,21 +694,21 @@ export function ErrosUploadERP() {
 
                     <div className="min-w-0">
                       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Empresa</p>
-                      <p className="break-words text-sm text-slate-700 dark:text-slate-200">
+                      <p className="vm-muted-text break-words text-sm">
                         {item.empresa_nome || '—'}
                       </p>
                     </div>
 
                     <div className="min-w-0">
                       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Vendedor</p>
-                      <p className="break-words text-sm text-slate-700 dark:text-slate-200">
+                      <p className="vm-muted-text break-words text-sm">
                         {item.vendedor_nome || '—'}
                       </p>
                     </div>
 
                     <div className="min-w-0">
                       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Adesionista</p>
-                      <p className="break-words text-sm text-slate-700 dark:text-slate-200">
+                      <p className="vm-muted-text break-words text-sm">
                         {item.adesionista_nome || '—'}
                       </p>
                     </div>
@@ -727,7 +727,7 @@ export function ErrosUploadERP() {
 
                     <div className="text-left xl:text-center">
                       <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Tentativas</p>
-                      <p className="text-sm font-bold tabular-nums text-slate-800 dark:text-slate-100">
+                      <p className="vm-page-title text-sm font-bold tabular-nums">
                         {item.attempts}
                       </p>
                     </div>
@@ -742,7 +742,7 @@ export function ErrosUploadERP() {
                             onClick={() => handleSync(item)}
                             title="Sincronizar"
                             aria-label="Sincronizar este erro"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                            className="vm-user-action vm-user-action-neutral disabled:opacity-40"
                           >
                             <RefreshCw className="h-4 w-4" />
                           </button>
@@ -754,7 +754,7 @@ export function ErrosUploadERP() {
                             onClick={() => chooseReplacement(item)}
                             title="Enviar novo arquivo"
                             aria-label="Enviar novo arquivo"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 text-emerald-600 transition hover:bg-emerald-50 disabled:opacity-40 dark:border-emerald-900/60 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+                            className="vm-user-action rounded-lg text-emerald-600 hover:border-emerald-500/20 hover:bg-emerald-500/10 disabled:opacity-40 dark:text-emerald-300"
                           >
                             <Upload className="h-4 w-4" />
                           </button>
@@ -766,7 +766,7 @@ export function ErrosUploadERP() {
                             onClick={() => handleCompress(item)}
                             title="Comprimir e reenviar"
                             aria-label="Comprimir e reenviar"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-amber-200 text-amber-600 transition hover:bg-amber-50 disabled:opacity-40 dark:border-amber-900/60 dark:text-amber-300 dark:hover:bg-amber-950/30"
+                            className="vm-user-action rounded-lg text-amber-600 hover:border-amber-500/20 hover:bg-amber-500/10 disabled:opacity-40 dark:text-amber-300"
                           >
                             {busyId === item.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
@@ -782,7 +782,7 @@ export function ErrosUploadERP() {
                             onClick={() => handleReprocess(item)}
                             title="Tentar novamente"
                             aria-label="Tentar novamente"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:opacity-40 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                            className="vm-user-action vm-user-action-neutral disabled:opacity-40"
                           >
                             <RotateCcw className="h-4 w-4" />
                           </button>
@@ -797,7 +797,7 @@ export function ErrosUploadERP() {
                     </div>
                   </div>
 
-                  <div className="grid gap-3 border-t border-slate-200 bg-slate-50/70 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-950/40 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1.6fr)]">
+                  <div className="vm-settings-code grid gap-3 border-t px-3 py-2.5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,1.6fr)]">
                     <div className="min-w-0">
                       <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                         <FileText className="h-3.5 w-3.5" />
@@ -850,7 +850,7 @@ export function ErrosUploadERP() {
                 </article>
               ))}
 
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+              <div className="vm-settings-card flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3">
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   {response.pagination.total} registro(s) · Página {response.pagination.page} de{' '}
                   {response.pagination.total_pages}
@@ -887,7 +887,7 @@ export function ErrosUploadERP() {
         </div>
 
         {scope === 'historical' && (
-          <div className="flex gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+          <div className="vm-settings-card vm-muted-text flex gap-3 rounded-2xl p-4 text-sm">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-slate-500" />
             <p>
               O passivo histórico é exibido para auditoria e não é tratado como alerta

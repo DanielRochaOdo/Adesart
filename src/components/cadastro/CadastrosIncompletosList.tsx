@@ -369,7 +369,7 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
 
   if (incompletos.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12">
+      <div className="vm-cadastro-card rounded-3xl p-12">
         <div className="text-center">
           <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
           <p className="text-slate-500">Nenhum cadastro incompleto</p>
@@ -406,10 +406,10 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
 
   return (
     <>
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4">
+      <div className="vm-cadastro-card mb-4 rounded-3xl p-4">
         <div className="flex items-center gap-2 mb-3">
           <Search className="w-5 h-5 text-slate-500" />
-          <h3 className="font-semibold text-slate-800">Filtros</h3>
+          <h3 className="vm-page-title font-semibold">Filtros</h3>
           {temFiltrosAtivos && (
             <button
               onClick={limparFiltros}
@@ -598,14 +598,14 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
             Filtrar
           </Button>
 
-          <div className="text-sm text-slate-600">
+          <div className="vm-muted-text text-sm">
             Mostrando {cadastrosFiltrados.length} de {cadastrosPorPeriodo.length} {cadastrosPorPeriodo.length === 1 ? 'adesão' : 'adesões'}
           </div>
         </div>
       </div>
 
       {cadastrosFiltrados.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12">
+        <div className="vm-cadastro-card rounded-3xl p-12">
           <div className="text-center">
             <Search className="w-12 h-12 text-slate-300 mx-auto mb-3" />
             <p className="text-slate-500">Nenhum cadastro encontrado com os filtros aplicados</p>
@@ -614,17 +614,17 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
       ) : (
         <div className="space-y-4">
         {clientesPaginados.map((cliente) => (
-          <div key={cliente.cpf} className="bg-white rounded-xl shadow-sm border border-slate-200">
-            <div className="p-4 border-b border-slate-200 bg-slate-50">
+          <div key={cliente.cpf} className="vm-cadastro-list-card rounded-3xl">
+            <div className="vm-link-group-head border-b p-4">
               <div className="flex items-center gap-3">
                 <User className="w-5 h-5 text-emerald-600" />
                 <div>
-                  <h3 className="font-semibold text-slate-800">
+                  <h3 className="vm-page-title font-semibold">
                     {cliente.nome || 'Nome não informado'}
                   </h3>
                   {/* Exibe CPF apenas se não for um UUID (cadastros normais) */}
                   {cliente.cpf && !cliente.cpf.includes('-') && (
-                    <p className="text-sm text-slate-600">CPF: {formatCPF(cliente.cpf)}</p>
+                    <p className="vm-muted-text text-sm">CPF: {formatCPF(cliente.cpf)}</p>
                   )}
                   {/* Para inclusão de dependente sem CPF, não exibe nada */}
                 </div>
@@ -643,7 +643,7 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
                 return (
                   <div
                     key={`${cliente.cpf}-${cadastro.id}-${idx}`}
-                    className="bg-slate-50 rounded-lg p-4"
+                    className="vm-cadastro-subcard rounded-2xl p-4"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
@@ -666,7 +666,7 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
                           )}
                         </div>
 
-                        <div className="space-y-1 text-sm text-slate-600">
+                        <div className="vm-muted-text space-y-1 text-sm">
                           {cadastro.data_nascimento && (
                             <p>
                               <span className="font-medium">Nascimento:</span>{' '}
@@ -749,7 +749,7 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
                         {!isBlocked && (
                           <button
                             onClick={() => onSelect(cadastro)}
-                            className="text-emerald-600 hover:text-emerald-700 font-medium text-sm px-4 py-2 bg-white rounded-lg border border-emerald-200 hover:border-emerald-300 transition-colors"
+                            className="vm-glass-secondary rounded-lg px-4 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-300"
                           >
                             Continuar →
                           </button>
@@ -770,7 +770,7 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
           <button
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
             disabled={currentPage === 1}
-            className="p-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="vm-glass-secondary rounded-lg p-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -780,7 +780,7 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
               <>
                 <button
                   onClick={() => setCurrentPage(1)}
-                  className="px-3 py-1.5 rounded-lg font-medium text-sm text-slate-600 hover:bg-slate-100 transition-colors"
+                  className="vm-glass-secondary rounded-lg px-3 py-1.5 text-sm font-medium"
                 >
                   1
                 </button>
@@ -797,7 +797,7 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
                 className={`px-3 py-1.5 rounded-lg font-medium text-sm transition-colors ${
                   currentPage === page
                     ? 'bg-emerald-600 text-white'
-                    : 'text-slate-600 hover:bg-slate-100'
+                    : 'vm-glass-secondary'
                 }`}
               >
                 {page}
@@ -811,7 +811,7 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
                 )}
                 <button
                   onClick={() => setCurrentPage(totalPages)}
-                  className="px-3 py-1.5 rounded-lg font-medium text-sm text-slate-600 hover:bg-slate-100 transition-colors"
+                  className="vm-glass-secondary rounded-lg px-3 py-1.5 text-sm font-medium"
                 >
                   {totalPages}
                 </button>
@@ -822,7 +822,7 @@ export function CadastrosIncompletosList({ cadastros, onSelect, onRefresh }: Cad
           <button
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
             disabled={currentPage === totalPages}
-            className="p-2 text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="vm-glass-secondary rounded-lg p-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <ChevronRight className="w-5 h-5" />
           </button>

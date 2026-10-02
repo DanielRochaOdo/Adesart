@@ -36,13 +36,14 @@ fun VendaBrandIcon(
     Surface(
         modifier = logoModifier,
         shape = RoundedCornerShape(VendaRadius.md),
-        color = EmeraldDark,
+        color = androidx.compose.ui.graphics.Color.Transparent,
+        shadowElevation = 5.dp,
     ) {
         Image(
-            painter = painterResource(id = R.drawable.vendamais_logo_odontoart),
+            painter = painterResource(id = R.drawable.vendamais_logo_principal),
             contentDescription = "Venda+",
             modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Crop,
+            contentScale = ContentScale.Fit,
         )
     }
 }
@@ -73,22 +74,19 @@ fun VendaBrandWordmark(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(VendaSpacing.x2),
     ) {
-        OdontoartBrandMark(
+        Image(
+            painter = painterResource(id = R.drawable.vendamais_logo_principal),
+            contentDescription = "Venda+",
             modifier = Modifier
-                .fillMaxWidth(0.72f)
-                .widthIn(max = 280.dp)
-                .height(82.dp),
-        )
-        Text(
-            text = "VENDA+ OPERACIONAL",
-            color = White,
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.Bold,
+                .fillMaxWidth(0.58f)
+                .widthIn(max = 220.dp)
+                .height(150.dp),
+            contentScale = ContentScale.Fit,
         )
         if (!subtitle.isNullOrBlank()) {
             Text(
                 text = subtitle,
-                color = White.copy(alpha = 0.84f),
+                color = White.copy(alpha = 0.88f),
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
             )
