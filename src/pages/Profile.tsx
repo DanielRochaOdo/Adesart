@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Layout } from '../components/Layout';
-import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase, Team } from '../lib/supabase';
 import { formatMobilePhone, normalizeMobilePhone } from '../lib/cpf';
-import { User, Mail, Shield, Briefcase, Hash, Calendar, Phone } from 'lucide-react';
+import { User, Mail, Shield, Briefcase, Hash, Calendar, Phone, Pencil, CheckCircle2 } from 'lucide-react';
 import { usePersistentState } from '../hooks/usePersistentState';
 
 export function Profile() {
@@ -121,18 +120,59 @@ export function Profile() {
 
   return (
     <Layout>
-      <div className="space-y-4 sm:space-y-6 max-w-3xl mx-auto">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Meu Perfil</h1>
-          <p className="text-slate-600 mt-1 text-sm sm:text-base">Gerencie suas informações pessoais</p>
-        </div>
+      <div className="mx-auto max-w-4xl space-y-4 sm:space-y-6">
+        <header className="vm-profile-hero flex flex-col gap-5 rounded-3xl p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="vm-profile-avatar flex h-16 w-16 shrink-0 items-center justify-center rounded-3xl text-2xl font-bold text-white sm:h-20 sm:w-20 sm:text-3xl">
+              {(profile?.name || profile?.email || 'U').trim().charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <div className="mb-2 inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">
+                Conta pessoal
+              </div>
+              <h1 className="vm-page-title truncate text-2xl font-bold tracking-tight sm:text-3xl">
+                {profile?.name || 'Meu Perfil'}
+              </h1>
+              <p className="vm-muted-text mt-1 truncate text-sm sm:text-base">{profile?.email}</p>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <span className="vm-dashboard-pill rounded-full px-2.5 py-1">
+                  {profile?.role ? roleLabels[profile.role] || profile.role : 'Sem função'}
+                </span>
+                {team && (
+                  <span className="vm-dashboard-pill rounded-full px-2.5 py-1">
+                    {team.name}
+                  </span>
+                )}
+                {profile?.created_at && (
+                  <span className="vm-dashboard-pill rounded-full px-2.5 py-1">
+                    Desde {formatDate(profile.created_at)}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
 
-        <Card title="Informações Pessoais">
+          {!editing && (
+            <Button type="button" onClick={() => setEditing(true)} className="w-full sm:w-auto">
+              <Pencil className="mr-2 h-4 w-4" />
+              Editar Perfil
+            </Button>
+          )}
+        </header>
+
+        <section className="vm-profile-shell rounded-3xl p-4 sm:p-6">
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="vm-page-title text-lg font-bold sm:text-xl">Informações Pessoais</h2>
+              <p className="vm-muted-text mt-1 text-sm">Dados principais vinculados à sua conta no Venda+.</p>
+            </div>
+          </div>
+
           <form onSubmit={handleUpdateProfile} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <div className="flex items-center text-sm text-slate-600 mb-2">
-                  <User className="w-4 h-4 mr-2" />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="vm-profile-field rounded-2xl p-4">
+                <div className="vm-muted-text mb-3 flex items-center text-sm">
+                  <User className="mr-2 h-4 w-4" />
                   <span className="font-medium">Nome</span>
                 </div>
                 {editing ? (
@@ -142,21 +182,21 @@ export function Profile() {
                     required
                   />
                 ) : (
-                  <p className="text-slate-800 font-medium">{profile?.name}</p>
+                  <p className="vm-page-title font-semibold">{profile?.name}</p>
                 )}
               </div>
 
-              <div>
-                <div className="flex items-center text-sm text-slate-600 mb-2">
-                  <Mail className="w-4 h-4 mr-2" />
+              <div className="vm-profile-field rounded-2xl p-4">
+                <div className="vm-muted-text mb-3 flex items-center text-sm">
+                  <Mail className="mr-2 h-4 w-4" />
                   <span className="font-medium">Email</span>
                 </div>
-                <p className="text-slate-800 font-medium">{profile?.email}</p>
+                <p className="vm-page-title font-semibold">{profile?.email}</p>
               </div>
 
-              <div>
-                <div className="flex items-center text-sm text-slate-600 mb-2">
-                  <Phone className="w-4 h-4 mr-2" />
+              <div className="vm-profile-field rounded-2xl p-4">
+                <div className="vm-muted-text mb-3 flex items-center text-sm">
+                  <Phone className="mr-2 h-4 w-4" />
                   <span className="font-medium">Telefone</span>
                 </div>
                 {editing ? (
@@ -168,23 +208,23 @@ export function Profile() {
                     inputMode="tel"
                   />
                 ) : (
-                  <p className="text-slate-800 font-medium">{formatMobilePhone(profile?.telefone || '') || '-'}</p>
+                  <p className="vm-page-title font-semibold">{formatMobilePhone(profile?.telefone || '') || '-'}</p>
                 )}
               </div>
 
-              <div>
-                <div className="flex items-center text-sm text-slate-600 mb-2">
-                  <Shield className="w-4 h-4 mr-2" />
+              <div className="vm-profile-field rounded-2xl p-4">
+                <div className="vm-muted-text mb-3 flex items-center text-sm">
+                  <Shield className="mr-2 h-4 w-4" />
                   <span className="font-medium">Função</span>
                 </div>
-                <p className="text-slate-800 font-medium">
+                <p className="vm-page-title font-semibold">
                   {profile?.role ? roleLabels[profile.role] : '-'}
                 </p>
               </div>
 
-              <div>
-                <div className="flex items-center text-sm text-slate-600 mb-2">
-                  <Hash className="w-4 h-4 mr-2" />
+              <div className="vm-profile-field rounded-2xl p-4">
+                <div className="vm-muted-text mb-3 flex items-center text-sm">
+                  <Hash className="mr-2 h-4 w-4" />
                   <span className="font-medium">Código do Usuário (ID Externo)</span>
                 </div>
                 {editing ? (
@@ -194,116 +234,118 @@ export function Profile() {
                     placeholder="Insira seu código do ERP"
                   />
                 ) : (
-                  <p className="text-slate-800 font-medium">{profile?.external_id || '-'}</p>
+                  <p className="vm-page-title font-semibold">{profile?.external_id || '-'}</p>
                 )}
                 {editing && (
-                  <p className="text-xs text-slate-500 mt-1">
+                  <p className="vm-meta-text mt-2 text-xs">
                     Necessário para cadastrar clientes no sistema
                   </p>
                 )}
               </div>
 
               {team && (
-                <div>
-                  <div className="flex items-center text-sm text-slate-600 mb-2">
-                    <Briefcase className="w-4 h-4 mr-2" />
+                <div className="vm-profile-field rounded-2xl p-4">
+                  <div className="vm-muted-text mb-3 flex items-center text-sm">
+                    <Briefcase className="mr-2 h-4 w-4" />
                     <span className="font-medium">Equipe</span>
                   </div>
-                  <p className="text-slate-800 font-medium">{team.name}</p>
+                  <p className="vm-page-title font-semibold">{team.name}</p>
                 </div>
               )}
 
-              <div>
-                <div className="flex items-center text-sm text-slate-600 mb-2">
-                  <Calendar className="w-4 h-4 mr-2" />
+              <div className="vm-profile-field rounded-2xl p-4">
+                <div className="vm-muted-text mb-3 flex items-center text-sm">
+                  <Calendar className="mr-2 h-4 w-4" />
                   <span className="font-medium">Membro desde</span>
                 </div>
-                <p className="text-slate-800 font-medium">
+                <p className="vm-page-title font-semibold">
                   {profile?.created_at ? formatDate(profile.created_at) : '-'}
                 </p>
               </div>
             </div>
 
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              <div className="rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
                 {error}
               </div>
             )}
 
             {success && (
-              <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
                 {success}
               </div>
             )}
 
-            <div className="flex flex-col sm:flex-row gap-3 pt-4">
-              {editing ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      setEditing(false);
-                      setName(profile?.name || '');
-                      setExternalId(profile?.external_id || '');
-                      setTelefone(formatMobilePhone(profile?.telefone || ''));
-                      setError('');
-                      setSuccess('');
-                    }}
-                    className="w-full sm:w-auto"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button type="submit" disabled={loading} className="w-full sm:w-auto">
-                    {loading ? 'Salvando...' : 'Salvar Alterações'}
-                  </Button>
-                </>
-              ) : (
-                <Button type="button" onClick={() => setEditing(true)} className="w-full sm:w-auto">
-                  Editar Perfil
+            {editing && (
+              <div className="flex flex-col gap-3 border-t border-slate-200/70 pt-4 dark:border-white/10 sm:flex-row">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => {
+                    setEditing(false);
+                    setName(profile?.name || '');
+                    setExternalId(profile?.external_id || '');
+                    setTelefone(formatMobilePhone(profile?.telefone || ''));
+                    setError('');
+                    setSuccess('');
+                  }}
+                  className="w-full sm:w-auto"
+                >
+                  Cancelar
                 </Button>
-              )}
-            </div>
+                <Button type="submit" disabled={loading} className="w-full sm:w-auto">
+                  {loading ? 'Salvando...' : 'Salvar Alterações'}
+                </Button>
+              </div>
+            )}
           </form>
-        </Card>
+        </section>
 
-        <Card title="Permissões">
-          <div className="space-y-3">
-            <p className="text-slate-600 text-sm">
-              Como <span className="font-semibold">{profile?.role ? roleLabels[profile.role] : ''}</span>, você tem as seguintes permissões:
+        <section className="vm-profile-shell rounded-3xl p-4 sm:p-6">
+          <div className="mb-5">
+            <h2 className="vm-page-title text-lg font-bold sm:text-xl">Permissões</h2>
+            <p className="vm-muted-text mt-1 text-sm">
+              Acessos disponíveis para sua função atual no Venda+.
             </p>
-            <ul className="list-disc list-inside space-y-2 text-slate-700 text-sm">
+          </div>
+
+          <div className="space-y-3">
+            <p className="vm-muted-text text-sm">
+              Como <span className="vm-page-title font-semibold">{profile?.role ? roleLabels[profile.role] || profile.role : ''}</span>, você tem as seguintes permissões:
+            </p>
+            <ul className="grid gap-2 text-sm text-slate-700 dark:text-slate-200 sm:grid-cols-2">
               {profile?.role === 'ADMINISTRADOR' && (
                 <>
-                  <li>Acesso total ao sistema</li>
-                  <li>Criar, editar e excluir usuários e equipes</li>
-                  <li>Visualizar todos os dados do sistema</li>
+                  <li className="vm-profile-permission flex items-start gap-2 rounded-xl p-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" /><span>Acesso total ao sistema</span></li>
+                  <li className="vm-profile-permission flex items-start gap-2 rounded-xl p-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" /><span>Criar, editar e excluir usuários e equipes</span></li>
+                  <li className="vm-profile-permission flex items-start gap-2 rounded-xl p-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" /><span>Visualizar todos os dados do sistema</span></li>
                 </>
               )}
               {profile?.role === 'GERENTE' && (
                 <>
-                  <li>Visualizar todas as equipes e usuários</li>
-                  <li>Criar e editar usuários</li>
-                  <li>Acesso a relatórios e estatísticas</li>
+                  <li className="vm-profile-permission flex items-start gap-2 rounded-xl p-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" /><span>Visualizar todas as equipes e usuários</span></li>
+                  <li className="vm-profile-permission flex items-start gap-2 rounded-xl p-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" /><span>Criar e editar usuários</span></li>
+                  <li className="vm-profile-permission flex items-start gap-2 rounded-xl p-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" /><span>Acesso a relatórios e estatísticas</span></li>
                 </>
               )}
               {profile?.role === 'SUPERVISOR' && (
                 <>
-                  <li>Visualizar e gerenciar sua equipe</li>
-                  <li>Criar e editar usuários da sua equipe</li>
-                  <li>Acesso aos dados da sua equipe</li>
+                  <li className="vm-profile-permission flex items-start gap-2 rounded-xl p-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" /><span>Visualizar e gerenciar sua equipe</span></li>
+                  <li className="vm-profile-permission flex items-start gap-2 rounded-xl p-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" /><span>Criar e editar usuários da sua equipe</span></li>
+                  <li className="vm-profile-permission flex items-start gap-2 rounded-xl p-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" /><span>Acesso aos dados da sua equipe</span></li>
                 </>
               )}
               {(profile?.role === 'VENDEDOR' || profile?.role === 'ADESIONISTA') && (
                 <>
-                  <li>Visualizar seu próprio perfil</li>
-                  <li>Editar suas informações pessoais</li>
-                  <li>Acesso às funcionalidades básicas do sistema</li>
+                  <li className="vm-profile-permission flex items-start gap-2 rounded-xl p-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" /><span>Visualizar seu próprio perfil</span></li>
+                  <li className="vm-profile-permission flex items-start gap-2 rounded-xl p-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" /><span>Editar suas informações pessoais</span></li>
+                  <li className="vm-profile-permission flex items-start gap-2 rounded-xl p-3"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-300" /><span>Acesso às funcionalidades básicas do sistema</span></li>
                 </>
               )}
             </ul>
           </div>
-        </Card>
+        </section>
       </div>
     </Layout>
   );
