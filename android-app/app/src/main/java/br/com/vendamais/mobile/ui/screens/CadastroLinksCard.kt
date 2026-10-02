@@ -885,12 +885,13 @@ private fun LinkListItem(
                 }
                 Surface(
                     shape = MaterialTheme.shapes.extraSmall,
-                    color = EmeraldSoft,
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.82f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)),
                 ) {
                     Text(
                         text = "Ativo",
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        color = EmeraldDark,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
                     )
