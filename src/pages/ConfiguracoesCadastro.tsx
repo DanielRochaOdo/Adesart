@@ -18,65 +18,62 @@ export function ConfiguracoesCadastro() {
   return (
     <Layout>
       <div className="space-y-4 sm:space-y-6">
-        <div>
-          <div className="flex items-center gap-2 sm:gap-3 mb-2">
-            <Settings className="w-6 h-6 sm:w-8 sm:h-8 text-emerald-600" />
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-800">Configurações</h1>
+        <header className="vm-settings-hero flex flex-col gap-4 rounded-3xl p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="vm-dashboard-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+              <Settings className="h-6 w-6" />
+            </div>
+            <div>
+              <div className="mb-2 inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">
+                Administração do sistema
+              </div>
+              <h1 className="vm-page-title text-2xl font-bold tracking-tight sm:text-3xl">Configurações</h1>
+              <p className="vm-muted-text mt-1 text-sm sm:text-base">
+                Parametrize regras de cadastro, mapeamentos e auditoria de integrações.
+              </p>
+            </div>
           </div>
-          <p className="text-xs sm:text-sm text-slate-600">
-            Gerencie as tabelas de correspondência para planos e parentesco
-          </p>
-        </div>
+        </header>
 
-        <div className="bg-white rounded-lg sm:rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="border-b border-slate-200">
-            <div className="flex overflow-x-auto">
+        <div className="vm-settings-shell overflow-hidden rounded-3xl">
+          <div className="vm-settings-tabs">
+            <div className="flex gap-1 overflow-x-auto p-1.5">
               <button
                 onClick={() => setActiveTab('geral')}
-                className={`flex-1 sm:flex-none px-4 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
-                  activeTab === 'geral'
-                    ? 'text-emerald-600 border-b-2 border-emerald-600 bg-emerald-50'
-                    : 'text-slate-600 hover:text-slate-800 hover:bg-slate-50 active:bg-slate-100'
+                className={`vm-settings-tab flex-1 whitespace-nowrap rounded-xl px-4 py-3 text-xs font-semibold sm:flex-none sm:px-6 sm:text-sm ${
+                  activeTab === 'geral' ? 'vm-settings-tab-active' : ''
                 }`}
               >
                 Geral
               </button>
               <button
                 onClick={() => setActiveTab('planos')}
-                className={`flex-1 sm:flex-none px-4 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
-                  activeTab === 'planos'
-                    ? 'text-emerald-600 border-b-2 border-emerald-600 bg-emerald-50'
-                    : 'text-slate-600 hover:text-slate-800 hover:bg-slate-50 active:bg-slate-100'
+                className={`vm-settings-tab flex-1 whitespace-nowrap rounded-xl px-4 py-3 text-xs font-semibold sm:flex-none sm:px-6 sm:text-sm ${
+                  activeTab === 'planos' ? 'vm-settings-tab-active' : ''
                 }`}
               >
                 Planos
               </button>
               <button
                 onClick={() => setActiveTab('parentesco')}
-                className={`flex-1 sm:flex-none px-4 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
-                  activeTab === 'parentesco'
-                    ? 'text-emerald-600 border-b-2 border-emerald-600 bg-emerald-50'
-                    : 'text-slate-600 hover:text-slate-800 hover:bg-slate-50 active:bg-slate-100'
+                className={`vm-settings-tab flex-1 whitespace-nowrap rounded-xl px-4 py-3 text-xs font-semibold sm:flex-none sm:px-6 sm:text-sm ${
+                  activeTab === 'parentesco' ? 'vm-settings-tab-active' : ''
                 }`}
               >
                 Parentesco
               </button>
               <button
                 onClick={() => setActiveTab('status')}
-                className={`flex-1 sm:flex-none px-4 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
-                  activeTab === 'status'
-                    ? 'text-emerald-600 border-b-2 border-emerald-600 bg-emerald-50'
-                    : 'text-slate-600 hover:text-slate-800 hover:bg-slate-50 active:bg-slate-100'
+                className={`vm-settings-tab flex-1 whitespace-nowrap rounded-xl px-4 py-3 text-xs font-semibold sm:flex-none sm:px-6 sm:text-sm ${
+                  activeTab === 'status' ? 'vm-settings-tab-active' : ''
                 }`}
               >
                 Status Adesões
               </button>
               <button
                 onClick={() => setActiveTab('logs')}
-                className={`flex-1 sm:flex-none px-4 sm:px-6 py-3 sm:py-4 font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
-                  activeTab === 'logs'
-                    ? 'text-emerald-600 border-b-2 border-emerald-600 bg-emerald-50'
-                    : 'text-slate-600 hover:text-slate-800 hover:bg-slate-50 active:bg-slate-100'
+                className={`vm-settings-tab flex-1 whitespace-nowrap rounded-xl px-4 py-3 text-xs font-semibold sm:flex-none sm:px-6 sm:text-sm ${
+                  activeTab === 'logs' ? 'vm-settings-tab-active' : ''
                 }`}
               >
                 Logs de API
@@ -84,7 +81,7 @@ export function ConfiguracoesCadastro() {
             </div>
           </div>
 
-          <div className="p-3 sm:p-4 md:p-6">
+          <div className="p-3 sm:p-5 md:p-6">
             {activeTab === 'geral' && <GeralConfigCard />}
             {activeTab === 'planos' && <PlanosMapTable />}
             {activeTab === 'parentesco' && <ParentescoMapTable />}
