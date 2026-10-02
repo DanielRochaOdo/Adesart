@@ -1203,3 +1203,234 @@
     box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
   }
 }
+
+
+/* ============================================================
+   Venda+ Glass Lab — Users / aggressive Reflect direction
+   ============================================================ */
+@layer utilities {
+  .vm-users-hero {
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(540px circle at 6% -45%, rgba(16,185,129,.23), transparent 66%),
+      radial-gradient(440px circle at 92% -55%, rgba(20,184,166,.11), transparent 66%),
+      linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,.015)),
+      var(--vm-glass-layer-strong);
+    border: 1px solid var(--vm-border);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.6),
+      0 22px 58px rgba(15,23,42,.10);
+    -webkit-backdrop-filter: blur(22px) saturate(132%);
+    backdrop-filter: blur(22px) saturate(132%);
+  }
+
+  .dark .vm-users-hero {
+    background:
+      radial-gradient(540px circle at 6% -45%, rgba(16,185,129,.20), transparent 66%),
+      radial-gradient(440px circle at 92% -55%, rgba(14,116,144,.13), transparent 66%),
+      linear-gradient(180deg, rgba(255,255,255,.024), transparent),
+      rgba(10,18,32,.76);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.035),
+      0 24px 64px rgba(0,0,0,.26);
+  }
+
+  .vm-users-shell {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.24), rgba(255,255,255,.012)),
+      rgba(235,243,239,.76);
+    border: 1px solid var(--vm-border);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.56),
+      0 18px 46px rgba(15,23,42,.075);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    backdrop-filter: blur(16px) saturate(120%);
+  }
+
+  .dark .vm-users-shell {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.022), transparent),
+      rgba(10,18,32,.68);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.025),
+      0 20px 48px rgba(0,0,0,.20);
+  }
+
+  .vm-users-filter-dock {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.20), rgba(255,255,255,.015)),
+      rgba(210,224,217,.78);
+    border: 1px solid var(--vm-border-strong);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.52),
+      0 14px 32px rgba(15,23,42,.06);
+    -webkit-backdrop-filter: blur(14px) saturate(116%);
+    backdrop-filter: blur(14px) saturate(116%);
+  }
+
+  .dark .vm-users-filter-dock {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.025), transparent),
+      rgba(9,17,31,.76);
+    border-color: var(--vm-border);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.024),
+      0 16px 36px rgba(0,0,0,.17);
+  }
+
+  .vm-users-customizer {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.20), rgba(255,255,255,.012)),
+      rgba(225,236,230,.80);
+    border: 1px solid var(--vm-border);
+    color: var(--vm-text-secondary);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.52),
+      0 10px 26px rgba(15,23,42,.055);
+    -webkit-backdrop-filter: blur(12px) saturate(115%);
+    backdrop-filter: blur(12px) saturate(115%);
+  }
+
+  .vm-users-customizer:hover {
+    border-color: var(--vm-border-strong);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.23), rgba(255,255,255,.016)),
+      rgba(216,230,223,.90);
+  }
+
+  .dark .vm-users-customizer {
+    background: rgba(15,23,42,.64);
+    border-color: var(--vm-border);
+  }
+
+  .dark .vm-users-customizer:hover {
+    background: rgba(30,41,59,.72);
+    border-color: var(--vm-border-strong);
+  }
+
+  .vm-users-customizer-content {
+    background: rgba(239,246,242,.68);
+    border-top: 1px solid var(--vm-border);
+  }
+
+  .dark .vm-users-customizer-content {
+    background: rgba(8,17,31,.52);
+  }
+
+  .vm-column-chip {
+    background: rgba(248,251,249,.72);
+    border: 1px solid var(--vm-border);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.5);
+  }
+
+  .dark .vm-column-chip {
+    background: rgba(15,23,42,.62);
+    border-color: var(--vm-border);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+  }
+
+  .vm-user-action {
+    display: inline-flex;
+    height: 2rem;
+    width: 2rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: .65rem;
+    border: 1px solid transparent;
+    transition:
+      background-color 140ms ease,
+      border-color 140ms ease,
+      transform 140ms ease,
+      box-shadow 140ms ease;
+  }
+
+  .vm-user-action:hover {
+    transform: translateY(-1px);
+  }
+
+  .vm-user-action-neutral {
+    color: var(--vm-text-secondary);
+  }
+
+  .vm-user-action-neutral:hover {
+    background: rgba(71,85,105,.09);
+    border-color: rgba(71,85,105,.13);
+    color: var(--vm-text);
+  }
+
+  .vm-user-action-history {
+    color: #0284c7;
+  }
+
+  .vm-user-action-history:hover {
+    background: rgba(14,165,233,.10);
+    border-color: rgba(14,165,233,.16);
+  }
+
+  .vm-user-action-password {
+    color: #d97706;
+  }
+
+  .vm-user-action-password:hover {
+    background: rgba(245,158,11,.11);
+    border-color: rgba(245,158,11,.18);
+  }
+
+  .dark .vm-user-action-neutral:hover {
+    background: rgba(255,255,255,.06);
+    border-color: rgba(255,255,255,.07);
+  }
+
+  .vm-role-badge {
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+
+  .vm-users-table-shell {
+    overflow: hidden;
+    border: 1px solid var(--vm-border);
+    border-radius: 16px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.12), transparent),
+      rgba(241,247,244,.70);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.5),
+      0 12px 30px rgba(15,23,42,.05);
+  }
+
+  .dark .vm-users-table-shell {
+    background: rgba(8,17,31,.56);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.02),
+      0 14px 34px rgba(0,0,0,.15);
+  }
+
+  .vm-users-table-head {
+    background: rgba(204,220,211,.72);
+    color: var(--vm-text-secondary);
+    border-color: var(--vm-border);
+  }
+
+  .dark .vm-users-table-head {
+    background: rgba(15,23,42,.84);
+  }
+
+  .vm-users-table-row {
+    border-color: var(--vm-hairline);
+    transition:
+      background-color 120ms ease,
+      box-shadow 120ms ease;
+  }
+
+  .vm-users-table-row:hover {
+    background: rgba(197,216,206,.52);
+    box-shadow: inset 3px 0 0 rgba(16,185,129,.55);
+  }
+
+  .dark .vm-users-table-row:hover {
+    background: rgba(255,255,255,.035);
+    box-shadow: inset 3px 0 0 rgba(52,211,153,.38);
+  }
+}
