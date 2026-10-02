@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -39,8 +40,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -137,8 +141,17 @@ fun VendaButton(
             modifier = modifier.heightIn(min = height),
             enabled = enabled && !loading,
             shape = RoundedCornerShape(VendaRadius.md),
-            border = BorderStroke(1.dp, if (enabled) Emerald.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outline),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Emerald),
+            border = BorderStroke(
+                1.dp,
+                if (enabled) MaterialTheme.colorScheme.outline.copy(alpha = 0.72f)
+                else MaterialTheme.colorScheme.outline.copy(alpha = 0.38f),
+            ),
+            colors = ButtonDefaults.outlinedButtonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.70f),
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f),
+                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
+            ),
             content = { content() },
         )
 
@@ -175,14 +188,15 @@ fun VendaStatusChip(
     tone: VendaStatusTone,
     modifier: Modifier = Modifier,
 ) {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val colors = when (tone) {
-        VendaStatusTone.SUCCESS -> EmeraldSoft to EmeraldDark
-        VendaStatusTone.WARNING -> Amber100 to Amber500
-        VendaStatusTone.ERROR -> Red100 to Red500
-        VendaStatusTone.INFO -> Blue100 to Blue500
-        VendaStatusTone.PENDING -> Amber100 to Amber500
-        VendaStatusTone.PROCESSING -> Blue100 to Blue500
-        VendaStatusTone.NEUTRAL -> Slate100 to Slate500
+        VendaStatusTone.SUCCESS -> if (dark) Color(0xFF123F33) to Color(0xFF6EE7B7) else Color(0xFFDDF3E9) to Color(0xFF047857)
+        VendaStatusTone.WARNING -> if (dark) Color(0xFF4A3212) to Color(0xFFFBBF24) else Color(0xFFFFF1C7) to Color(0xFFB45309)
+        VendaStatusTone.ERROR -> if (dark) Color(0xFF4A1D1B) to Color(0xFFFF8A84) else Color(0xFFFEE4E2) to Color(0xFFB42318)
+        VendaStatusTone.INFO -> if (dark) Color(0xFF1E335F) to Color(0xFF8FB0FF) else Color(0xFFDBEAFE) to Color(0xFF1D4ED8)
+        VendaStatusTone.PENDING -> if (dark) Color(0xFF4A3212) to Color(0xFFFBBF24) else Color(0xFFFFF1C7) to Color(0xFFB45309)
+        VendaStatusTone.PROCESSING -> if (dark) Color(0xFF1E335F) to Color(0xFF8FB0FF) else Color(0xFFDBEAFE) to Color(0xFF1D4ED8)
+        VendaStatusTone.NEUTRAL -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
     }
     val icon = when (tone) {
         VendaStatusTone.SUCCESS -> Icons.Rounded.CheckCircle
@@ -196,7 +210,9 @@ fun VendaStatusChip(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(VendaRadius.full),
-        color = colors.first,
+        color = colors.first.copy(alpha = 0.96f),
+        border = BorderStroke(1.dp, colors.second.copy(alpha = 0.18f)),
+        shadowElevation = 1.dp,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = VendaSpacing.x3, vertical = 6.dp),
@@ -226,41 +242,60 @@ fun VendaMetricCard(
     contentColor: Color = MaterialTheme.colorScheme.onSurface,
     onClick: (() -> Unit)? = null,
 ) {
-    Surface(
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val shape = RoundedCornerShape(VendaRadius.lg)
+    val baseColor = if (containerColor == MaterialTheme.colorScheme.surface) {
+        if (dark) Color(0xFF142135) else Color(0xFFF1F7F4)
+    } else {
+        containerColor
+    }
+    val metricBrush = Brush.verticalGradient(
+        listOf(
+            baseColor.copy(alpha = if (dark) 0.84f else 0.88f),
+            baseColor.copy(alpha = if (dark) 0.66f else 0.72f),
+        ),
+    )
+    Column(
         modifier = modifier
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .animateContentSize(),
-        shape = RoundedCornerShape(VendaRadius.lg),
-        color = containerColor,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-    ) {
-        Column(
-            modifier = Modifier.padding(VendaSpacing.x3),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            Text(
-                text = value,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = contentColor,
+            .animateContentSize()
+            .shadow(
+                elevation = if (dark) 9.dp else 7.dp,
+                shape = shape,
+                ambientColor = if (dark) Color.Black.copy(alpha = 0.30f) else Color(0xFF0F172A).copy(alpha = 0.10f),
+                spotColor = if (dark) Color.Black.copy(alpha = 0.32f) else Color(0xFF0F172A).copy(alpha = 0.08f),
             )
+            .background(metricBrush, shape)
+            .border(
+                1.dp,
+                if (dark) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.24f),
+                shape,
+            )
+            .padding(VendaSpacing.x3),
+        verticalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = contentColor,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = contentColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        supportingText?.takeIf { it.isNotBlank() }?.let {
             Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = contentColor,
-                maxLines = 1,
+                text = it,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
-            supportingText?.takeIf { it.isNotBlank() }?.let {
-                Text(
-                    text = it,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
         }
     }
 }
@@ -390,7 +425,8 @@ fun VendaEmptyState(
             Surface(
                 modifier = Modifier.size(48.dp),
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+        shadowElevation = 3.dp,
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(icon, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -468,10 +504,16 @@ fun VendaSectionTabs(
     onSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(VendaRadius.lg),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(VendaRadius.xl),
+        color = if (dark) Color(0xFF0E1A2C).copy(alpha = 0.76f) else Color(0xFFDDE9E3).copy(alpha = 0.82f),
+        border = BorderStroke(
+            1.dp,
+            if (dark) Color.White.copy(alpha = 0.07f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
+        ),
+        shadowElevation = if (dark) 8.dp else 6.dp,
     ) {
         Row(
             modifier = Modifier
@@ -488,15 +530,18 @@ fun VendaSectionTabs(
                         .heightIn(min = 40.dp),
                     onClick = { onSelected(index) },
                     shape = RoundedCornerShape(VendaRadius.md),
-                    color = if (selected) MaterialTheme.colorScheme.surface else Color.Transparent,
-                    tonalElevation = if (selected) 1.dp else 0.dp,
+                    color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (dark) 0.72f else 0.82f) else Color.Transparent,
+                    border = if (selected) {
+                        BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = if (dark) 0.20f else 0.24f))
+                    } else null,
+                    shadowElevation = if (selected) 3.dp else 0.dp,
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
                             text = label,
                             modifier = Modifier.padding(horizontal = VendaSpacing.x3, vertical = VendaSpacing.x2),
                             style = MaterialTheme.typography.labelMedium,
-                            color = if (selected) Emerald else MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                             maxLines = 1,
                             overflow = TextOverflow.Clip,

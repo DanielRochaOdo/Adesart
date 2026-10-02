@@ -289,16 +289,16 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
   return (
     <>
       {showAuthorizationModal && selectedEmpresa && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-40">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden">
-            <div className="p-6 border-b border-slate-200">
-              <h2 className="text-xl font-semibold text-slate-800">A empresa requer autorização?</h2>
-              <p className="text-sm text-slate-600 mt-2">
+        <div className="vm-modal-overlay fixed inset-0 z-40 flex items-center justify-center p-4">
+          <div className="vm-glass-modal w-full max-w-md overflow-hidden rounded-2xl">
+            <div className="vm-glass-modal-bar border-b p-6">
+              <h2 className="vm-page-title text-xl font-semibold">A empresa requer autorização?</h2>
+              <p className="vm-muted-text mt-2 text-sm">
                 Empresa {selectedEmpresa.id} - {selectedEmpresa.nomeFantasia || selectedEmpresa.razaoSocial}
               </p>
             </div>
 
-            <div className="flex justify-end gap-3 p-6 bg-slate-50">
+            <div className="vm-glass-modal-bar flex justify-end gap-3 border-t p-6">
               <Button variant="secondary" onClick={() => handleAuthorizationAnswer(true)}>
                 Sim
               </Button>
@@ -311,14 +311,14 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
       )}
 
       <div className="space-y-6 max-w-3xl">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <div className="vm-cadastro-card rounded-3xl p-6">
           <div className="flex items-start gap-3 mb-6">
-            <div className="p-3 rounded-lg bg-emerald-50">
+            <div className="vm-dashboard-icon rounded-xl bg-emerald-500/10 p-3 text-emerald-700 dark:text-emerald-300">
               <LinkIcon className="w-6 h-6 text-emerald-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-slate-800">Gerar Link de Adesão</h3>
-              <p className="text-sm text-slate-600 mt-1">
+              <h3 className="vm-page-title text-lg font-semibold">Gerar Link de Adesão</h3>
+              <p className="vm-muted-text mt-1 text-sm">
                 {isGerente
                   ? 'Selecione a empresa e o vendedor responsável pelo link público.'
                   : 'O link será vinculado a esta empresa e ao código de vendedor do usuário logado.'}
@@ -327,20 +327,20 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+            <div className="vm-cadastro-subcard rounded-2xl p-4">
+              <p className="vm-meta-text mb-1 text-xs font-semibold uppercase tracking-wide">
                 Usuário
               </p>
-              <p className="text-sm font-medium text-slate-800">
+              <p className="vm-page-title text-sm font-semibold">
                 {profile?.name || profile?.email || 'Não identificado'}
               </p>
             </div>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+            <div className="vm-cadastro-subcard rounded-2xl p-4">
+              <p className="vm-meta-text mb-1 text-xs font-semibold uppercase tracking-wide">
                 {isGerente ? 'Vendedor do Link' : 'Código de Vendedor'}
               </p>
-              <p className="text-sm font-medium text-slate-800">
+              <p className="vm-page-title text-sm font-semibold">
                 {isGerente
                   ? (vendedores.find((item) => item.id === selectedVendedor)?.name || 'Selecione um vendedor abaixo')
                   : (profile?.external_id || 'Não configurado - será usado o código 0')}
@@ -348,11 +348,11 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
             </div>
           </div>
 
-          <div className="mb-6 bg-slate-50 border border-slate-200 rounded-lg p-4">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1">
+          <div className="vm-cadastro-subcard mb-6 rounded-2xl p-4">
+            <p className="vm-meta-text mb-1 text-xs font-semibold uppercase tracking-wide">
               URL Publica do Link
             </p>
-            <p className="text-sm text-slate-700 break-all">
+            <p className="vm-muted-text break-all text-sm">
               {String(import.meta.env.VITE_PUBLIC_APP_URL || '').trim() || window.location.origin}
             </p>
           </div>
@@ -363,13 +363,13 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
           />
 
           {error && (
-            <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+            <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
               {error}
             </div>
           )}
 
           {success && (
-            <div className="mt-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+            <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
               {success}
             </div>
           )}
@@ -449,18 +449,18 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
         </div>
 
         {generatedLink && requiresAuthorization === false && (
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h4 className="text-base font-semibold text-slate-800 mb-2">Link Gerado</h4>
-            <p className="text-sm text-slate-600 mb-4">
+          <div className="vm-cadastro-card rounded-3xl p-6">
+            <h4 className="vm-page-title mb-2 text-base font-semibold">Link Gerado</h4>
+            <p className="vm-muted-text mb-4 text-sm">
               Empresa {generatedLink.empresaCodigo} - {generatedLink.empresaNome}
             </p>
 
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 break-all text-sm text-slate-700">
+            <div className="vm-cadastro-subcard break-all rounded-2xl p-4 text-sm text-slate-700 dark:text-slate-200">
               {generatedLink.url}
             </div>
 
             <div className="mt-4 flex items-center justify-between gap-3">
-              <p className="text-xs text-slate-500">
+              <p className="vm-meta-text text-xs">
                 {copySuccess ? 'Link copiado para a área de transferencia.' : 'Ações rapidas do link'}
               </p>
 

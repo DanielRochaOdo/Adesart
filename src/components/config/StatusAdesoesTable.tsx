@@ -133,7 +133,7 @@ export function StatusAdesoesTable() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-slate-800">Status de Adesões</h3>
+        <h3 className="vm-page-title text-lg font-semibold">Status de Adesões</h3>
         {!isAdding && (
           <Button
             onClick={() => setIsAdding(true)}
@@ -146,7 +146,7 @@ export function StatusAdesoesTable() {
       </div>
 
       {isAdding && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className="vm-settings-card rounded-2xl p-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
             <Input
               label="Nome do Status"
@@ -155,7 +155,7 @@ export function StatusAdesoesTable() {
               placeholder="Ex: Em Análise"
             />
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">
+              <label className="vm-muted-text mb-1 block text-sm font-semibold">
                 Cor
               </label>
               <div className="flex items-center gap-2">
@@ -163,7 +163,7 @@ export function StatusAdesoesTable() {
                   type="color"
                   value={newCor}
                   onChange={(e) => setNewCor(e.target.value)}
-                  className="h-10 w-20 rounded border border-slate-300 cursor-pointer"
+                  className="vm-glass-field h-10 w-20 cursor-pointer rounded-lg border p-1"
                 />
                 <div
                   className="px-4 py-2 rounded-lg font-medium text-white"
@@ -177,14 +177,14 @@ export function StatusAdesoesTable() {
           <div className="flex gap-2">
             <button
               onClick={handleAdd}
-              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2"
+              className="vm-glass-primary flex items-center gap-2 rounded-lg px-4 py-2 font-semibold text-white"
             >
               <Save className="w-4 h-4" />
               Salvar
             </button>
             <button
               onClick={handleCancelAdd}
-              className="px-4 py-2 bg-slate-200 text-slate-700 rounded-lg hover:bg-slate-300 flex items-center gap-2"
+              className="vm-glass-secondary flex items-center gap-2 rounded-lg px-4 py-2 font-semibold"
             >
               <X className="w-4 h-4" />
               Cancelar
@@ -193,9 +193,9 @@ export function StatusAdesoesTable() {
         </div>
       )}
 
-      <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+      <div className="vm-settings-table-shell">
         <table className="w-full">
-          <thead className="bg-slate-50">
+          <thead className="vm-settings-table-head">
             <tr>
               <th className="px-4 py-3 text-left text-sm font-medium text-slate-700">Status</th>
               <th className="px-4 py-3 text-left text-sm font-medium text-slate-700">Cor</th>
@@ -203,7 +203,7 @@ export function StatusAdesoesTable() {
               <th className="px-4 py-3 text-right text-sm font-medium text-slate-700">Ações</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200">
+          <tbody className="divide-y divide-slate-200/70 dark:divide-white/5">
             {statusList.length === 0 ? (
               <tr>
                 <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
@@ -212,7 +212,7 @@ export function StatusAdesoesTable() {
               </tr>
             ) : (
               statusList.map((status) => (
-                <tr key={status.id} className="hover:bg-slate-50">
+                <tr key={status.id} className="vm-settings-row">
                   {editingId === status.id ? (
                     <>
                       <td className="px-4 py-3">
@@ -227,7 +227,7 @@ export function StatusAdesoesTable() {
                           type="color"
                           value={editCor}
                           onChange={(e) => setEditCor(e.target.value)}
-                          className="h-10 w-20 rounded border border-slate-300 cursor-pointer"
+                          className="vm-glass-field h-10 w-20 cursor-pointer rounded-lg border p-1"
                         />
                       </td>
                       <td className="px-4 py-3">
@@ -242,14 +242,14 @@ export function StatusAdesoesTable() {
                         <div className="flex justify-end gap-2">
                           <button
                             onClick={() => handleSave(status.id)}
-                            className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg"
+                            className="vm-user-action rounded-lg text-emerald-600 hover:border-emerald-500/20 hover:bg-emerald-500/10 dark:text-emerald-300"
                             title="Salvar"
                           >
                             <Save className="w-4 h-4" />
                           </button>
                           <button
                             onClick={handleCancel}
-                            className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+                            className="vm-user-action vm-user-action-neutral rounded-lg"
                             title="Cancelar"
                           >
                             <X className="w-4 h-4" />
@@ -259,8 +259,8 @@ export function StatusAdesoesTable() {
                     </>
                   ) : (
                     <>
-                      <td className="px-4 py-3 text-slate-800">{status.nome}</td>
-                      <td className="px-4 py-3 text-slate-600 font-mono text-sm">{status.cor}</td>
+                      <td className="vm-page-title px-4 py-3 font-medium">{status.nome}</td>
+                      <td className="vm-muted-text px-4 py-3 font-mono text-sm">{status.cor}</td>
                       <td className="px-4 py-3">
                         <div
                           className="inline-block px-3 py-1 rounded-lg font-medium text-white text-sm"
@@ -273,14 +273,14 @@ export function StatusAdesoesTable() {
                         <div className="flex justify-end gap-2">
                           <button
                             onClick={() => handleEdit(status)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                            className="vm-user-action rounded-lg text-blue-600 hover:border-blue-500/20 hover:bg-blue-500/10 dark:text-blue-300"
                             title="Editar"
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleDelete(status.id, status.nome)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                            className="vm-user-action rounded-lg text-red-600 hover:border-red-500/20 hover:bg-red-500/10 dark:text-red-300"
                             title="Excluir"
                           >
                             <Trash2 className="w-4 h-4" />

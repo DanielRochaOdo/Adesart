@@ -49,6 +49,7 @@ import br.com.vendamais.mobile.data.remote.CadastroPayloadBuilder
 import br.com.vendamais.mobile.domain.cadastro.CadastroApiErrorMapper
 import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.components.OdontoartBrandMark
+import br.com.vendamais.mobile.ui.components.ScreenBackground
 import br.com.vendamais.mobile.ui.components.ScreenHeading
 import br.com.vendamais.mobile.ui.components.VendaButton
 import br.com.vendamais.mobile.ui.components.VendaButtonSize
@@ -275,7 +276,7 @@ fun PublicAdesaoParityScreen(
         return
     }
 
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    ScreenBackground {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -1104,7 +1105,7 @@ fun PublicAdesaoParityScreen(
 
 @Composable
 private fun PublicLoadingScreen() {
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    ScreenBackground {
         Column(
             modifier = Modifier.padding(24.dp),
             verticalArrangement = Arrangement.Center,
@@ -1124,7 +1125,7 @@ private fun PublicUnavailableScreen(
     consultant: br.com.vendamais.mobile.data.models.PublicConsultantInfo?,
     onClose: () -> Unit,
 ) {
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    ScreenBackground {
         Column(
             modifier = Modifier.padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -1154,7 +1155,7 @@ private fun PublicFinalStateScreen(
     onInstallApp: () -> Unit,
     onClose: () -> Unit,
 ) {
-    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+    ScreenBackground {
         Column(
             modifier = Modifier
                 .fillMaxSize()

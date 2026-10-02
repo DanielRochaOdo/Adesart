@@ -60,9 +60,9 @@ export function ParceiroInvalidoModal({ onClose, onRetry }: ParceiroInvalidoModa
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full">
-        <div className="flex items-center justify-between p-6 border-b border-slate-200">
+    <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="vm-glass-modal w-full max-w-lg rounded-3xl">
+        <div className="vm-glass-modal-bar flex items-center justify-between border-b p-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
               <AlertTriangle className="w-5 h-5 text-amber-600" />
@@ -110,7 +110,7 @@ export function ParceiroInvalidoModal({ onClose, onRetry }: ParceiroInvalidoModa
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200 bg-slate-50">
+        <div className="vm-glass-modal-bar flex items-center justify-end gap-3 border-t p-6">
           <Button onClick={onClose} variant="secondary">
             Cancelar
           </Button>

@@ -30,6 +30,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -63,7 +65,16 @@ fun LoginScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Emerald),
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color(0xFF0B8A63),
+                        Color(0xFF075D47),
+                        Color(0xFF0A1830),
+                        Color(0xFF07111F),
+                    ),
+                ),
+            ),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -84,9 +95,9 @@ fun LoginScreen(
 
             Surface(
                 modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.surface,
-                shadowElevation = 0.dp,
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.84f),
+                shadowElevation = 18.dp,
                 border = BorderStroke(1.dp, White.copy(alpha = 0.20f)),
             ) {
                 Column(

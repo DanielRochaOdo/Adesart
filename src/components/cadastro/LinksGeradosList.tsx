@@ -173,15 +173,15 @@ const countDependentesCadastrados = (dependentes: unknown) => {
 const historyStatusClass = (status: HistoryStatus) => {
   switch (status) {
     case 'Concluiu a adesão':
-      return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      return 'bg-emerald-500/20 text-emerald-800 border-emerald-500/30 dark:bg-emerald-400/20 dark:text-emerald-100 dark:border-emerald-300/25';
     case 'Chegou ao contrato e não concluiu':
-      return 'bg-amber-100 text-amber-800 border-amber-200';
+      return 'vm-history-status-contract';
     case 'Validou CPF/data e abandonou depois':
-      return 'bg-blue-100 text-blue-800 border-blue-200';
+      return 'bg-blue-500/20 text-blue-800 border-blue-500/30 dark:bg-blue-400/20 dark:text-blue-100 dark:border-blue-300/25';
     case 'Informou CPF e chegou à consulta dos dados':
-      return 'bg-violet-100 text-violet-800 border-violet-200';
+      return 'bg-violet-500/20 text-violet-800 border-violet-500/30 dark:bg-violet-400/20 dark:text-violet-100 dark:border-violet-300/25';
     default:
-      return 'bg-slate-100 text-slate-700 border-slate-200';
+      return 'bg-slate-500/10 text-slate-700 border-slate-500/25 dark:bg-slate-400/10 dark:text-slate-100 dark:border-slate-300/20';
   }
 };
 
@@ -556,17 +556,17 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
 
   if (links.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 text-center">
+      <div className="vm-cadastro-card rounded-3xl p-8 text-center">
         <Link2 className="w-8 h-8 text-slate-400 mx-auto mb-3" />
-        <h3 className="text-lg font-semibold text-slate-800">Nenhum link gerado</h3>
-        <p className="text-sm text-slate-600 mt-1">Gere um link na aba `Link` para que ele apareca aqui.</p>
+        <h3 className="vm-page-title text-lg font-semibold">Nenhum link gerado</h3>
+        <p className="vm-muted-text mt-1 text-sm">Gere um link na aba `Link` para que ele apareca aqui.</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-5">
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="vm-cadastro-card rounded-3xl p-4">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
@@ -574,10 +574,10 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
             placeholder="Buscar por empresa, código, CNPJ ou vendedor"
-            className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-sm text-slate-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+            className="vm-glass-field h-11 w-full rounded-xl border pl-10 pr-3 text-sm outline-none"
           />
         </div>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+        <div className="vm-meta-text mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
           <span>
             {filteredLinks.length === 0
               ? 'Nenhum link encontrado'
@@ -588,9 +588,9 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
       </div>
 
       {filteredLinks.length === 0 ? (
-        <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+        <div className="vm-cadastro-card rounded-3xl p-8 text-center">
           <Search className="mx-auto mb-3 h-8 w-8 text-slate-400" />
-          <h3 className="text-base font-semibold text-slate-800">Nenhum resultado</h3>
+          <h3 className="vm-page-title text-base font-semibold">Nenhum resultado</h3>
           <p className="mt-1 text-sm text-slate-500">Tente buscar por outro código, empresa ou vendedor.</p>
         </div>
       ) : (
@@ -609,14 +609,14 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
           const groupAssociadosDetalhes = group.links.flatMap((link) => associadosByLinkId[link.id] || []);
 
           return (
-            <div key={groupKey} className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div key={groupKey} className="vm-link-group rounded-3xl">
               <button
                 type="button"
                 onClick={() => toggleGroup(groupKey)}
-                className="w-full border-b border-slate-200 bg-slate-50 px-6 py-5 text-left transition-colors hover:bg-slate-100"
+                className="vm-link-group-head w-full border-b px-6 py-5 text-left"
               >
                 <div className="flex items-start gap-3">
-                  <div className="rounded-lg bg-emerald-50 p-3">
+                  <div className="vm-dashboard-icon rounded-xl bg-emerald-500/10 p-3">
                     <Building2 className="h-5 w-5 text-emerald-600" />
                   </div>
 
@@ -627,21 +627,21 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                           {isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
                         </div>
                         <div>
-                          <h3 className="text-lg font-semibold text-slate-800">{group.empresaNome}</h3>
-                          <p className="mt-1 text-sm text-slate-600">
+                          <h3 className="vm-page-title text-lg font-semibold">{group.empresaNome}</h3>
+                          <p className="vm-muted-text mt-1 text-xs sm:text-sm">
                             Codigo {group.empresaCodigo}{group.empresaCnpj ? ` • CNPJ ${group.empresaCnpj}` : ''}
                           </p>
-                          <p className="mt-2 text-xs text-slate-500">
+                          <p className="vm-meta-text mt-2 text-xs">
                             {isExpanded ? 'Clique para ocultar detalhes e opções' : 'Clique para expandir detalhes e opções'}
                           </p>
                         </div>
                       </div>
 
-                      <div className="w-full rounded-xl border border-slate-200 bg-white px-1 py-1 shadow-sm lg:w-auto">
+                      <div className="vm-link-metric w-full rounded-2xl px-1 py-1 lg:w-auto">
                         <div className="grid min-w-[198px] grid-cols-3 divide-x divide-slate-200">
                           <div className="px-1.5 py-1 text-center">
                             <p className="text-[8px] font-medium uppercase tracking-[0.08em] text-slate-400">Visitas por sessão</p>
-                            <p className="mt-0.5 text-[15px] font-semibold text-slate-800">{groupVisits}</p>
+                            <p className="vm-page-title mt-0.5 text-[15px] font-semibold">{groupVisits}</p>
                           </div>
 
                           <button
@@ -653,15 +653,15 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                                 associados: groupAssociadosDetalhes,
                               });
                             }}
-                            className="px-1.5 py-1 text-center transition-colors hover:bg-slate-50"
+                            className="rounded-lg px-1.5 py-1 text-center transition-colors hover:bg-white/35 dark:hover:bg-white/[0.04]"
                           >
                             <p className="text-[8px] font-medium uppercase tracking-[0.05em] text-slate-400">Associados</p>
-                            <p className="mt-0.5 text-[15px] font-semibold text-slate-800">{groupAssociados}</p>
+                            <p className="vm-page-title mt-0.5 text-[15px] font-semibold">{groupAssociados}</p>
                           </button>
 
                           <div className="px-1.5 py-1 text-center">
                             <p className="text-[8px] font-medium uppercase tracking-[0.04em] text-slate-400">Dependentes</p>
-                            <p className="mt-0.5 text-[15px] font-semibold text-slate-800">{groupDependentes}</p>
+                            <p className="vm-page-title mt-0.5 text-[15px] font-semibold">{groupDependentes}</p>
                           </div>
                         </div>
                       </div>
@@ -671,7 +671,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
               </button>
 
               {isExpanded && (
-                <div className="divide-y divide-slate-200">
+                <div className="divide-y divide-slate-200/70 dark:divide-white/10">
                   {group.links.map((link) => {
                     const isCopyingCurrent = copyFeedbackId === link.id;
                     const isActionLoading = actionLoadingId === link.id;
@@ -685,18 +685,18 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                         <div className="flex flex-col gap-4">
                           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                             <div className="space-y-1">
-                              <p className="text-sm font-medium text-slate-800">
+                              <p className="vm-page-title text-sm font-semibold">
                                 Vendedor: {link.vendedor_nome} (Código {link.vendedor_codigo})
                               </p>
                               {link.adesionista_id && (
-                                <p className="text-sm font-medium text-slate-700">
+                                <p className="vm-muted-text text-sm font-semibold">
                                   Adesionista: {link.adesionista_nome || 'Não identificado'}
                                   {link.adesionista_codigo?.trim() ? ` (Código ${link.adesionista_codigo})` : ''}
                                 </p>
                               )}
-                              <p className="text-xs text-slate-500">Gerado em {formatDateTime(link.created_at)}</p>
+                              <p className="vm-meta-text text-xs">Gerado em {formatDateTime(link.created_at)}</p>
                               {link.used_at && (
-                                <p className="text-xs text-slate-500">
+                                <p className="vm-meta-text text-xs">
                                   Ultimo uso em {formatDateTime(link.used_at)}{link.used_cpf ? ` • CPF ${formatCpf(link.used_cpf)}` : ''}
                                 </p>
                               )}
@@ -707,12 +707,12 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                             </span>
                           </div>
 
-                          <div className="break-all rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                          <div className="vm-cadastro-subcard break-all rounded-2xl p-4 text-sm text-slate-700 dark:text-slate-200">
                             {link.link_url || 'Link legado sem URL armazenada'}
                           </div>
 
                           <div className="flex items-center justify-between gap-3">
-                            <p className="text-xs text-slate-500">
+                            <p className="vm-meta-text text-xs">
                               {isCopyingCurrent ? 'Link copiado com sucesso.' : 'Ações do link'}
                             </p>
 
@@ -774,14 +774,14 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
       )}
 
       {filteredLinks.length > 0 && totalPages > 1 && (
-        <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div className="vm-cadastro-card flex flex-col gap-3 rounded-2xl px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-sm text-slate-500">Pagina {currentPage} de {totalPages}</p>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
               disabled={currentPage === 1}
-              className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              className="vm-glass-secondary inline-flex h-9 items-center gap-1 rounded-lg px-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronLeft className="h-4 w-4" />Anterior
             </button>
@@ -789,7 +789,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
               type="button"
               onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
               disabled={currentPage === totalPages}
-              className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              className="vm-glass-secondary inline-flex h-9 items-center gap-1 rounded-lg px-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
             >
               Proxima<ChevronRight className="h-4 w-4" />
             </button>
@@ -799,20 +799,20 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
 
       {selectedHistoryLink && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-3 backdrop-blur-sm sm:p-4"
+          className="vm-modal-overlay fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto p-2 sm:p-4"
           onClick={() => setSelectedHistoryLink(null)}
         >
           <div
-            className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+            className="vm-glass-modal vm-modal-compact my-1 flex max-h-[calc(100dvh-0.5rem)] w-full max-w-[1480px] flex-col overflow-hidden rounded-3xl sm:my-0 sm:max-h-[calc(100dvh-2rem)]"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="vm-glass-modal-bar shrink-0 flex flex-col gap-2 border-b px-4 py-2.5 sm:flex-row sm:items-start sm:justify-between sm:px-5 sm:py-3">
               <div>
-                <h3 className="text-lg font-semibold text-slate-800">Histórico do link</h3>
-                <p className="mt-1 text-sm text-slate-600">
+                <h3 className="vm-page-title text-base font-semibold sm:text-lg">Histórico do link</h3>
+                <p className="vm-muted-text mt-1 text-sm">
                   {selectedHistoryLink.empresa_nome} • Codigo {selectedHistoryLink.empresa_codigo}
                 </p>
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="vm-meta-text mt-1 text-[11px] sm:text-xs">
                   Vendedor: {selectedHistoryLink.vendedor_nome} (Código {selectedHistoryLink.vendedor_codigo})
                   {selectedHistoryLink.adesionista_id && (
                     <span className="block">Adesionista: {selectedHistoryLink.adesionista_nome || 'Não identificado'}{selectedHistoryLink.adesionista_codigo?.trim() ? ` (Código ${selectedHistoryLink.adesionista_codigo})` : ''}</span>
@@ -824,7 +824,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                   type="button"
                   onClick={handleExportHistory}
                   disabled={historyLoading || visibleHistoryRows.length === 0}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg border border-emerald-600 bg-emerald-600 px-3 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="vm-glass-primary inline-flex h-8 items-center gap-2 rounded-lg px-3 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40 sm:h-9 sm:text-sm"
                 >
                   <Download className="h-4 w-4" />
                   Exportar XLSX
@@ -832,7 +832,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                 <button
                   type="button"
                   onClick={() => setSelectedHistoryLink(null)}
-                  className="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                  className="vm-glass-nav-item rounded-lg p-2"
                   aria-label="Fechar histórico"
                 >
                   <X className="h-5 w-5" />
@@ -841,35 +841,35 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
             </div>
 
             {historySummary && (
-              <div className="grid grid-cols-2 gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3 sm:grid-cols-4">
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide text-slate-400">Visitas por sessão</p>
-                  <p className="text-base font-semibold text-slate-800">{historySummary.clickCount}</p>
+              <div className="vm-link-stat-grid shrink-0 grid grid-cols-2 gap-2.5 px-4 py-3 sm:grid-cols-4 sm:px-5">
+                <div className="vm-link-stat-card">
+                  <p className="vm-link-stat-label">Visitas por sessão</p>
+                  <p className="vm-link-stat-value">{historySummary.clickCount}</p>
                 </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide text-slate-400">Tentativas identificadas</p>
-                  <p className="text-base font-semibold text-slate-800">{historySummary.identifiedAttempts}</p>
+                <div className="vm-link-stat-card">
+                  <p className="vm-link-stat-label">Tentativas identificadas</p>
+                  <p className="vm-link-stat-value">{historySummary.identifiedAttempts}</p>
                 </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide text-slate-400">Apenas abriu</p>
-                  <p className="text-base font-semibold text-slate-800">{historySummary.anonymousDetailed}</p>
+                <div className="vm-link-stat-card">
+                  <p className="vm-link-stat-label">Apenas abriu</p>
+                  <p className="vm-link-stat-value">{historySummary.anonymousDetailed}</p>
                 </div>
-                <div>
-                  <p className="text-[10px] uppercase tracking-wide text-slate-400">Última visita</p>
-                  <p className="text-xs font-medium text-slate-700">
+                <div className="vm-link-stat-card">
+                  <p className="vm-link-stat-label">Última visita</p>
+                  <p className="vm-link-stat-value vm-link-stat-value-small">
                     {historySummary.lastClickedAt ? formatDateTime(historySummary.lastClickedAt) : '-'}
                   </p>
                 </div>
               </div>
             )}
 
-            <div className="grid gap-3 border-b border-slate-200 bg-white px-5 py-3 sm:grid-cols-2">
-              <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+            <div className="vm-history-toolbar shrink-0 grid gap-2.5 border-b px-4 py-2.5 sm:grid-cols-2 sm:px-5">
+              <label className="vm-muted-text flex flex-col gap-1 text-[11px] font-semibold">
                 Status
                 <select
                   value={historyStatusFilter}
                   onChange={(event) => setHistoryStatusFilter(event.target.value)}
-                  className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-500"
+                  className="vm-glass-field h-9 rounded-lg border px-3 text-xs outline-none sm:text-sm"
                 >
                   <option value="todos">Todos os status</option>
                   {historyStatusOptions.map((status) => (
@@ -878,12 +878,12 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                 </select>
               </label>
 
-              <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+              <label className="vm-muted-text flex flex-col gap-1 text-[11px] font-semibold">
                 Ordenar por
                 <select
                   value={historySort}
                   onChange={(event) => setHistorySort(event.target.value as HistorySort)}
-                  className="h-10 rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none focus:border-emerald-500"
+                  className="vm-glass-field h-9 rounded-lg border px-3 text-xs outline-none sm:text-sm"
                 >
                   <option value="recentes">Mais recentes primeiro</option>
                   <option value="antigos">Mais antigos primeiro</option>
@@ -894,7 +894,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
               </label>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-auto">
+            <div className="vm-glass-scroll min-h-0 flex-1 overflow-auto overscroll-contain">
               {historyLoading ? (
                 <div className="flex min-h-56 items-center justify-center">
                   <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
@@ -908,40 +908,40 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                   Nenhum registro encontrado para os filtros selecionados.
                 </div>
               ) : (
-                <table className="min-w-[1180px] w-full border-collapse text-left text-xs">
-                  <thead className="sticky top-0 z-10 bg-slate-100 text-slate-600">
+                <table className="min-w-[1180px] w-full border-collapse text-left text-[10.5px] sm:text-[11px]">
+                  <thead className="vm-users-table-head sticky top-0 z-10">
                     <tr>
-                      <th className="border-b border-slate-200 px-3 py-3 font-semibold">Data</th>
-                      <th className="border-b border-slate-200 px-3 py-3 font-semibold">Horário</th>
-                      <th className="border-b border-slate-200 px-3 py-3 font-semibold">Nome do RF</th>
-                      <th className="border-b border-slate-200 px-3 py-3 font-semibold">Dependentes</th>
-                      <th className="border-b border-slate-200 px-3 py-3 font-semibold">Telefone</th>
-                      <th className="border-b border-slate-200 px-3 py-3 font-semibold">Status</th>
-                      <th className="border-b border-slate-200 px-3 py-3 font-semibold">Vendedor</th>
-                      <th className="border-b border-slate-200 px-3 py-3 font-semibold">Empresa</th>
-                      <th className="border-b border-slate-200 px-3 py-3 font-semibold">Código</th>
+                      <th className="border-b border-slate-200 px-2.5 py-2 font-semibold">Data</th>
+                      <th className="border-b border-slate-200 px-2.5 py-2 font-semibold">Horário</th>
+                      <th className="border-b border-slate-200 px-2.5 py-2 font-semibold">Nome do RF</th>
+                      <th className="border-b border-slate-200 px-2.5 py-2 font-semibold">Dependentes</th>
+                      <th className="border-b border-slate-200 px-2.5 py-2 font-semibold">Telefone</th>
+                      <th className="border-b border-slate-200 px-2.5 py-2 font-semibold">Status</th>
+                      <th className="border-b border-slate-200 px-2.5 py-2 font-semibold">Vendedor</th>
+                      <th className="border-b border-slate-200 px-2.5 py-2 font-semibold">Empresa</th>
+                      <th className="border-b border-slate-200 px-2.5 py-2 font-semibold">Código</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {pagedHistoryRows.map((row) => (
-                      <tr key={row.id} className="align-top hover:bg-slate-50">
-                        <td className="whitespace-nowrap px-3 py-3 text-slate-700">{formatDate(row.timestamp)}</td>
-                        <td className="whitespace-nowrap px-3 py-3 text-slate-700">{formatTime(row.timestamp)}</td>
-                        <td className="min-w-44 px-3 py-3 font-medium text-slate-800">{row.nomeRf || '-'}</td>
-                        <td className="min-w-48 px-3 py-3 text-slate-600">
+                      <tr key={row.id} className="vm-users-table-row align-top">
+                        <td className="whitespace-nowrap px-2.5 py-2 text-slate-700">{formatDate(row.timestamp)}</td>
+                        <td className="whitespace-nowrap px-2.5 py-2 text-slate-700">{formatTime(row.timestamp)}</td>
+                        <td className="min-w-44 px-2.5 py-2 font-medium text-slate-800">{row.nomeRf || '-'}</td>
+                        <td className="min-w-48 px-2.5 py-2 text-slate-600">
                           {row.dependentes.length > 0 ? row.dependentes.join(', ') : '-'}
                         </td>
-                        <td className="whitespace-nowrap px-3 py-3 text-slate-700">{formatPhone(row.telefone)}</td>
-                        <td className="min-w-64 px-3 py-3">
-                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold leading-4 ${historyStatusClass(row.status)}`}>
+                        <td className="whitespace-nowrap px-2.5 py-2 text-slate-700">{formatPhone(row.telefone)}</td>
+                        <td className="min-w-52 px-2.5 py-2">
+                          <span className={`inline-flex max-w-[190px] rounded-full border px-2.5 py-1 text-[10.5px] font-bold leading-4 shadow-[inset_0_1px_0_rgba(255,255,255,.10)] ${historyStatusClass(row.status)}`}>
                             {row.status}
                           </span>
                         </td>
-                        <td className="min-w-52 px-3 py-3 text-slate-700">
+                        <td className="min-w-52 px-2.5 py-2 text-slate-700">
                           {row.vendedor}{row.vendedorCodigo ? ` (${row.vendedorCodigo})` : ''}
                         </td>
-                        <td className="min-w-44 px-3 py-3 text-slate-700">{row.empresaNome}</td>
-                        <td className="whitespace-nowrap px-3 py-3 font-medium text-slate-800">{row.empresaCodigo}</td>
+                        <td className="min-w-44 px-2.5 py-2 text-slate-700">{row.empresaNome}</td>
+                        <td className="whitespace-nowrap px-2.5 py-2 font-medium text-slate-800">{row.empresaCodigo}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -950,8 +950,8 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
             </div>
 
             {!historyLoading && !historyError && visibleHistoryRows.length > 0 && (
-              <div className="flex flex-col gap-3 border-t border-slate-200 bg-white px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs text-slate-500">
+              <div className="vm-glass-modal-bar shrink-0 flex flex-col gap-2 border-t px-4 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                <p className="vm-meta-text text-xs">
                   Mostrando {historyPageStart + 1}-{Math.min(historyPageStart + HISTORY_PAGE_SIZE, visibleHistoryRows.length)} de {visibleHistoryRows.length} registros • 10 por pagina
                 </p>
                 <div className="flex items-center gap-2">
@@ -959,7 +959,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                     type="button"
                     onClick={() => setHistoryCurrentPage((page) => Math.max(1, page - 1))}
                     disabled={historyCurrentPage === 1}
-                    className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="vm-glass-secondary inline-flex h-9 items-center gap-1 rounded-lg px-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <ChevronLeft className="h-4 w-4" />Anterior
                   </button>
@@ -970,7 +970,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                     type="button"
                     onClick={() => setHistoryCurrentPage((page) => Math.min(historyTotalPages, page + 1))}
                     disabled={historyCurrentPage === historyTotalPages}
-                    className="inline-flex h-9 items-center gap-1 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="vm-glass-secondary inline-flex h-9 items-center gap-1 rounded-lg px-3 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Proxima<ChevronRight className="h-4 w-4" />
                   </button>
@@ -978,7 +978,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
               </div>
             )}
 
-            <div className="border-t border-slate-200 bg-slate-50 px-5 py-3 text-xs leading-5 text-slate-500">
+            <div className="vm-dashboard-subpanel shrink-0 border-t px-4 py-2 text-[9.5px] leading-4 text-slate-500 dark:text-slate-400 sm:px-5 sm:text-[10px]">
               Visitas são contabilizadas uma vez por link e por sessão do navegador ou aplicativo desde {historySummary?.visitsStartedAt ? formatDateTime(historySummary.visitsStartedAt) : 'a atualização da métrica'}. Retornar à tela inicial ou atualizar a página não aumenta a contagem. O histórico anterior ({historySummary?.legacyClickCount ?? 0} aberturas, sem deduplicação) permanece preservado separadamente e não é somado nem exibido como visita por sessão.
             </div>
           </div>
@@ -987,17 +987,17 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
 
       {selectedAssociadosGroup && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm"
+          className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4"
           onClick={() => setSelectedAssociadosGroup(null)}
         >
           <div
-            className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+            className="vm-glass-modal max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-3xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+            <div className="vm-glass-modal-bar flex items-start justify-between gap-4 border-b px-5 py-4">
               <div>
-                <h3 className="text-lg font-semibold text-slate-800">Associados Cadastrados</h3>
-                <p className="mt-1 text-sm text-slate-600">{selectedAssociadosGroup.empresaNome}</p>
+                <h3 className="vm-page-title text-lg font-semibold">Associados Cadastrados</h3>
+                <p className="vm-muted-text mt-1 text-sm">{selectedAssociadosGroup.empresaNome}</p>
               </div>
               <button
                 type="button"
@@ -1011,13 +1011,13 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
 
             <div className="max-h-[calc(90vh-88px)] space-y-3 overflow-y-auto p-5">
               {selectedAssociadosGroup.associados.length === 0 ? (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                <div className="vm-cadastro-subcard rounded-2xl p-4 text-sm text-slate-600 dark:text-slate-300">
                   Nenhum associado concluido para esta empresa ainda.
                 </div>
               ) : (
                 selectedAssociadosGroup.associados.map((associado, index) => (
-                  <div key={`${associado.nome}-${index}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="break-words text-[13px] font-semibold leading-5 text-slate-800">{associado.nome}</p>
+                  <div key={`${associado.nome}-${index}`} className="vm-cadastro-subcard rounded-2xl p-4">
+                    <p className="vm-page-title break-words text-[13px] font-semibold leading-5">{associado.nome}</p>
                     <p className="mt-3 text-xs uppercase tracking-wide text-slate-400">Dependentes</p>
                     {associado.dependentes.length === 0 ? (
                       <p className="mt-2 text-sm text-slate-500">Nenhum dependente cadastrado.</p>
@@ -1026,7 +1026,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                         {associado.dependentes.map((dependente, dependenteIndex) => (
                           <span
                             key={`${dependente}-${dependenteIndex}`}
-                            className="inline-flex max-w-full items-center break-all rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] leading-4 text-slate-700"
+                            className="vm-dashboard-pill inline-flex max-w-full items-center break-all rounded-full px-3 py-1 text-[11px] leading-4"
                           >
                             {dependente}
                           </span>

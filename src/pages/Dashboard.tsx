@@ -375,9 +375,9 @@ function exportarCSV(registros: DashboardCadastro[]) {
 function Painel({ titulo, children, extra, className = '' }: {
   titulo: string; children: ReactNode; extra?: ReactNode; className?: string;
 }) {
-  return <section className={'rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 ' + className}>
+  return <section className={'vm-dashboard-panel rounded-2xl p-4 sm:p-5 ' + className}>
     <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-      <h2 className="text-base font-bold text-slate-800">{titulo}</h2>
+      <h2 className="vm-dashboard-panel-title text-base font-bold">{titulo}</h2>
       {extra}
     </div>
     {children}
@@ -394,16 +394,16 @@ function CardIndicador({ titulo, valor, anterior, icone: Icone, cor, detalhe, po
     type="button"
     onClick={onClick}
     aria-label={'Ver registros de ' + titulo}
-    className="group min-w-0 rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+    className="vm-dashboard-kpi group min-w-0 rounded-2xl p-4 text-left focus:outline-none focus:ring-2 focus:ring-emerald-500/60 focus:ring-offset-2 focus:ring-offset-transparent"
   >
     <div className="flex items-start gap-3">
-      <div className={'rounded-xl p-2.5 ' + cor}><Icone className="h-5 w-5" /></div>
+      <div className={'vm-dashboard-icon rounded-xl p-2.5 ' + cor}><Icone className="h-5 w-5" /></div>
       <div className="min-w-0">
-        <p className="text-xs font-medium text-slate-600 sm:text-sm">{titulo}</p>
-        <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{inteiro(valor)}</p>
+        <p className="vm-muted-text text-xs font-semibold sm:text-sm">{titulo}</p>
+        <p className="vm-page-title mt-1 text-2xl font-bold tabular-nums">{inteiro(valor)}</p>
       </div>
     </div>
-    <p className="mt-3 flex items-center gap-1 text-xs text-slate-500">
+    <p className="vm-meta-text mt-3 flex items-center gap-1 text-xs">
       {variacao === null ? 'Sem base no período anterior' : <>
         {variacao >= 0 ? <ArrowUpRight className="h-3.5 w-3.5" /> :
           <ArrowDownRight className="h-3.5 w-3.5" />}
@@ -413,8 +413,8 @@ function CardIndicador({ titulo, valor, anterior, icone: Icone, cor, detalhe, po
         <span>vs. período anterior</span>
       </>}
     </p>
-    {detalhe && <p className="mt-1 text-xs text-slate-500">{detalhe}</p>}
-    <p className="mt-2 text-xs font-semibold text-slate-400 transition group-hover:text-slate-600">
+    {detalhe && <p className="vm-meta-text mt-1 text-xs">{detalhe}</p>}
+    <p className="vm-meta-text mt-2 text-xs font-semibold transition group-hover:text-emerald-700 dark:group-hover:text-emerald-300">
       Ver registros
     </p>
   </button>;
@@ -447,7 +447,7 @@ function ModalIndicador({ detalhes, onClose }: {
   }, [onClose]);
 
   return <div
-    className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/55 p-3 sm:p-6"
+    className="vm-modal-overlay fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-6"
     role="dialog"
     aria-modal="true"
     aria-labelledby="dashboard-indicador-modal-titulo"
@@ -455,21 +455,21 @@ function ModalIndicador({ detalhes, onClose }: {
       if (e.target === e.currentTarget) onClose();
     }}
   >
-    <div className="flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-      <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-4 sm:p-5">
+    <div className="vm-glass-modal flex max-h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl">
+      <div className="vm-glass-modal-bar flex items-start justify-between gap-4 border-b p-4 sm:p-5">
         <div>
-          <h2 id="dashboard-indicador-modal-titulo" className="text-lg font-bold text-slate-900 sm:text-xl">
+          <h2 id="dashboard-indicador-modal-titulo" className="vm-page-title text-lg font-bold sm:text-xl">
             {detalhes.titulo}
           </h2>
           <p className="mt-1 text-sm text-slate-500">
             {inteiro(detalhes.valor)} {detalhes.rotuloQuantidade} · {inteiro(detalhes.registros.length)} registros relacionados
           </p>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="vm-meta-text mt-1 text-xs">
             Lista respeitando o período e todos os filtros atualmente aplicados no Dashboard.
           </p>
         </div>
         <button type="button" onClick={onClose}
-          className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+          className="vm-glass-nav-item rounded-lg p-2"
           aria-label="Fechar detalhes do indicador">
           <X className="h-5 w-5" />
         </button>
@@ -482,7 +482,7 @@ function ModalIndicador({ detalhes, onClose }: {
           </div>
         ) : (
           <table className="w-full min-w-[1050px] border-collapse text-left text-xs sm:text-sm">
-            <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500">
+            <thead className="vm-table-head sticky top-0 z-10 text-slate-600 dark:text-slate-300">
               <tr>
                 <th className="px-4 py-3 font-semibold">Data</th>
                 <th className="px-4 py-3 font-semibold">Registro</th>
@@ -496,7 +496,7 @@ function ModalIndicador({ detalhes, onClose }: {
             </thead>
             <tbody>
               {exibidos.map(({ cadastro, quantidade }) => (
-                <tr key={cadastro.id} className="border-t border-slate-100 hover:bg-slate-50/70">
+                <tr key={cadastro.id} className="vm-table-row border-t">
                   <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                     {new Date(cadastro.created_at).toLocaleString('pt-BR', {
                       day: '2-digit', month: '2-digit', year: 'numeric',
@@ -550,7 +550,7 @@ function ModalIndicador({ detalhes, onClose }: {
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setPagina((p) => Math.max(1, p - 1))}
               disabled={paginaAtual <= 1}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+              className="vm-glass-secondary rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50">
               Anterior
             </button>
             <span className="text-xs tabular-nums text-slate-500">
@@ -558,7 +558,7 @@ function ModalIndicador({ detalhes, onClose }: {
             </span>
             <button type="button" onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))}
               disabled={paginaAtual >= totalPaginas}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+              className="vm-glass-secondary rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-50">
               Próxima
             </button>
           </div>
@@ -576,7 +576,7 @@ function Barras({ grupos, cor = 'bg-blue-500', vazio = 'Sem dados no período.' 
   return <div className="space-y-3">
     {grupos.slice(0, 6).map((g) => <div key={g.key} className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] items-center gap-3 text-xs sm:text-sm">
       <span className="truncate text-slate-600" title={g.nome}>{g.nome}</span>
-      <div className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+      <div className="h-2.5 overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-800/80">
         <div className={'h-full rounded-full ' + cor} style={{ width: (100 * g.total / maior) + '%' }} />
       </div>
       <span className="min-w-9 text-right font-semibold tabular-nums text-slate-700">{inteiro(g.total)}</span>
@@ -625,7 +625,7 @@ function RankingPlanos({ catalogo, registros, erro }: {
           <strong className="w-10 shrink-0 text-right tabular-nums text-slate-800"
             title={inteiro(plano.total) + ' vidas'}>{inteiro(plano.total)}</strong>
         </div>
-        <div className="ml-8 h-2 overflow-hidden rounded-full bg-slate-100">
+        <div className="ml-8 h-2 overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-800/80">
           <div className="h-full rounded-full bg-emerald-500"
             style={{ width: (100 * plano.total / maior) + '%' }} />
         </div>
@@ -656,7 +656,7 @@ function Rosca({ entradas, centro, legenda, compacto = false }: {
     : 'grid items-center gap-5 sm:grid-cols-[minmax(120px,1fr)_minmax(0,1.5fr)]'}>
     <div className={'relative mx-auto flex shrink-0 items-center justify-center rounded-full ' +
       (compacto ? 'h-32 w-32' : 'h-40 w-40')} style={{ background: fundo }}>
-      <div className={'flex flex-col items-center justify-center rounded-full bg-white text-center ' +
+      <div className={'vm-dashboard-subpanel flex flex-col items-center justify-center rounded-full text-center ' +
         (compacto ? 'h-24 w-24' : 'h-28 w-28')}>
         <strong className="text-2xl tabular-nums text-slate-900">{inteiro(centro)}</strong>
         <span className="text-xs text-slate-500">{legenda}</span>
@@ -702,15 +702,29 @@ function GraficoEvolucao({ registros, inicio, fimExclusivo }: {
   if (!registros.some((c) => c.tipo_cadastro === 'cadastro')) {
     return <div className="flex h-52 items-center justify-center text-sm text-slate-500">Sem cadastros no período selecionado.</div>;
   }
-  return <div>
-    <div className="mb-2 flex justify-end gap-4 text-xs text-slate-600">
-      <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-blue-500" />Iniciados</span>
-      <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500" />Enviados ao ERP</span>
+  return <div className="vm-chart-well p-3">
+    <div className="vm-muted-text mb-2 flex justify-end gap-4 text-xs">
+      <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-blue-500 shadow-sm" />Iniciados</span>
+      <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500 shadow-sm" />Enviados ao ERP</span>
     </div>
     <svg viewBox="0 0 715 208" role="img" aria-label="Cadastros criados em cada dia ou grupo de dias do período, separados pelo status atual" className="h-56 w-full">
       {[0, 1, 2, 3, 4].map((parte) => <g key={parte}>
-        <line x1="38" y1={176 - parte * 37.5} x2="685" y2={176 - parte * 37.5} stroke="#e2e8f0" />
-        <text x="29" y={180 - parte * 37.5} textAnchor="end" fill="#64748b" fontSize="11">
+        <line
+          x1="38"
+          y1={176 - parte * 37.5}
+          x2="685"
+          y2={176 - parte * 37.5}
+          stroke="currentColor"
+          className="text-slate-300 dark:text-slate-700"
+        />
+        <text
+          x="29"
+          y={180 - parte * 37.5}
+          textAnchor="end"
+          fill="currentColor"
+          fontSize="11"
+          className="text-slate-500 dark:text-slate-400"
+        >
           {inteiro(Math.round(maior * parte / 4))}
         </text>
       </g>)}
@@ -720,12 +734,20 @@ function GraficoEvolucao({ registros, inicio, fimExclusivo }: {
       <path d={linha('enviados')} fill="none" stroke="#16a34a" strokeWidth="2.7" strokeLinejoin="round" />
       {pontos.filter((_, indice) => indice % Math.max(1, Math.ceil(pontos.length / 7)) === 0).map((p) => {
         const indice = pontos.indexOf(p);
-        return <text key={p.dia} x={x(indice)} y="199" textAnchor="middle" fill="#64748b" fontSize="11">
+        return <text
+          key={p.dia}
+          x={x(indice)}
+          y="199"
+          textAnchor="middle"
+          fill="currentColor"
+          fontSize="11"
+          className="text-slate-500 dark:text-slate-400"
+        >
           {p.dia.slice(8, 10) + '/' + p.dia.slice(5, 7)}
         </text>;
       })}
     </svg>
-    <p className="text-xs text-slate-500">Por data de criação; a linha verde mostra a situação atual dos cadastros criados em cada data.</p>
+    <p className="vm-meta-text text-xs">Por data de criação; a linha verde mostra a situação atual dos cadastros criados em cada data.</p>
   </div>;
 }
 
@@ -735,13 +757,13 @@ function TabelaProfissionais({ titulo, grupos, mostrarTaxa }: {
   return <Painel titulo={titulo}>
     {!grupos.length ? <p className="py-8 text-center text-sm text-slate-500">Nenhum registro no período.</p> :
       <div className="overflow-x-auto"><table className="w-full min-w-[420px] text-left text-xs sm:text-sm">
-        <thead className="bg-slate-50 text-slate-500"><tr>
+        <thead className="vm-table-head text-slate-600 dark:text-slate-300"><tr>
           <th className="rounded-l-lg px-2 py-2">Nome</th>
           <th className="px-2 py-2 text-right">Cadastros</th>
           <th className="px-2 py-2 text-right">Enviados</th>
           <th className="rounded-r-lg px-2 py-2 text-right">{mostrarTaxa ? 'Envio %' : 'Pendentes'}</th>
         </tr></thead>
-        <tbody>{grupos.slice(0, 5).map((grupo) => <tr key={grupo.key} className="border-b border-slate-100 last:border-0">
+        <tbody>{grupos.slice(0, 5).map((grupo) => <tr key={grupo.key} className="vm-table-row border-b last:border-0">
           <td className="max-w-40 truncate px-2 py-2 font-medium text-slate-700" title={grupo.nome}>{grupo.nome}</td>
           <td className="px-2 py-2 text-right tabular-nums">{inteiro(grupo.total)}</td>
           <td className="px-2 py-2 text-right tabular-nums">{inteiro(grupo.enviados)}</td>
@@ -1177,9 +1199,9 @@ export function Dashboard() {
   const CampoFiltro = ({ nome, titulo, escolhas, desabilitado = false }: {
     nome: keyof Filtros; titulo: string; escolhas: { value: string; label: string }[];
     desabilitado?: boolean;
-  }) => <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-slate-600">
+  }) => <label className="vm-muted-text flex min-w-0 flex-col gap-1 text-xs font-semibold">
     {titulo}
-    <select className="w-full rounded-xl border border-slate-200 bg-white px-2.5 py-2.5 text-sm text-slate-700 outline-none focus:border-emerald-500"
+    <select className="vm-glass-field w-full rounded-xl border px-2.5 py-2.5 text-sm outline-none"
       value={nome === 'equipe' && equipeRestrita ? equipeRestrita : filtros[nome]}
       disabled={desabilitado} onChange={(e) => alterarFiltro(nome, e.target.value)}>
       {!desabilitado && <option value="todos">Todos</option>}
@@ -1189,15 +1211,19 @@ export function Dashboard() {
 
   return <Layout>
     <main className="mx-auto w-full max-w-[1760px] space-y-4 pb-10 sm:space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Dashboard Gerencial</h1>
-          <p className="mt-1 text-sm text-slate-600">
+      <header className="vm-dashboard-hero flex flex-wrap items-start justify-between gap-4 rounded-3xl p-5 sm:p-6">
+        <div className="max-w-3xl">
+          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-500/15 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">
+            <BarChart3 className="h-3.5 w-3.5" />
+            Visão gerencial
+          </div>
+          <h1 className="vm-page-title text-2xl font-bold tracking-tight sm:text-3xl">Dashboard Gerencial</h1>
+          <p className="vm-muted-text mt-1 text-sm">
             Produção comercial e acompanhamento dos cadastros · situação atual das coortes criadas no período
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+          <label className="vm-dashboard-pill flex items-center gap-2 rounded-xl px-3 py-2 text-sm">
             <CalendarDays className="h-4 w-4" />
             <span className="sr-only">Período</span>
             <select className="max-w-40 bg-transparent outline-none" value={periodo}
@@ -1210,26 +1236,26 @@ export function Dashboard() {
             </select>
           </label>
           <button type="button" onClick={atualizarDashboard}
-            disabled={carregando} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+            disabled={carregando} className="vm-glass-secondary flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold disabled:opacity-60">
             <RefreshCw className={'h-4 w-4 ' + (carregando ? 'animate-spin' : '')} /> Atualizar
           </button>
           <button type="button" onClick={() => exportarCSV(atuais)} disabled={carregando || !!erro || !atuais.length}
-            className="flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50">
+            className="vm-glass-primary flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">
             <Download className="h-4 w-4" /> Exportar CSV
           </button>
         </div>
       </header>
 
-      {periodo === 'personalizado' && <div className="flex flex-wrap gap-3 rounded-xl border border-slate-200 bg-white p-3">
-        <label className="text-sm text-slate-600">Início <input aria-label="Início do período" type="date"
-          className="ml-2 rounded-lg border border-slate-200 p-1.5" value={inicioPersonalizado}
+      {periodo === 'personalizado' && <div className="vm-dashboard-panel flex flex-wrap gap-3 rounded-2xl p-3">
+        <label className="vm-muted-text text-sm">Início <input aria-label="Início do período" type="date"
+          className="vm-glass-field ml-2 rounded-lg border p-1.5" value={inicioPersonalizado}
           onChange={(e) => setInicioPersonalizado(e.target.value)} /></label>
-        <label className="text-sm text-slate-600">Fim <input aria-label="Fim do período" type="date"
-          className="ml-2 rounded-lg border border-slate-200 p-1.5" value={fimPersonalizado}
+        <label className="vm-muted-text text-sm">Fim <input aria-label="Fim do período" type="date"
+          className="vm-glass-field ml-2 rounded-lg border p-1.5" value={fimPersonalizado}
           onChange={(e) => setFimPersonalizado(e.target.value)} /></label>
       </div>}
 
-      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="vm-filter-dock grid grid-cols-2 gap-2 rounded-3xl p-3 sm:grid-cols-3 lg:grid-cols-6">
         <CampoFiltro nome="equipe" titulo="Equipe"
           desabilitado={!gerencial}
           escolhas={equipeRestrita
@@ -1243,7 +1269,7 @@ export function Dashboard() {
         <CampoFiltro nome="status" titulo="Situação" escolhas={opcoes.status} />
       </div>
       <div className="flex flex-col gap-2 sm:flex-row">
-        <label className="flex flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+        <label className="vm-glass-field flex flex-1 items-center gap-2 rounded-xl border px-3 py-2">
           <Filter className="h-4 w-4 text-slate-500" />
           <span className="sr-only">Buscar por nome de empresa, plano ou profissional</span>
           <input className="w-full bg-transparent text-sm outline-none" placeholder="Buscar empresa, plano ou profissional..."
@@ -1255,7 +1281,7 @@ export function Dashboard() {
           disabled={Object.entries(filtros).every(([key, value]) =>
             key === 'busca' ? value === '' : value === 'todos'
           )}
-          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+          className="vm-glass-secondary rounded-xl px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
         >
           Limpar filtros
         </button>
@@ -1265,7 +1291,7 @@ export function Dashboard() {
         <AlertCircle className="h-5 w-5 shrink-0" />
         <div><strong>Não foi possível carregar os dados.</strong><p>{erro}</p></div>
       </div>}
-      {carregando ? <div className="flex items-center justify-center gap-3 rounded-2xl border border-slate-200 bg-white py-24 text-slate-600">
+      {carregando ? <div className="vm-dashboard-panel vm-muted-text flex items-center justify-center gap-3 rounded-2xl py-24">
         <Loader2 className="h-6 w-6 animate-spin text-emerald-600" /> Carregando indicadores...
       </div> : erro ? null : <>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
@@ -1323,32 +1349,32 @@ export function Dashboard() {
                 <span className="text-slate-600">{motivo.titulo}</span>
                 <span className="font-semibold tabular-nums text-slate-800">{inteiro(motivo.total)} · {percentual(atual.pendentes ? motivo.total / atual.pendentes : 0)}</span>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full"
+              <div className="h-2 overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-800/80"><div className="h-full rounded-full"
                 style={{ backgroundColor: motivo.cor, width: (100 * motivo.total / Math.max(1, atual.pendentes)) + '%' }} /></div>
             </div>)}</div>
             <p className="mt-3 text-xs text-slate-500">Categorias mutuamente exclusivas de cadastros ainda não enviados ao ERP.</p>
           </Painel>
           <Painel titulo="Resumo de performance">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="rounded-xl bg-slate-50 p-3">
+              <div className="vm-dashboard-subpanel rounded-xl p-3">
                 <BarChart3 className="mb-2 h-5 w-5 text-blue-600" />
                 <p className="text-xs text-slate-500">Vendedor com maior volume</p>
                 <p className="font-bold text-slate-800">{profissionaisVendedor[0]?.nome || 'Não informado'}</p>
-                <p className="text-sm text-slate-600">{inteiro(profissionaisVendedor[0]?.total || 0)} cadastros</p>
+                <p className="vm-muted-text text-sm">{inteiro(profissionaisVendedor[0]?.total || 0)} cadastros</p>
               </div>
-              <div className="rounded-xl bg-slate-50 p-3">
+              <div className="vm-dashboard-subpanel rounded-xl p-3">
                 <Users className="mb-2 h-5 w-5 text-emerald-600" />
                 <p className="text-xs text-slate-500">Adesionista com maior volume</p>
                 <p className="font-bold text-slate-800">{profissionaisAdesionista[0]?.nome || 'Não informado'}</p>
-                <p className="text-sm text-slate-600">{inteiro(profissionaisAdesionista[0]?.total || 0)} cadastros</p>
+                <p className="vm-muted-text text-sm">{inteiro(profissionaisAdesionista[0]?.total || 0)} cadastros</p>
               </div>
-              <div className="rounded-xl bg-slate-50 p-3">
+              <div className="vm-dashboard-subpanel rounded-xl p-3">
                 <ClipboardList className="mb-2 h-5 w-5 text-blue-600" />
                 <p className="text-xs text-slate-500">Empresa com maior volume</p>
                 <p className="font-bold text-slate-800">{porEmpresa[0]?.nome || 'Não informada'}</p>
-                <p className="text-sm text-slate-600">{inteiro(porEmpresa[0]?.total || 0)} cadastros</p>
+                <p className="vm-muted-text text-sm">{inteiro(porEmpresa[0]?.total || 0)} cadastros</p>
               </div>
-              <div className="rounded-xl bg-slate-50 p-3">
+              <div className="vm-dashboard-subpanel rounded-xl p-3">
                 <ShieldCheck className="mb-2 h-5 w-5 text-emerald-600" />
                 <p className="text-xs text-slate-500">Proporção enviada ao ERP</p>
                 <p className="text-2xl font-bold text-slate-800">{percentual(atual.titulares ? atual.enviados / atual.titulares : 0)}</p>

@@ -1510,11 +1510,11 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-xl max-w-5xl w-full my-8 max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-slate-200 p-6 flex items-center justify-between z-10">
+    <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
+      <div className="vm-glass-modal my-8 max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-3xl">
+        <div className="vm-glass-modal-bar sticky top-0 z-10 flex items-center justify-between border-b p-6">
           <div>
-            <h2 className="text-xl font-bold text-slate-800">Inclusão de Dependente</h2>
+            <h2 className="vm-page-title text-xl font-bold">Inclusão de Dependente</h2>
             <p className="text-sm text-slate-600 mt-1">
               Busque um responsável financeiro e adicione dependentes
             </p>
@@ -1533,7 +1533,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
 
         <div className="p-6 space-y-6">
           {profile?.role !== 'VENDEDOR' && (
-            <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+            <div className="vm-cadastro-subcard rounded-2xl p-4">
               <h3 className="font-semibold text-slate-900 mb-4">Selecionar Vendedor{profile?.role === 'CADASTRO' ? ' e Adesionista' : ''}</h3>
 
               <div className="space-y-3">
@@ -1635,7 +1635,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
-                        <p className="font-medium text-slate-800">{resp.nome}</p>
+                        <p className="vm-page-title font-semibold">{resp.nome}</p>
                         <p className="text-sm text-slate-600">
                           Código: {resp.codigo} | CPF: {formatCPF(resp.cpf)}
                         </p>
@@ -1698,7 +1698,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
                       <div key={index} className={`bg-white border rounded-lg p-4 ${dep.saved ? 'border-green-500' : 'border-emerald-200'}`}>
                         <div className="flex items-center justify-between mb-3">
                           <div className="flex items-center gap-2">
-                            <h4 className="font-medium text-slate-800">Dependente {index + 1}</h4>
+                            <h4 className="vm-page-title font-semibold">Dependente {index + 1}</h4>
                             {dep.saved && (
                               <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-medium">
                                 Salvo
@@ -1964,9 +1964,9 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
 
                 <div className="space-y-4">
                   {dependentes.map((dep, index) => (
-                    <div key={`anexo-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <div key={`anexo-${index}`} className="vm-cadastro-subcard rounded-2xl p-4">
                       <div className="mb-3">
-                        <h4 className="font-medium text-slate-800">{dep.nome || `Dependente ${index + 1}`}</h4>
+                        <h4 className="vm-page-title font-semibold">{dep.nome || `Dependente ${index + 1}`}</h4>
                         <p className="text-sm text-slate-600">
                           Plano {dep.plano || '-'}{dep.planoValor ? ` • R$ ${dep.planoValor}` : ''}
                         </p>

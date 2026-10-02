@@ -139,7 +139,7 @@ const whatsappUrl = (phone?: string | null) => {
 function ConsultantContact({ link }: { link: Pick<LinkData, 'vendedorNome' | 'vendedorTelefone'> | null }) {
   const url = whatsappUrl(link?.vendedorTelefone);
   if (!link?.vendedorNome && !url) return null;
-  return <div className="mt-5 rounded-2xl bg-emerald-50 p-4 text-left">
+  return <div className="vm-public-consultant mt-5 rounded-2xl p-4 text-left">
     <p className="font-bold text-emerald-900">Ficou com alguma dúvida?</p>
     <p className="mt-1 text-sm text-emerald-900">Seu consultor está pronto para lhe atender.</p>
     {link?.vendedorNome && <p className="mt-3 text-sm font-semibold text-emerald-950">{link.vendedorNome}</p>}
@@ -192,7 +192,7 @@ function AppButtons() {
       </button>
 
       {showFallback && (
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
+        <div className="vm-public-info rounded-2xl p-4 text-left">
           <p className="text-sm leading-6 text-slate-600">
             Nao foi possivel identificar automaticamente o sistema deste aparelho. Escolha a loja abaixo.
           </p>
@@ -662,25 +662,27 @@ export function PublicCadastroLink() {
   };
 
   const shell = (children: React.ReactNode) => (
-    <div translate="no" className="min-h-screen bg-slate-50 px-4 py-5 sm:py-8">
-      <main className="mx-auto w-full max-w-xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <header className="bg-emerald-700 px-5 py-6 text-white sm:px-7">
-          <div className="flex items-start justify-between gap-3">
+    <div translate="no" className="vm-public-page min-h-screen px-4 py-5 sm:py-8">
+      <main className="vm-public-shell mx-auto w-full max-w-2xl overflow-hidden rounded-[32px]">
+        <header className="vm-public-header px-5 py-6 text-white sm:px-7 sm:py-7">
+          <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
               <p className="text-xs font-medium uppercase tracking-[0.16em] text-emerald-100">Adesão Odontoart</p>
               <h1 className="truncate text-lg font-semibold">{linkData?.empresaNome || 'Plano odontológico'}</h1>
               {(linkData || knownConsultant)?.vendedorNome && <p className="mt-1 text-xs text-emerald-100">Consultor: {(linkData || knownConsultant)?.vendedorNome}</p>}
               {(linkData || knownConsultant)?.vendedorTelefone && <p className="mt-0.5 text-xs text-emerald-100">WhatsApp: {formatMobilePhone((linkData || knownConsultant)?.vendedorTelefone || '')}</p>}
             </div>
-            <img src="/logo-odontoart.png" alt="Odontoart Planos Odontológicos" className="h-auto w-32 shrink-0 object-contain sm:w-40" />
+            <div className="vm-public-logo-tile shrink-0 rounded-2xl p-2.5">
+              <img src="/logo-odontoart.png" alt="Odontoart Planos Odontológicos" className="h-auto w-28 object-contain sm:w-36" />
+            </div>
           </div>
           {whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) && <a href={whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) || '#'} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-extrabold text-white shadow-lg ring-2 ring-orange-200 transition-colors hover:bg-orange-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-300"><MessageCircle className="h-5 w-5" />Precisa de ajuda? Fale com seu consultor</a>}
         </header>
-        <div className="p-5 sm:p-7">
-          {linkData && !['success', 'completed', 'not_eligible'].includes(stage) && <div aria-label="Progresso da adesão" className="mb-5 grid grid-cols-4 gap-1 text-center text-[10px] font-medium">
+        <div className="vm-public-content p-5 sm:p-7">
+          {linkData && !['success', 'completed', 'not_eligible'].includes(stage) && <div aria-label="Progresso da adesão" className="vm-public-progress mb-5 grid grid-cols-4 gap-1.5 rounded-2xl p-1.5 text-center text-[10px] font-semibold">
             {['Dados', 'Plano', 'Dependentes', 'Confirmação'].map((label, index) => {
               const currentStep = stage === 'identify' ? 0 : stage === 'details' ? (form.titularPlano ? 1 : 0) : stage === 'dependents' ? 2 : 3;
-              return <span key={label} className={`rounded-lg px-1 py-2 ${index <= currentStep ? 'bg-emerald-100 text-emerald-900' : 'bg-slate-100 text-slate-500'}`}>{label}</span>;
+              return <span key={label} className={`rounded-xl border px-1 py-2 ${index <= currentStep ? 'vm-public-step-active' : 'vm-public-step'}`}>{label}</span>;
             })}
           </div>}
           {children}
@@ -727,7 +729,7 @@ export function PublicCadastroLink() {
       {error && <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
       {stage === 'identify' && (
-        <section>
+        <section className="vm-public-section rounded-3xl p-5 sm:p-6">
           <div className="mb-6"><ShieldCheck className="mb-3 h-9 w-9 text-emerald-700" /><h2 className="text-2xl font-bold text-slate-900">Vamos começar sua adesão</h2><p className="mt-2 text-sm leading-6 text-slate-600">Informe os dados do responsável financeiro para validar sua identidade.</p></div>
           <div className="space-y-4">
             <Input label="CPF" inputMode="numeric" value={formatCPF(cpf)} onChange={(event) => setCpf(event.target.value)} maxLength={14} required error={validationErrors.includes('CPF válido') ? 'Informe um CPF válido.' : undefined} className="min-h-12 text-base" />
@@ -742,7 +744,7 @@ export function PublicCadastroLink() {
       )}
 
       {stage === 'details' && (
-        <section className="space-y-5">
+        <section className="vm-public-section space-y-5 rounded-3xl p-5 sm:p-6">
           <div><UserRound className="mb-3 h-8 w-8 text-emerald-700" /><h2 className="text-xl font-bold text-slate-900">Seus dados</h2><p className="mt-1 text-sm text-slate-600">Revise os dados localizados e corrija o que for necessário.</p></div>
           <Input label="Nome completo" value={form.nome} onChange={(event) => setForm((prev) => ({ ...prev, nome: event.target.value }))} required className="min-h-12" />
           <div className="grid gap-4 sm:grid-cols-2">
@@ -771,12 +773,12 @@ export function PublicCadastroLink() {
       )}
 
       {stage === 'dependents' && (
-        <section>
+        <section className="vm-public-section rounded-3xl p-4 sm:p-5">
           <button type="button" onClick={() => setStage('details')} className="mb-4 inline-flex items-center text-sm font-medium text-slate-600"><ChevronLeft className="mr-1 h-4 w-4" />Voltar</button>
           <div className="flex items-start justify-between gap-4"><div><h2 className="text-xl font-bold text-slate-900">Dependentes</h2><p className="mt-1 text-sm text-slate-600">Inclua os dependentes que deseja cadastrar nesta adesão.</p></div><span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">{dependents.length}</span></div>
           <div className="mt-5 space-y-4">
             {dependents.map((dep, index) => (
-              <div key={dep.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div key={dep.id} className="vm-public-info rounded-2xl p-4 sm:p-5">
                 <div className="mb-4 flex items-center justify-between"><strong className="text-sm text-slate-800">Dependente {index + 1}</strong><button type="button" onClick={() => removeDependent(dep.id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button></div>
                 <div className="space-y-4">
                   <div>
@@ -792,31 +794,31 @@ export function PublicCadastroLink() {
               </div>
             ))}
           </div>
-          <button type="button" onClick={addDependent} className="mt-4 flex min-h-12 w-full items-center justify-center rounded-2xl border border-dashed border-emerald-400 bg-emerald-50 px-4 text-sm font-semibold text-emerald-700"><Plus className="mr-2 h-4 w-4" />Adicionar dependente</button>
+          <button type="button" onClick={addDependent} className="vm-public-info mt-4 flex min-h-12 w-full items-center justify-center rounded-2xl border border-dashed border-emerald-500/40 px-4 text-sm font-semibold text-emerald-700 dark:text-emerald-300"><Plus className="mr-2 h-4 w-4" />Adicionar dependente</button>
           <Button onClick={goReview} className="mt-5 min-h-12 w-full text-base">Continuar {dependents.length === 0 ? 'sem dependentes' : ''}</Button>
           {validationErrors.length > 0 && <div role="alert" className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800">Corrija as pendências: {validationErrors.join(', ')}.</div>}
         </section>
       )}
 
       {stage === 'review' && (
-        <section>
+        <section className="vm-public-section rounded-3xl p-4 sm:p-5">
           <button type="button" onClick={() => setStage('dependents')} className="mb-4 inline-flex items-center text-sm font-medium text-slate-600"><ChevronLeft className="mr-1 h-4 w-4" />Voltar</button>
           <h2 className="text-xl font-bold text-slate-900">Revise sua adesão</h2>
           <div className="mt-5 space-y-3 text-sm">
-            <div className="rounded-2xl border border-slate-200 p-4"><span className="text-slate-500">Responsável financeiro</span><strong className="mt-1 block text-slate-900">{form.nome}</strong><span className="text-slate-600">{formatCPF(cpf)}</span></div>
-            <div className="rounded-2xl border border-slate-200 p-4"><span className="text-slate-500">Plano do titular</span><strong className="mt-1 block text-slate-900">{plans.find((plan) => plan.Plano === form.titularPlano)?.nomeExibicao}</strong><span className="text-slate-600">{currency(plans.find((plan) => plan.Plano === form.titularPlano)?.ValorTitular || 0)}</span></div>
-            <div className="rounded-2xl border border-slate-200 p-4"><span className="text-slate-500">Dependentes</span><strong className="mt-1 block text-slate-900">{dependents.length}</strong>{dependents.map((dep) => <p key={dep.id} className="mt-2 text-slate-600">{dep.nome} - {plans.find((plan) => plan.Plano === dep.plano)?.nomeExibicao}</p>)}</div>
-            <div className="rounded-2xl border border-slate-200 p-4"><span className="text-slate-500">Contato</span><strong className="mt-1 block text-slate-900">{formatPhone(form.telefone)}</strong><span className="text-slate-600">{form.email}</span></div>
+            <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Responsável financeiro</span><strong className="mt-1 block text-slate-900">{form.nome}</strong><span className="text-slate-600">{formatCPF(cpf)}</span></div>
+            <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Plano do titular</span><strong className="mt-1 block text-slate-900">{plans.find((plan) => plan.Plano === form.titularPlano)?.nomeExibicao}</strong><span className="text-slate-600">{currency(plans.find((plan) => plan.Plano === form.titularPlano)?.ValorTitular || 0)}</span></div>
+            <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Dependentes</span><strong className="mt-1 block text-slate-900">{dependents.length}</strong>{dependents.map((dep) => <p key={dep.id} className="mt-2 text-slate-600">{dep.nome} - {plans.find((plan) => plan.Plano === dep.plano)?.nomeExibicao}</p>)}</div>
+            <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Contato</span><strong className="mt-1 block text-slate-900">{formatPhone(form.telefone)}</strong><span className="text-slate-600">{form.email}</span></div>
           </div>
           <Button onClick={() => { setEmailToConfirm(form.email); setEmailModalOpen(true); setError(''); }} className="mt-5 min-h-12 w-full text-base"><FileCheck2 className="mr-2 h-5 w-5" />Revisar contrato</Button>
         </section>
       )}
 
       {stage === 'contract' && (
-        <section>
+        <section className="vm-public-section rounded-3xl p-4 sm:p-5">
           <button type="button" onClick={() => setStage('review')} className="mb-4 inline-flex items-center text-sm font-medium text-slate-600"><ChevronLeft className="mr-1 h-4 w-4" />Voltar e alterar dados</button>
           <div className="mb-4 flex items-center gap-3"><FileCheck2 className="h-8 w-8 text-emerald-700" /><div><h2 className="text-xl font-bold text-slate-900">Contrato de adesão</h2><p className="text-xs text-slate-500">Hash: {contractHash.slice(0, 16)}...</p></div></div>
-          <div className="max-h-[50vh] overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-4"><pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-700">{contractText}</pre></div>
+          <div className="vm-public-info vm-glass-scroll max-h-[50vh] overflow-y-auto rounded-2xl p-4"><pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-700">{contractText}</pre></div>
           <div className="mt-5 space-y-3">
             {coverageUrl && <>
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
@@ -827,23 +829,28 @@ export function PublicCadastroLink() {
                   <a href={coverageUrl} target="_blank" rel="noreferrer" download={`Cobertura-${coverageName || coverageCode}.pdf`} className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 px-3 py-2 text-sm font-semibold text-emerald-800"><Download className="h-4 w-4" />Baixar PDF</a>
                 </div>
               </div>
-              <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedCoverage} onChange={(event) => setAcceptedCoverage(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Estou ciente da cobertura do plano contratado, disponibilizada para consulta.</strong></span></label>
+              <label className="vm-public-info flex cursor-pointer items-start gap-3 rounded-2xl p-4"><input type="checkbox" checked={acceptedCoverage} onChange={(event) => setAcceptedCoverage(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Estou ciente da cobertura do plano contratado, disponibilizada para consulta.</strong></span></label>
             </>}
-            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Li e aceito os termos e condicoes do contrato apresentado.</strong></span></label>
-            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 p-4"><input type="checkbox" checked={acceptedData} onChange={(event) => setAcceptedData(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Confirmo que os dados informados estao corretos.</strong></span></label>
+            <label className="vm-public-info flex cursor-pointer items-start gap-3 rounded-2xl p-4"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Li e aceito os termos e condicoes do contrato apresentado.</strong></span></label>
+            <label className="vm-public-info flex cursor-pointer items-start gap-3 rounded-2xl p-4"><input type="checkbox" checked={acceptedData} onChange={(event) => setAcceptedData(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Confirmo que os dados informados estao corretos.</strong></span></label>
           </div>
           <Button onClick={finalize} disabled={busy || !acceptedTerms || !acceptedData || Boolean(coverageUrl && !acceptedCoverage)} className="mt-5 min-h-12 w-full text-base">{busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}Aceitar e concluir adesao</Button>
         </section>
       )}
 
-      {coverageOpen && coverageUrl && <div role="dialog" aria-label="Cobertura do plano" className="fixed inset-0 z-50 flex flex-col bg-white p-3 sm:p-6">
-        <div className="mb-3 flex items-center justify-between gap-3"><h3 className="font-semibold">Cobertura — {coverageName || 'Plano odontológico'}</h3><button type="button" className="rounded-lg bg-emerald-700 px-4 py-2 font-semibold text-white" onClick={() => setCoverageOpen(false)}>Fechar</button></div>
-        <iframe title="Cobertura do plano contratado" src={coverageUrl} className="min-h-0 w-full flex-1 rounded-xl border border-slate-200" />
-        <a href={coverageUrl} target="_blank" rel="noreferrer" className="mt-3 text-center text-sm font-semibold text-emerald-800 underline">Abrir ou baixar o PDF</a>
+      {coverageOpen && coverageUrl && <div role="dialog" aria-label="Cobertura do plano" className="vm-modal-overlay fixed inset-0 z-[100] flex p-3 sm:p-6">
+        <div className="vm-glass-modal flex min-h-0 w-full flex-1 flex-col rounded-3xl p-3 sm:p-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h3 className="vm-page-title font-semibold">Cobertura — {coverageName || 'Plano odontológico'}</h3>
+            <button type="button" className="vm-glass-primary rounded-lg px-4 py-2 font-semibold text-white" onClick={() => setCoverageOpen(false)}>Fechar</button>
+          </div>
+          <iframe title="Cobertura do plano contratado" src={coverageUrl} className="min-h-0 w-full flex-1 rounded-2xl border border-slate-200 bg-white/80" />
+          <a href={coverageUrl} target="_blank" rel="noreferrer" className="mt-3 text-center text-sm font-semibold text-emerald-700 underline dark:text-emerald-300">Abrir ou baixar o PDF</a>
+        </div>
       </div>}
       {emailModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-end bg-slate-950/50 p-0 sm:items-center sm:justify-center sm:p-4">
-          <div className="w-full rounded-t-3xl bg-white p-5 shadow-2xl sm:max-w-md sm:rounded-3xl sm:p-6">
+        <div className="vm-modal-overlay fixed inset-0 z-[100] flex items-end p-0 sm:items-center sm:justify-center sm:p-4">
+          <div className="vm-glass-modal w-full rounded-t-3xl p-5 sm:max-w-md sm:rounded-3xl sm:p-6">
             <h3 className="text-xl font-bold text-slate-900">Confirme seu e-mail</h3>
             <p className="mt-2 text-sm leading-6 text-slate-600">O contrato será enviado para este endereço. Você pode corrigi-lo antes de continuar.</p>
             <div className="mt-5"><Input label="E-mail do contrato" type="email" value={emailToConfirm} onChange={(event) => setEmailToConfirm(event.target.value)} required className="min-h-12" /></div>

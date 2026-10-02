@@ -89,14 +89,14 @@ export function Layout({ children }: LayoutProps) {
   const isConfigActive = configMenuItems.some(item => item.show && location.pathname === item.path);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 text-slate-800">
-      <nav className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-40">
+    <div className="vm-app-bg min-h-screen text-slate-800">
+      <nav className="vm-glass-nav sticky top-0 z-40 border-b">
         <div className="mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex justify-between h-14 sm:h-16">
             <div className="flex items-center space-x-2 sm:space-x-4 md:space-x-8">
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 active:bg-slate-200 transition-colors"
+                className="vm-glass-nav-item rounded-lg p-1.5 md:hidden"
                 aria-label="Menu"
               >
                 {mobileMenuOpen ? (
@@ -105,10 +105,19 @@ export function Layout({ children }: LayoutProps) {
                   <Menu className="w-5 h-5" />
                 )}
               </button>
-              <div className="flex items-center">
-                <Briefcase className="w-5 h-5 sm:w-7 sm:h-7 text-emerald-600" />
-                <span className="ml-1.5 sm:ml-2 text-base sm:text-xl font-bold text-slate-800">Venda+</span>
-              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/dashboard')}
+                className="group flex items-center rounded-xl px-1 py-0.5 transition hover:bg-white/30 dark:hover:bg-white/[0.04]"
+                aria-label="Ir para o Dashboard"
+              >
+                <img
+                  src="/venda-plus-logo.webp"
+                  alt="Venda+"
+                  className="h-10 w-10 rounded-xl object-contain drop-shadow-[0_6px_12px_rgba(5,150,105,.18)] sm:h-11 sm:w-11"
+                />
+                <span className="vm-page-title ml-2 hidden text-lg font-bold tracking-[-0.03em] xl:inline">Venda+</span>
+              </button>
               <div className="hidden md:flex space-x-1">
                 {mainMenuItems.map((item) => item.show && (
                   <button
@@ -116,8 +125,8 @@ export function Layout({ children }: LayoutProps) {
                     onClick={() => navigate(item.path)}
                     className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       location.pathname === item.path
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                        ? 'vm-glass-nav-item-active'
+                        : 'vm-glass-nav-item'
                     }`}
                   >
                     <item.icon className="w-4 h-4 mr-2" />
@@ -135,8 +144,8 @@ export function Layout({ children }: LayoutProps) {
                       onClick={() => setConfigDropdownOpen((open) => !open)}
                       className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                         isConfigActive
-                          ? 'bg-emerald-50 text-emerald-700'
-                          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                          ? 'vm-glass-nav-item-active'
+                          : 'vm-glass-nav-item'
                       }`}
                     >
                       <Settings className="w-4 h-4 mr-2" />
@@ -145,7 +154,7 @@ export function Layout({ children }: LayoutProps) {
                     </button>
 
                     {configDropdownOpen && (
-                      <div id="configuracoes-submenu-desktop" className="absolute top-full left-0 z-50 w-56 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                      <div id="configuracoes-submenu-desktop" className="vm-glass-popover absolute top-full left-0 z-50 mt-2 w-60 rounded-xl py-1.5">
                         {configMenuItems.map((item) => item.show && (
                           <button
                             key={item.path}
@@ -155,8 +164,8 @@ export function Layout({ children }: LayoutProps) {
                             }}
                             className={`w-full flex items-center px-4 py-2.5 text-sm font-medium transition-colors ${
                               location.pathname === item.path
-                                ? 'bg-emerald-50 text-emerald-700'
-                                : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                ? 'vm-glass-nav-item-active'
+                                : 'vm-glass-nav-item'
                             }`}
                           >
                             <item.icon className="w-4 h-4 mr-3" />
@@ -171,13 +180,13 @@ export function Layout({ children }: LayoutProps) {
             </div>
             <div className="flex items-center space-x-1 sm:space-x-3">
               <div className="text-right hidden lg:block">
-                <div className="text-sm font-medium text-slate-900 truncate max-w-[120px]">{profile?.name}</div>
-                <div className="text-xs text-slate-500">{profile?.role}</div>
+                <div className="vm-page-title max-w-[150px] truncate text-sm font-semibold">{profile?.name}</div>
+                <div className="vm-meta-text text-xs">{profile?.role}</div>
               </div>
               <button
                 type="button"
                 onClick={toggleTheme}
-                className="p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 rounded-lg transition-colors"
+                className="vm-glass-nav-item rounded-lg p-2"
                 aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
                 title={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
               >
@@ -185,7 +194,7 @@ export function Layout({ children }: LayoutProps) {
               </button>
               <button
                 onClick={handleSignOut}
-                className="flex items-center px-2 sm:px-3 py-1.5 sm:py-2 text-sm font-medium text-slate-700 hover:text-slate-900 hover:bg-slate-100 active:bg-slate-200 rounded-lg transition-colors"
+                className="vm-glass-nav-item flex items-center rounded-lg px-2 py-1.5 text-sm font-medium sm:px-3 sm:py-2"
                 aria-label="Sair"
               >
                 <LogOut className="w-4 h-4 sm:mr-1.5" />
@@ -196,10 +205,10 @@ export function Layout({ children }: LayoutProps) {
         </div>
 
         {mobileMenuOpen && (
-          <div className="md:hidden border-t border-slate-200 bg-white shadow-lg">
+          <div className="vm-glass-panel md:hidden border-t">
             <div className="px-3 py-2 space-y-1 max-h-[calc(100vh-3.5rem)] overflow-y-auto">
-              <div className="px-3 py-2 border-b border-slate-200 mb-1">
-                <div className="text-sm font-medium text-slate-900 truncate">{profile?.name}</div>
+              <div className="mb-1 border-b border-slate-200/70 px-3 py-2 dark:border-white/10">
+                <div className="vm-page-title truncate text-sm font-semibold">{profile?.name}</div>
                 <div className="text-xs text-slate-500">{profile?.role}</div>
               </div>
 
@@ -209,8 +218,8 @@ export function Layout({ children }: LayoutProps) {
                   onClick={() => handleNavigate(item.path)}
                   className={`w-full flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors active:scale-95 ${
                     location.pathname === item.path
-                      ? 'bg-emerald-50 text-emerald-700'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100'
+                      ? 'vm-glass-nav-item-active'
+                      : 'vm-glass-nav-item'
                   }`}
                 >
                   <item.icon className="w-5 h-5 mr-3 flex-shrink-0" />
@@ -227,8 +236,8 @@ export function Layout({ children }: LayoutProps) {
                     onClick={() => setMobileConfigOpen((open) => !open)}
                     className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors active:scale-95 ${
                       isConfigActive
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100'
+                        ? 'vm-glass-nav-item-active'
+                        : 'vm-glass-nav-item'
                     }`}
                   >
                     <div className="flex items-center">
@@ -243,15 +252,15 @@ export function Layout({ children }: LayoutProps) {
                   </button>
 
                   {mobileConfigOpen && (
-                    <div id="configuracoes-submenu-mobile" className="ml-4 space-y-1 border-l-2 border-slate-200 pl-2">
+                    <div id="configuracoes-submenu-mobile" className="ml-4 space-y-1 border-l border-slate-200/70 pl-2 dark:border-white/10">
                       {configMenuItems.map((item) => item.show && (
                         <button
                           key={item.path}
                           onClick={() => handleNavigate(item.path)}
                           className={`w-full flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors active:scale-95 ${
                             location.pathname === item.path
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 active:bg-slate-100'
+                              ? 'vm-glass-nav-item-active'
+                              : 'vm-glass-nav-item'
                           }`}
                         >
                           <item.icon className="w-4 h-4 mr-3 flex-shrink-0" />
@@ -266,7 +275,7 @@ export function Layout({ children }: LayoutProps) {
           </div>
         )}
       </nav>
-      <main className="mx-auto px-3 sm:px-4 lg:px-8 py-3 sm:py-6 max-w-7xl">
+      <main className="relative mx-auto max-w-7xl px-3 py-5 sm:px-4 sm:py-7 lg:px-8">
         {children}
       </main>
     </div>

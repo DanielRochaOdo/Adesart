@@ -9,15 +9,15 @@ interface ObservacoesEmpresaModalProps {
 
 export function ObservacoesEmpresaModal({ observacoes, nomeEmpresa, onClose }: ObservacoesEmpresaModalProps) {
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between p-6 border-b border-slate-200 bg-amber-50">
+    <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="vm-glass-modal flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl">
+        <div className="vm-glass-modal-bar flex items-center justify-between border-b p-6">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-amber-100 rounded-lg">
               <AlertTriangle className="w-6 h-6 text-amber-600" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-slate-800">Observações da Empresa</h2>
+              <h2 className="vm-page-title text-xl font-semibold">Observações da Empresa</h2>
               <p className="text-sm text-slate-600 mt-0.5">{nomeEmpresa}</p>
             </div>
           </div>
@@ -38,7 +38,7 @@ export function ObservacoesEmpresaModal({ observacoes, nomeEmpresa, onClose }: O
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 p-6 border-t border-slate-200 bg-slate-50">
+        <div className="vm-glass-modal-bar flex justify-end gap-3 border-t p-6">
           <Button onClick={onClose} variant="primary">
             Entendi
           </Button>

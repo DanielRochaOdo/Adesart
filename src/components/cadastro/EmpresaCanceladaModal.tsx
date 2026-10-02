@@ -19,15 +19,15 @@ export function EmpresaCanceladaModal({ empresaNome, onClose, onBuscarNova }: Em
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+    <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="vm-glass-modal w-full max-w-md rounded-3xl">
         <div className="p-6">
           <div className="flex items-start gap-4 mb-4">
             <div className="p-3 bg-red-100 rounded-full flex-shrink-0">
               <AlertTriangle className="w-6 h-6 text-red-600" />
             </div>
             <div className="flex-1">
-              <h3 className="text-lg font-bold text-slate-800 mb-1">
+              <h3 className="vm-page-title mb-1 text-lg font-bold">
                 Contrato inválido
               </h3>
               <p className="text-sm text-slate-600">

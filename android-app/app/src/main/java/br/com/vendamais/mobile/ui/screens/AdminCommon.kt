@@ -23,6 +23,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.ui.components.VendaEmptyState
@@ -50,15 +52,23 @@ internal fun EmptyAdminCard(message: String) {
 
 @Composable
 internal fun AdminBadge(label: String, bgColor: Color, textColor: Color) {
-    Text(
-        text = label,
-        modifier = Modifier
-            .background(bgColor, RoundedCornerShape(999.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
-        color = textColor,
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.SemiBold,
-    )
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val resolvedBackground = if (dark) bgColor.copy(alpha = 0.20f) else bgColor.copy(alpha = 0.88f)
+    val resolvedText = if (dark) lerp(textColor, Color.White, 0.48f) else textColor
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = resolvedBackground,
+        border = BorderStroke(1.dp, resolvedText.copy(alpha = 0.16f)),
+        shadowElevation = 1.dp,
+    ) {
+        Text(
+            text = label,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            color = resolvedText,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
 }
 
 @Composable
@@ -71,11 +81,15 @@ internal fun <T> SelectionField(
     onSelected: (T) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
-    val fieldColor = if (highlighted) EmeraldSoft.copy(alpha = 0.55f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+    val fieldColor = if (highlighted) {
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f)
+    } else {
+        MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.80f)
+    }
     val fieldBorder = if (highlighted) {
         BorderStroke(1.dp, Emerald.copy(alpha = 0.35f))
     } else {
-        BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f))
+        BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.62f))
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -87,6 +101,7 @@ internal fun <T> SelectionField(
             shape = RoundedCornerShape(12.dp),
             color = fieldColor,
             border = fieldBorder,
+            shadowElevation = 2.dp,
         ) {
             Text(
                 text = value,
@@ -115,7 +130,14 @@ internal fun <T> SelectionField(
                                     open = false
                                 },
                             shape = RoundedCornerShape(12.dp),
-                            color = if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                            color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.82f)
+                            else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.78f),
+                            border = BorderStroke(
+                                1.dp,
+                                if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)
+                                else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.72f),
+                            ),
+                            shadowElevation = if (selected) 2.dp else 1.dp,
                         ) {
                             Text(
                                 text = option.second,

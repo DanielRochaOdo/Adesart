@@ -1,5 +1,6 @@
 package br.com.vendamais.mobile.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -81,8 +82,10 @@ fun ProfileScreen(
 
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = EmeraldSoft,
+            shape = RoundedCornerShape(20.dp),
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.68f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)),
+            shadowElevation = 9.dp,
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
@@ -92,12 +95,12 @@ fun ProfileScreen(
                     text = profile.name,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = Emerald,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                 )
                 Text(
                     text = roleLabel(profile.role),
                     style = MaterialTheme.typography.labelLarge,
-                    color = Emerald,
+                    color = MaterialTheme.colorScheme.primary,
                 )
                 Text(
                     text = state.team?.name ?: "Sem equipe vinculada",

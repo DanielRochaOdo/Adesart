@@ -48,15 +48,15 @@ export function CadastroExistenteModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-hidden">
+    <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="vm-glass-modal max-h-[90vh] w-full max-w-lg overflow-hidden rounded-3xl">
         <div className="flex items-start justify-between p-6 border-b border-slate-200">
           <div className="flex items-start gap-3">
             <div className="flex-shrink-0 w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center">
               <AlertTriangle className="w-5 h-5 text-amber-600" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-800">Cadastro Já Existe</h2>
+              <h2 className="vm-page-title text-xl font-bold">Cadastro Já Existe</h2>
               <p className="text-sm text-slate-600 mt-1">
                 {canContinue
                   ? 'Um pré-cadastro com este CPF já foi iniciado'
@@ -100,7 +100,7 @@ export function CadastroExistenteModal({
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 CPF
               </label>
-              <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800">
+              <div className="vm-cadastro-subcard rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200">
                 {cpf}
               </div>
             </div>
@@ -110,7 +110,7 @@ export function CadastroExistenteModal({
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Nome
                 </label>
-                <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800">
+                <div className="vm-cadastro-subcard rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200">
                   {cadastro.nome}
                 </div>
               </div>
@@ -120,7 +120,7 @@ export function CadastroExistenteModal({
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Status
               </label>
-              <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg">
+              <div className="vm-cadastro-subcard rounded-xl px-3 py-2">
                 <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusColors[cadastro.status] || 'bg-slate-100 text-slate-800'}`}>
                   <FileText className="w-3 h-3 mr-1" />
                   {statusLabels[cadastro.status] || cadastro.status}
@@ -133,7 +133,7 @@ export function CadastroExistenteModal({
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Vendedor Responsável
                 </label>
-                <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800">
+                <div className="vm-cadastro-subcard rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200">
                   {cadastro.vendedor_nome}
                 </div>
               </div>
@@ -144,7 +144,7 @@ export function CadastroExistenteModal({
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Empresa
                 </label>
-                <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800">
+                <div className="vm-cadastro-subcard rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200">
                   {cadastro.empresa_razao_social}
                 </div>
               </div>
@@ -154,7 +154,7 @@ export function CadastroExistenteModal({
               <label className="block text-sm font-medium text-slate-700 mb-1">
                 Data de Criação
               </label>
-              <div className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-slate-800">
+              <div className="vm-cadastro-subcard rounded-xl px-3 py-2 text-slate-800 dark:text-slate-200">
                 {formatDate(cadastro.created_at)}
               </div>
             </div>
