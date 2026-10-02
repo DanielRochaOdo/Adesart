@@ -373,7 +373,7 @@ fun ErrosUploadErpScreen(
                             Text(
                                 text = "Passivo historico: nao compoe o alerta operacional atual.",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Slate500,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
 
