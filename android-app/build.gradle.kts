@@ -24,8 +24,23 @@ tasks.register("syncIosVersion") {
         val properties = Properties().apply {
             source.inputStream().use(::load)
         }
-        val versionName = properties.getProperty("VERSION_NAME")?.trim().orEmpty().ifBlank { "1.0.0" }
-        val versionCode = properties.getProperty("VERSION_CODE")?.trim().orEmpty().ifBlank { "1" }
+        val requestedVersionName = providers.environmentVariable("VENDA_VERSION_NAME").orNull
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+        val requestedVersionCode = providers.environmentVariable("VENDA_VERSION_CODE").orNull
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+
+        if ((requestedVersionName == null) != (requestedVersionCode == null)) {
+            throw GradleException(
+                "VENDA_VERSION_NAME e VENDA_VERSION_CODE devem ser informados juntos.",
+            )
+        }
+
+        val versionName = requestedVersionName
+            ?: properties.getProperty("VERSION_NAME")?.trim().orEmpty().ifBlank { "1.0.0" }
+        val versionCode = requestedVersionCode
+            ?: properties.getProperty("VERSION_CODE")?.trim().orEmpty().ifBlank { "1" }
 
         output.parentFile.mkdirs()
         output.writeText(
