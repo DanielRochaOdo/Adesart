@@ -2850,3 +2850,130 @@
     }
   }
 }
+
+
+/* ============================================================
+   Venda+ Glass Lab — Meu Perfil / aggressive Reflect direction
+   ============================================================ */
+@layer utilities {
+  .vm-profile-hero {
+    position: relative;
+    overflow: hidden;
+    background:
+      radial-gradient(560px circle at 7% -48%, rgba(16,185,129,.24), transparent 66%),
+      radial-gradient(430px circle at 92% -54%, rgba(20,184,166,.12), transparent 65%),
+      linear-gradient(180deg, rgba(255,255,255,.28), rgba(255,255,255,.015)),
+      var(--vm-glass-layer-strong);
+    border: 1px solid var(--vm-border);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.60),
+      0 22px 58px rgba(15,23,42,.10);
+    -webkit-backdrop-filter: blur(22px) saturate(132%);
+    backdrop-filter: blur(22px) saturate(132%);
+  }
+
+  .dark .vm-profile-hero {
+    background:
+      radial-gradient(560px circle at 7% -48%, rgba(16,185,129,.20), transparent 66%),
+      radial-gradient(430px circle at 92% -54%, rgba(14,116,144,.14), transparent 65%),
+      linear-gradient(180deg, rgba(255,255,255,.024), transparent),
+      rgba(10,18,32,.76);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.035),
+      0 24px 64px rgba(0,0,0,.26);
+  }
+
+  .vm-profile-avatar {
+    background:
+      radial-gradient(circle at 35% 25%, rgba(255,255,255,.34), transparent 36%),
+      linear-gradient(145deg, rgba(16,185,129,.95), rgba(4,120,87,.94));
+    border: 1px solid rgba(255,255,255,.28);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.30),
+      0 14px 30px rgba(5,150,105,.22);
+  }
+
+  .vm-profile-shell {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.012)),
+      rgba(235,243,239,.76);
+    border: 1px solid var(--vm-border);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.54),
+      0 18px 46px rgba(15,23,42,.075);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    backdrop-filter: blur(16px) saturate(120%);
+  }
+
+  .dark .vm-profile-shell {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.022), transparent),
+      rgba(10,18,32,.68);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.025),
+      0 20px 48px rgba(0,0,0,.20);
+  }
+
+  .vm-profile-field {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,.01)),
+      rgba(220,232,226,.72);
+    border: 1px solid var(--vm-border);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.46),
+      0 8px 22px rgba(15,23,42,.045);
+    transition:
+      transform 140ms ease,
+      border-color 140ms ease,
+      background-color 140ms ease;
+  }
+
+  .vm-profile-field:hover {
+    transform: translateY(-1px);
+    border-color: rgba(5,150,105,.23);
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.20), rgba(255,255,255,.015)),
+      rgba(213,228,220,.83);
+  }
+
+  .dark .vm-profile-field {
+    background: rgba(15,23,42,.58);
+    border-color: var(--vm-border);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.02),
+      0 10px 24px rgba(0,0,0,.13);
+  }
+
+  .dark .vm-profile-field:hover {
+    background: rgba(30,41,59,.66);
+    border-color: rgba(52,211,153,.14);
+  }
+
+  .vm-profile-icon {
+    background: rgba(16,185,129,.10);
+    color: #047857;
+    border: 1px solid rgba(16,185,129,.14);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.40);
+  }
+
+  .dark .vm-profile-icon {
+    color: #6ee7b7;
+    background: rgba(16,185,129,.10);
+    border-color: rgba(52,211,153,.12);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+  }
+
+  .vm-profile-permission {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.01)),
+      rgba(224,235,229,.72);
+    border: 1px solid var(--vm-border);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.44);
+  }
+
+  .dark .vm-profile-permission {
+    background: rgba(15,23,42,.56);
+    border-color: var(--vm-border);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.02);
+  }
+}
