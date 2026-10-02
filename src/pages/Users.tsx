@@ -657,15 +657,15 @@ export function Users() {
             )}
           </div>
 
-          <details className="vm-config-strip mb-6 overflow-hidden rounded-xl">
-            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-slate-100 transition hover:bg-white/[0.06]">
+          <details className="vm-control-strip mb-6 overflow-hidden rounded-xl">
+            <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold text-slate-700 transition dark:text-slate-200">
               <SlidersHorizontal className="h-4 w-4" />
               Personalizar tabela
-              <span className="ml-1 text-xs font-normal text-slate-400">
+              <span className="vm-meta-text ml-1 text-xs font-normal">
                 ordem das colunas e exportação
               </span>
             </summary>
-            <div className="border-t border-white/10 bg-slate-900/45 p-4">
+            <div className="vm-control-strip-content p-4">
               <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
                 Use as setas para mover as colunas para a esquerda ou para a direita. A exportação segue a mesma ordem.
               </p>
@@ -710,10 +710,10 @@ export function Users() {
             </div>
           ) : (
             <>
-              <div className="hidden md:block overflow-x-auto">
+              <div className="vm-table-shell hidden overflow-x-auto md:block">
                 <table className="w-full">
                   <thead>
-                    <tr className="border-b border-slate-200">
+                    <tr className="vm-table-head border-b">
                       {userColumns.map((column) => (
                         <th key={column.key} className="text-left py-3 px-4 text-sm font-semibold text-slate-600">
                           {column.label}
@@ -727,7 +727,7 @@ export function Users() {
                   </thead>
                   <tbody>
                     {filteredUsers.map((user) => (
-                      <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <tr key={user.id} className="vm-table-row border-b">
                         {userColumns.map((column) => (
                           <td key={column.key} className="py-3 px-4 text-slate-600">
                             {renderCell(user, column.key)}
@@ -776,7 +776,7 @@ export function Users() {
 
               <div className="md:hidden space-y-3">
                 {filteredUsers.map((user) => (
-                  <div key={user.id} className="border border-slate-200 rounded-lg p-4 bg-white">
+                  <div key={user.id} className="vm-mobile-card rounded-xl p-4">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex-1">
                         <h3 className="font-semibold text-slate-800">{user.name}</h3>
@@ -840,13 +840,13 @@ export function Users() {
       </div>
 
       {showCreateModal && canCreate && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full my-8">
-            <div className="flex items-center justify-between p-6 border-b border-slate-200">
-              <h2 className="text-xl font-bold text-slate-800">Novo Usuário</h2>
+        <div className="vm-modal-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto p-4">
+          <div className="vm-glass-modal my-8 w-full max-w-2xl rounded-2xl">
+            <div className="vm-glass-modal-bar flex items-center justify-between border-b p-6">
+              <h2 className="vm-card-heading text-xl font-bold">Novo Usuário</h2>
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="text-slate-400 hover:text-slate-600"
+                className="rounded-lg p-1 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-white/[0.08] dark:hover:text-white"
               >
                 <X className="w-5 h-5" />
               </button>
