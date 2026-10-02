@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,7 +52,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
@@ -537,13 +540,39 @@ private fun AppHeaderBar(
     profileName: String,
     profileRole: String,
 ) {
-    Surface(
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val shape = RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp)
+    val glassBrush = if (dark) {
+        Brush.verticalGradient(
+            listOf(
+                Color(0xFF172338).copy(alpha = 0.92f),
+                Color(0xFF0E192A).copy(alpha = 0.82f),
+            ),
+        )
+    } else {
+        Brush.verticalGradient(
+            listOf(
+                Color(0xFFF9FCFA).copy(alpha = 0.94f),
+                Color(0xFFEAF2EE).copy(alpha = 0.84f),
+            ),
+        )
+    }
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .statusBarsPadding(),
-        shadowElevation = 6.dp,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.78f)),
+            .statusBarsPadding()
+            .shadow(
+                elevation = if (dark) 14.dp else 10.dp,
+                shape = shape,
+                ambientColor = if (dark) Color.Black.copy(alpha = 0.40f) else Color(0xFF0F172A).copy(alpha = 0.13f),
+                spotColor = if (dark) Color.Black.copy(alpha = 0.42f) else Color(0xFF0F172A).copy(alpha = 0.10f),
+            )
+            .background(glassBrush, shape)
+            .border(
+                1.dp,
+                if (dark) Color.White.copy(alpha = 0.08f) else Color(0xFF334155).copy(alpha = 0.12f),
+                shape,
+            ),
     ) {
         Row(
             modifier = Modifier
@@ -558,7 +587,7 @@ private fun AppHeaderBar(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 VendaBrandIcon(
-                    modifier = Modifier.size(36.dp),
+                    modifier = Modifier.size(40.dp),
                     showPlusBubble = false,
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -594,18 +623,44 @@ private fun MagicBottomNavigationBar(
 ) {
     if (groups.isEmpty()) return
 
-    Surface(
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    val shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
+    val glassBrush = if (dark) {
+        Brush.verticalGradient(
+            listOf(
+                Color(0xFF152136).copy(alpha = 0.88f),
+                Color(0xFF0B1525).copy(alpha = 0.82f),
+            ),
+        )
+    } else {
+        Brush.verticalGradient(
+            listOf(
+                Color(0xFFF8FBF9).copy(alpha = 0.92f),
+                Color(0xFFE8F0EC).copy(alpha = 0.84f),
+            ),
+        )
+    }
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .navigationBarsPadding(),
-        shadowElevation = 8.dp,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.78f)),
+            .navigationBarsPadding()
+            .shadow(
+                elevation = if (dark) 16.dp else 11.dp,
+                shape = shape,
+                ambientColor = if (dark) Color.Black.copy(alpha = 0.42f) else Color(0xFF0F172A).copy(alpha = 0.14f),
+                spotColor = if (dark) Color.Black.copy(alpha = 0.44f) else Color(0xFF0F172A).copy(alpha = 0.11f),
+            )
+            .background(glassBrush, shape)
+            .border(
+                1.dp,
+                if (dark) Color.White.copy(alpha = 0.08f) else Color(0xFF334155).copy(alpha = 0.12f),
+                shape,
+            ),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 6.dp),
+                .padding(horizontal = 6.dp, vertical = 7.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -632,9 +687,9 @@ private fun MagicBottomNavigationBar(
                     Surface(
                         modifier = Modifier.size(width = 44.dp, height = 32.dp),
                         shape = RoundedCornerShape(16.dp),
-                        color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.80f) else Color.Transparent,
-                        border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)) else null,
-                        shadowElevation = if (selected) 2.dp else 0.dp,
+                        color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (dark) 0.72f else 0.82f) else Color.Transparent,
+                        border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)) else null,
+                        shadowElevation = if (selected) 3.dp else 0.dp,
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
@@ -672,8 +727,8 @@ private fun NavigationGroupSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-        tonalElevation = 6.dp,
+        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.90f),
+        tonalElevation = 10.dp,
     ) {
         Column(
             modifier = Modifier
@@ -692,7 +747,7 @@ private fun NavigationGroupSheet(
                     onClick = { onSelect(module) },
                     shape = RoundedCornerShape(14.dp),
                     color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.78f)
-                    else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.84f),
+                    else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.70f),
                     border = BorderStroke(
                         width = 1.dp,
                         color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
