@@ -43,6 +43,8 @@ import br.com.vendamais.mobile.ui.AppViewModel
 import br.com.vendamais.mobile.ui.components.ScreenHeading
 import br.com.vendamais.mobile.ui.components.WebCard
 import br.com.vendamais.mobile.ui.components.VendaButton
+import br.com.vendamais.mobile.ui.components.VendaFeedbackTone
+import br.com.vendamais.mobile.ui.components.VendaInlineFeedback
 import br.com.vendamais.mobile.ui.components.VendaMetricCard
 import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 import br.com.vendamais.mobile.ui.theme.Amber100
@@ -584,18 +586,11 @@ private fun UserEditorSheet(
                 }
                 if (requiresTeam) {
                     item {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            color = Amber100,
-                        ) {
-                            Text(
-                                text = "Esta funcao exige ID Externo e Equipe para manter o vinculo com o ERP.",
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Amber500,
-                            )
-                        }
+                        VendaInlineFeedback(
+                            title = "Vinculo com o ERP",
+                            message = "Esta funcao exige ID Externo e Equipe para manter o vinculo com o ERP.",
+                            tone = VendaFeedbackTone.WARNING,
+                        )
                     }
                     item {
                         OutlinedTextField(
