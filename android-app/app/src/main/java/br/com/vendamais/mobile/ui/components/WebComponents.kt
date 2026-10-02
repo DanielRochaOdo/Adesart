@@ -14,9 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.shadow
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -25,6 +27,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import br.com.vendamais.mobile.ui.theme.VendaGlass
 import br.com.vendamais.mobile.ui.theme.VendaRadius
 import br.com.vendamais.mobile.ui.theme.VendaSpacing
 
@@ -34,35 +37,27 @@ fun ScreenBackground(content: @Composable () -> Unit) {
     val backgroundBrush = if (dark) {
         Brush.verticalGradient(
             listOf(
-                Color(0xFF08111F),
+                Color(0xFF06101D),
                 Color(0xFF0A1524),
-                Color(0xFF07101D),
+                Color(0xFF07111F),
             ),
         )
     } else {
         Brush.verticalGradient(
             listOf(
                 Color(0xFFDCE8E2),
-                Color(0xFFE7EEEB),
-                Color(0xFFEAF1ED),
+                Color(0xFFE5EDE9),
+                Color(0xFFEDF3F0),
             ),
         )
     }
-    val glowBrush = if (dark) {
-        Brush.radialGradient(
-            colors = listOf(
-                Color(0xFF10B981).copy(alpha = 0.16f),
-                Color.Transparent,
-            ),
-        )
-    } else {
-        Brush.radialGradient(
-            colors = listOf(
-                Color(0xFF10B981).copy(alpha = 0.13f),
-                Color.Transparent,
-            ),
-        )
-    }
+    val glowBrush = Brush.radialGradient(
+        colors = listOf(
+            MaterialTheme.colorScheme.primary.copy(alpha = if (dark) 0.18f else 0.14f),
+            Color.Transparent,
+        ),
+    )
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -73,7 +68,11 @@ fun ScreenBackground(content: @Composable () -> Unit) {
                 .fillMaxSize()
                 .background(glowBrush),
         )
-        content()
+        CompositionLocalProvider(
+            LocalContentColor provides MaterialTheme.colorScheme.onBackground,
+        ) {
+            content()
+        }
     }
 }
 
@@ -93,15 +92,15 @@ fun WebCard(
     val surfaceBrush = if (dark) {
         Brush.verticalGradient(
             listOf(
-                Color(0xFF172338).copy(alpha = 0.84f),
-                Color(0xFF0F1A2C).copy(alpha = 0.72f),
+                Color(0xFF17263B).copy(alpha = VendaGlass.darkSurfaceStrongAlpha),
+                Color(0xFF0F1A2C).copy(alpha = VendaGlass.darkSurfaceAlpha),
             ),
         )
     } else {
         Brush.verticalGradient(
             listOf(
-                Color(0xFFF8FBF9).copy(alpha = 0.90f),
-                Color(0xFFEFF6F2).copy(alpha = 0.76f),
+                Color(0xFFF9FCFA).copy(alpha = VendaGlass.lightSurfaceStrongAlpha),
+                Color(0xFFEAF3EE).copy(alpha = VendaGlass.lightSurfaceAlpha),
             ),
         )
     }
@@ -114,7 +113,7 @@ fun WebCard(
     Box(
         modifier = modifier
             .shadow(
-                elevation = if (dark) 14.dp else 10.dp,
+                elevation = VendaGlass.cardElevation,
                 shape = shape,
                 ambientColor = if (dark) Color.Black.copy(alpha = 0.38f) else Color(0xFF0F172A).copy(alpha = 0.13f),
                 spotColor = if (dark) Color.Black.copy(alpha = 0.42f) else Color(0xFF0F172A).copy(alpha = 0.10f),
@@ -122,7 +121,8 @@ fun WebCard(
             .background(surfaceBrush, shape)
             .border(
                 1.dp,
-                if (dark) Color.White.copy(alpha = 0.09f) else Color(0xFF334155).copy(alpha = 0.14f),
+                if (dark) Color.White.copy(alpha = VendaGlass.darkBorderAlpha)
+                else Color(0xFF334155).copy(alpha = VendaGlass.lightBorderAlpha),
                 shape,
             ),
     ) {
@@ -131,7 +131,10 @@ fun WebCard(
                 .fillMaxSize()
                 .background(glowBrush, shape),
         )
-        Column {
+        CompositionLocalProvider(
+            LocalContentColor provides MaterialTheme.colorScheme.onSurface,
+        ) {
+            Column {
             if (title != null) {
                 Column {
                     Text(
@@ -148,6 +151,7 @@ fun WebCard(
             }
             Box(modifier = Modifier.padding(contentPadding)) {
                 content()
+            }
             }
         }
     }
