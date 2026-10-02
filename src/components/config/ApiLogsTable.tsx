@@ -461,7 +461,6 @@ export function ApiLogsTable() {
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                <div>
                   <label className="vm-muted-text mb-1 block text-sm font-semibold">
                     Status
                   </label>
