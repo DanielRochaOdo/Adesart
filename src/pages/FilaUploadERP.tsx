@@ -507,115 +507,151 @@ export function FilaUploadERP() {
           </div>
         ) : (
           <>
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-slate-50 border-b border-slate-200">
-                    <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Status</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Cliente</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Empresa</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Vendedor</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Adesionista</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Arquivo</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Tipo</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Tentativas</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Data</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-slate-600 uppercase">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {items.map((item) => (
-                      <tr key={item.id} className="hover:bg-slate-50">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            {getStatusIcon(item.status)}
-                            <span className={`px-2 py-1 rounded text-xs font-medium border ${getStatusColor(item.status)}`}>
-                              {getStatusLabel(item.status)}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="text-sm">
-                            <div className="font-medium text-slate-800">
-                              {item.cadastro?.nome || 'N/A'}
-                            </div>
-                            <div className="text-slate-500 text-xs">
-                              {item.cadastro?.cpf ? formatCPF(item.cadastro.cpf) : 'CPF não disponível'}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="text-sm text-slate-600">
-                            {item.cadastro?.empresa_nome || 'N/A'}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="max-w-48 truncate text-sm text-slate-600" title={item.cadastro?.vendedor_nome || undefined}>
-                            {item.cadastro?.vendedor_nome || '—'}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="max-w-48 truncate text-sm text-slate-600" title={item.cadastro?.adesionista_nome || undefined}>
-                            {item.cadastro?.adesionista_nome || '—'}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="text-sm text-slate-600 max-w-xs truncate">
-                            {item.arquivo_nome}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-sm text-slate-600 capitalize">
-                            {item.tipo}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="text-sm">
-                            <div className="text-slate-800 font-medium">
-                              {item.attempts}/5
-                            </div>
-                            {item.next_attempt_at && item.status === 'retry_wait' && (
-                              <div className="text-xs text-slate-500">
-                                Próxima: {new Date(item.next_attempt_at).toLocaleTimeString('pt-BR')}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="text-sm text-slate-600">
-                            {formatDate(item.created_at)}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          {item.status !== 'success' ? (
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleDownloadFile(item)}
-                                className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                title="Baixar arquivo"
-                              >
-                                <Download className="w-4 h-4" />
-                              </button>
-                              {item.status === 'failed' && (
-                                <button
-                                  onClick={() => handleReprocessItem(item.id)}
-                                  className="p-2 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
-                                  title="Reprocessar"
-                                >
-                                  <RefreshCw className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-400">-</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <div className="space-y-3">
+              <div className="hidden rounded-xl border border-slate-200 bg-slate-950/30 px-3 py-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400 shadow-sm xl:grid xl:grid-cols-[110px_minmax(170px,1.2fr)_110px_minmax(150px,1fr)_minmax(150px,1fr)_90px_82px_105px_76px] xl:gap-3">
+                <div>Status</div>
+                <div>Cliente</div>
+                <div>Empresa</div>
+                <div>Vendedor</div>
+                <div>Adesionista</div>
+                <div>Tipo</div>
+                <div>Tentativas</div>
+                <div>Data</div>
+                <div className="text-right">Ações</div>
               </div>
+
+              {items.map((item) => (
+                <article
+                  key={item.id}
+                  className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900"
+                >
+                  <div className="grid gap-3 px-3 py-3 sm:grid-cols-2 xl:grid-cols-[110px_minmax(170px,1.2fr)_110px_minmax(150px,1fr)_minmax(150px,1fr)_90px_82px_105px_76px] xl:items-start">
+                    <div>
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Status</p>
+                      <div className="flex items-center gap-1.5">
+                        {getStatusIcon(item.status)}
+                        <span className={`rounded border px-2 py-1 text-[11px] font-medium ${getStatusColor(item.status)}`}>
+                          {getStatusLabel(item.status)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Cliente</p>
+                      <p className="break-words text-sm font-semibold leading-tight text-slate-800 dark:text-slate-100">
+                        {item.cadastro?.nome || item.cliente_nome || 'N/A'}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        {item.cadastro?.cpf
+                          ? formatCPF(item.cadastro.cpf)
+                          : item.cliente_cpf
+                            ? formatCPF(item.cliente_cpf)
+                            : 'CPF não disponível'}
+                      </p>
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Empresa</p>
+                      <p className="break-words text-sm text-slate-700 dark:text-slate-200">
+                        {item.cadastro?.empresa_nome || item.empresa_nome || 'N/A'}
+                      </p>
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Vendedor</p>
+                      <p className="break-words text-sm text-slate-700 dark:text-slate-200">
+                        {item.cadastro?.vendedor_nome || '—'}
+                      </p>
+                    </div>
+
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Adesionista</p>
+                      <p className="break-words text-sm text-slate-700 dark:text-slate-200">
+                        {item.cadastro?.adesionista_nome || '—'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Tipo</p>
+                      <span className="text-sm capitalize text-slate-700 dark:text-slate-200">
+                        {item.tipo}
+                      </span>
+                    </div>
+
+                    <div>
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Tentativas</p>
+                      <p className="text-sm font-semibold tabular-nums text-slate-800 dark:text-slate-100">
+                        {item.attempts}/5
+                      </p>
+                      {item.next_attempt_at && item.status === 'retry_wait' && (
+                        <p className="mt-1 text-[10px] text-slate-500 dark:text-slate-400">
+                          {new Date(item.next_attempt_at).toLocaleTimeString('pt-BR')}
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Data</p>
+                      <p className="whitespace-nowrap text-xs text-slate-600 dark:text-slate-300">
+                        {formatDate(item.created_at)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400 xl:hidden">Ações</p>
+                      <div className="flex items-center gap-1.5 xl:justify-end">
+                        {item.status !== 'success' ? (
+                          <>
+                            <button
+                              onClick={() => handleDownloadFile(item)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-blue-200 text-blue-600 transition hover:bg-blue-50 dark:border-blue-900/60 dark:text-blue-300 dark:hover:bg-blue-950/30"
+                              title="Baixar arquivo"
+                              aria-label="Baixar arquivo"
+                            >
+                              <Download className="h-4 w-4" />
+                            </button>
+                            {item.status === 'failed' && (
+                              <button
+                                onClick={() => handleReprocessItem(item.id)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 text-emerald-600 transition hover:bg-emerald-50 dark:border-emerald-900/60 dark:text-emerald-300 dark:hover:bg-emerald-950/30"
+                                title="Reprocessar"
+                                aria-label="Reprocessar"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-200 bg-slate-50/70 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-950/40">
+                    <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                      <div className="min-w-0">
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                          Arquivo
+                        </p>
+                        <p className="break-all text-xs font-medium text-slate-700 dark:text-slate-200">
+                          {item.arquivo_nome || '—'}
+                        </p>
+                      </div>
+                      {item.last_error && (
+                        <div className="min-w-0 lg:max-w-xl">
+                          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                            Último erro
+                          </p>
+                          <p className="break-words text-xs text-red-600 dark:text-red-300">
+                            {item.last_error}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              ))}
             </div>
 
             {totalPages > 1 && (
