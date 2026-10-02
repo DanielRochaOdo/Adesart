@@ -175,7 +175,7 @@ const historyStatusClass = (status: HistoryStatus) => {
     case 'Concluiu a adesão':
       return 'bg-emerald-500/20 text-emerald-800 border-emerald-500/30 dark:bg-emerald-400/20 dark:text-emerald-100 dark:border-emerald-300/25';
     case 'Chegou ao contrato e não concluiu':
-      return 'bg-amber-400/20 text-amber-900 border-amber-500/40 dark:bg-amber-300/20 dark:text-amber-100 dark:border-amber-300/35';
+      return 'vm-history-status-contract';
     case 'Validou CPF/data e abandonou depois':
       return 'bg-blue-500/20 text-blue-800 border-blue-500/30 dark:bg-blue-400/20 dark:text-blue-100 dark:border-blue-300/25';
     case 'Informou CPF e chegou à consulta dos dados':
