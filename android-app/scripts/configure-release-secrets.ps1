@@ -3,7 +3,9 @@ param(
     [string]$AndroidKeystore = '',
     [string]$IosCertificateP12 = '',
     [string]$IosProvisioningProfile = '',
-    [string]$IosTeamId = ''
+    [string]$IosTeamId = '',
+    [ValidateSet('development', 'app-store-connect')]
+    [string]$IosSigningMode = 'development'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -115,10 +117,17 @@ finally {
 $p12Base64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path $IosCertificateP12)))
 $profileBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path $IosProvisioningProfile)))
 
-Set-GitHubSecret 'IOS_CERTIFICATE_P12_BASE64' $p12Base64
-Set-GitHubSecret 'IOS_CERTIFICATE_PASSWORD' $p12Password
-Set-GitHubSecret 'IOS_PROVISIONING_PROFILE_BASE64' $profileBase64
+if ($IosSigningMode -eq 'app-store-connect') {
+    Set-GitHubSecret 'IOS_APPSTORE_CERTIFICATE_P12_BASE64' $p12Base64
+    Set-GitHubSecret 'IOS_APPSTORE_CERTIFICATE_PASSWORD' $p12Password
+    Set-GitHubSecret 'IOS_APPSTORE_PROVISIONING_PROFILE_BASE64' $profileBase64
+}
+else {
+    Set-GitHubSecret 'IOS_CERTIFICATE_P12_BASE64' $p12Base64
+    Set-GitHubSecret 'IOS_CERTIFICATE_PASSWORD' $p12Password
+    Set-GitHubSecret 'IOS_PROVISIONING_PROFILE_BASE64' $profileBase64
+}
 Set-GitHubSecret 'IOS_TEAM_ID' $IosTeamId
 
 Write-Host ''
-Write-Host 'Secrets Android + iOS configurados.' -ForegroundColor Green
+Write-Host "Secrets Android + iOS ($IosSigningMode) configurados." -ForegroundColor Green
