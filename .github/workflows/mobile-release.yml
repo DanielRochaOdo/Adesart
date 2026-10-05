@@ -183,31 +183,64 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Validate iOS signing secrets
+      - name: Select iOS signing material
+        id: ios_signing
         shell: bash
         env:
-          IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
-          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
-          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          IOS_EXPORT_METHOD: ${{ needs.metadata.outputs.ios_export_method }}
+          DEV_CERT: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+          DEV_CERT_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          DEV_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          APPSTORE_CERT: ${{ secrets.IOS_APPSTORE_CERTIFICATE_P12_BASE64 }}
+          APPSTORE_CERT_PASSWORD: ${{ secrets.IOS_APPSTORE_CERTIFICATE_PASSWORD }}
+          APPSTORE_PROFILE: ${{ secrets.IOS_APPSTORE_PROVISIONING_PROFILE_BASE64 }}
           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
         run: |
           set -euo pipefail
+
+          case "$IOS_EXPORT_METHOD" in
+            app-store-connect)
+              cert="$APPSTORE_CERT"
+              cert_password="$APPSTORE_CERT_PASSWORD"
+              profile="$APPSTORE_PROFILE"
+              ;;
+            development|ad-hoc)
+              cert="$DEV_CERT"
+              cert_password="$DEV_CERT_PASSWORD"
+              profile="$DEV_PROFILE"
+              ;;
+            *)
+              echo "::error::Metodo iOS invalido: $IOS_EXPORT_METHOD"
+              exit 1
+              ;;
+          esac
+
           missing=0
-          for name in IOS_CERTIFICATE_P12_BASE64 IOS_CERTIFICATE_PASSWORD IOS_PROVISIONING_PROFILE_BASE64 IOS_TEAM_ID; do
-            if [[ -z "${!name:-}" ]]; then
-              echo "::error::GitHub Secret ausente: ${name}"
-              missing=1
-            fi
-          done
-          exit "${missing}"
+          [[ -n "$cert" ]] || { echo "::error::Certificado iOS ausente para $IOS_EXPORT_METHOD"; missing=1; }
+          [[ -n "$cert_password" ]] || { echo "::error::Senha do certificado iOS ausente para $IOS_EXPORT_METHOD"; missing=1; }
+          [[ -n "$profile" ]] || { echo "::error::Provisioning profile iOS ausente para $IOS_EXPORT_METHOD"; missing=1; }
+          [[ -n "$IOS_TEAM_ID" ]] || { echo "::error::IOS_TEAM_ID ausente"; missing=1; }
+          [[ "$missing" -eq 0 ]] || exit 1
+
+          {
+            echo "certificate<<EOF_CERT"
+            echo "$cert"
+            echo "EOF_CERT"
+            echo "certificate_password<<EOF_PASS"
+            echo "$cert_password"
+            echo "EOF_PASS"
+            echo "profile<<EOF_PROFILE"
+            echo "$profile"
+            echo "EOF_PROFILE"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Install Apple certificate and provisioning profile
         id: signing
         shell: bash
         env:
-          IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
-          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
-          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          IOS_CERTIFICATE_P12_BASE64: ${{ steps.ios_signing.outputs.certificate }}
+          IOS_CERTIFICATE_PASSWORD: ${{ steps.ios_signing.outputs.certificate_password }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ steps.ios_signing.outputs.profile }}
           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
         run: |
           set -euo pipefail
