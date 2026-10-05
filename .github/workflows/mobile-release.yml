@@ -291,9 +291,34 @@ jobs:
         env:
           IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
           PROFILE_NAME: ${{ steps.signing.outputs.profile_name }}
+          KEYCHAIN_PATH: ${{ steps.signing.outputs.keychain_path }}
         run: |
           set -euo pipefail
-          xcodebuild             -project iosApp/VendaMaisIOS.xcodeproj             -scheme VendaMaisIOS             -configuration Release             -destination "generic/platform=iOS"             -archivePath "$RUNNER_TEMP/VendaMaisIOS.xcarchive"             PRODUCT_BUNDLE_IDENTIFIER="$IOS_BUNDLE_ID"             DEVELOPMENT_TEAM="$IOS_TEAM_ID"             CODE_SIGN_STYLE=Manual             PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME"             archive
+
+          case "$IOS_EXPORT_METHOD" in
+            development) signing_identity="Apple Development" ;;
+            ad-hoc|app-store-connect) signing_identity="Apple Distribution" ;;
+            *)
+              echo "::error::Metodo iOS invalido: $IOS_EXPORT_METHOD"
+              exit 1
+              ;;
+          esac
+
+          echo "Assinatura iOS: $signing_identity"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+          xcodebuild \
+            -project iosApp/VendaMaisIOS.xcodeproj \
+            -scheme VendaMaisIOS \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/VendaMaisIOS.xcarchive" \
+            PRODUCT_BUNDLE_IDENTIFIER="$IOS_BUNDLE_ID" \
+            DEVELOPMENT_TEAM="$IOS_TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="$signing_identity" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
+            archive
 
       - name: Export IPA
         working-directory: android-app
