@@ -86,7 +86,7 @@ jobs:
           echo "ios_export_method=${ios_export_method}" >> "$GITHUB_OUTPUT"
 
   android:
-    name: APK + AAB + Google Play Production
+    name: APK + AAB
     needs: metadata
     runs-on: ubuntu-latest
     env:
@@ -109,11 +109,10 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
-          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
         run: |
           set -euo pipefail
           missing=0
-          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD SUPABASE_URL SUPABASE_ANON_KEY GOOGLE_PLAY_SERVICE_ACCOUNT_JSON; do
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD SUPABASE_URL SUPABASE_ANON_KEY; do
             if [[ -z "${!name:-}" ]]; then
               echo "::error::GitHub Secret ausente: ${name}"
               missing=1
@@ -166,16 +165,6 @@ jobs:
           path: |
             android-app/app/build/outputs/release-artifacts/vendamais-mobile-v${{ needs.metadata.outputs.version_name }}.apk
             android-app/app/build/outputs/release-artifacts/vendamais-mobile-v${{ needs.metadata.outputs.version_name }}.aab
-
-      - name: Publish AAB directly to Google Play Production
-        uses: r0adkll/upload-google-play@v1
-        with:
-          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: br.com.vendamais.mobile
-          releaseFiles: android-app/app/build/outputs/release-artifacts/vendamais-mobile-v${{ needs.metadata.outputs.version_name }}.aab
-          tracks: production
-          status: completed
-          changesNotSentForReview: false
 
   ios:
     name: IPA
