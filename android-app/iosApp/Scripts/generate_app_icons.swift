@@ -1,17 +1,20 @@
 import AppKit
 import Foundation
 
+func fail(_ message: String, code: Int32) -> Never {
+    FileHandle.standardError.write(Data((message + "\n").utf8))
+    exit(code)
+}
+
 guard CommandLine.arguments.count == 3 else {
-    fputs("Uso: generate_app_icons.swift <source.png> <output-dir>\n", stderr)
-    exit(2)
+    fail("Uso: generate_app_icons.swift <source.png> <output-dir>", code: 2)
 }
 
 let sourcePath = CommandLine.arguments[1]
 let outputDirectory = CommandLine.arguments[2]
 
 guard let source = NSImage(contentsOfFile: sourcePath) else {
-    fputs("Nao foi possivel abrir a imagem-fonte: \(sourcePath)\n", stderr)
-    exit(3)
+    fail("Nao foi possivel abrir a imagem-fonte: \(sourcePath)", code: 3)
 }
 
 let fileManager = FileManager.default
@@ -78,6 +81,7 @@ func generateIcon(filename: String, pixels: Int) throws {
     context.imageInterpolation = .high
 
     let bounds = NSRect(x: 0, y: 0, width: pixels, height: pixels)
+
     NSColor(
         calibratedRed: 41.0 / 255.0,
         green: 196.0 / 255.0,
@@ -90,9 +94,7 @@ func generateIcon(filename: String, pixels: Int) throws {
         in: bounds,
         from: .zero,
         operation: .sourceOver,
-        fraction: 1.0,
-        respectFlipped: true,
-        hints: [.interpolation: NSImageInterpolation.high.rawValue]
+        fraction: 1.0
     )
 
     guard let png = bitmap.representation(using: .png, properties: [:]) else {
