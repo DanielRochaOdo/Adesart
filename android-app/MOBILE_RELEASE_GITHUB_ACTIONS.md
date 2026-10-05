@@ -4,6 +4,7 @@ O workflow `.github/workflows/mobile-release.yml` gera os tres artefatos mobile 
 
 - Android APK assinado;
 - Android AAB assinado;
+- publicacao automatica do AAB diretamente na faixa **Production** do Google Play;
 - iOS IPA assinado.
 
 O build usa uma versao exata informada pelo comando. Ele nao depende do valor commitado em `version.properties` e nao faz bump adicional no CI.
@@ -41,6 +42,32 @@ Secrets criados:
 - `SUPABASE_ANON_KEY`
 
 A variavel `PUBLIC_APP_URL` tambem e criada quando existir em `local.properties`.
+
+### Google Play — publicacao direta em producao
+
+O workflow **nao envia mais o AAB para Internal Testing/Beta**. O destino configurado e:
+
+```text
+tracks: production
+status: completed
+```
+
+Para permitir a publicacao, configure uma Service Account com acesso ao app `br.com.vendamais.mobile` no Google Play Console e habilite a Google Play Android Developer API.
+
+Depois salve o JSON no GitHub Secrets com o script:
+
+```powershell
+.\android-app\scripts\configure-release-secrets.ps1 `
+  -GooglePlayServiceAccountJson "C:\GooglePlay\service-account.json"
+```
+
+O secret criado e:
+
+- `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`
+
+A conta de servico precisa ter permissao para criar/publicar releases do aplicativo no Google Play Console.
+
+**Importante:** se o Managed Publishing estiver ativado no Play Console, a release sera enviada para Production, mas o Google podera mante-la aguardando publicacao manual. Para entrada automatica em producao apos aprovacao/revisao, mantenha o Managed Publishing desativado.
 
 ## 3. Secrets iOS
 
@@ -96,7 +123,8 @@ O script:
 2. cria uma tag de release sobre o commit atual;
 3. faz push da tag;
 4. aguarda o GitHub Actions;
-5. baixa APK, AAB e IPA automaticamente.
+5. publica o AAB diretamente em **Google Play > Production**;
+6. baixa APK, AAB e IPA automaticamente.
 
 Saida padrao:
 
