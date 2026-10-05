@@ -41,6 +41,17 @@ function Read-PropertiesFile {
     return $result
 }
 
+function Resolve-FileSystemPath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $resolved = Resolve-Path -LiteralPath $Path
+    if ($resolved.Provider.Name -ne 'FileSystem') {
+        throw "O caminho nao pertence ao FileSystem: $Path"
+    }
+
+    return $resolved.ProviderPath
+}
+
 function Set-GitHubSecret {
     param(
         [Parameter(Mandatory = $true)][string]$Name,
@@ -69,7 +80,8 @@ if (-not $AndroidKeystore -or -not (Test-Path $AndroidKeystore)) {
     throw 'Informe -AndroidKeystore apontando para o JKS de producao.'
 }
 
-$keystoreBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path $AndroidKeystore)))
+$keystorePath = Resolve-FileSystemPath $AndroidKeystore
+$keystoreBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($keystorePath))
 Set-GitHubSecret 'ANDROID_KEYSTORE_BASE64' $keystoreBase64
 Set-GitHubSecret 'ANDROID_KEYSTORE_PASSWORD' $props['releaseStorePassword']
 Set-GitHubSecret 'ANDROID_KEY_ALIAS' $props['releaseKeyAlias']
@@ -114,8 +126,10 @@ finally {
     [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($ptr)
 }
 
-$p12Base64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path $IosCertificateP12)))
-$profileBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path $IosProvisioningProfile)))
+$p12Path = Resolve-FileSystemPath $IosCertificateP12
+$profilePath = Resolve-FileSystemPath $IosProvisioningProfile
+$p12Base64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($p12Path))
+$profileBase64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($profilePath))
 
 if ($IosSigningMode -eq 'app-store-connect') {
     Set-GitHubSecret 'IOS_APPSTORE_CERTIFICATE_P12_BASE64' $p12Base64
