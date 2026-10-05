@@ -10,6 +10,8 @@
     <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
     <key>CFBundleName</key>
     <string>$(PRODUCT_NAME)</string>
     <key>CFBundlePackageType</key>
@@ -30,6 +32,20 @@
     <string>O Venda+ usa a biblioteca de fotos para anexar documentos e imagens aos fluxos autorizados.</string>
     <key>UILaunchScreen</key>
     <dict/>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
     <key>CFBundleURLTypes</key>
     <array>
         <dict>
