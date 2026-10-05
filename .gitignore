@@ -35,3 +35,8 @@ android-app/**/*.keystore
 android-app/iosApp/**/xcuserdata/
 android-app/iosApp/**/*.xcuserstate
 android-app/iosApp/DerivedData/
+
+# Local release credentials / generated artifacts
+GooglePlay/
+android-app/release-downloads/
+**/*service-account*.json
