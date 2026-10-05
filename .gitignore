@@ -40,3 +40,6 @@ android-app/iosApp/DerivedData/
 GooglePlay/
 android-app/release-downloads/
 **/*service-account*.json
+
+# App Store Connect API keys
+**/AuthKey_*.p8
