@@ -1,4 +1,6 @@
 param(
+    [string]$Repository = 'DanielRochaOdo/Adesart',
+
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^\d+\.\d+\.\d+$')]
     [string]$VersionName,
@@ -101,7 +103,7 @@ try {
     Write-Host 'Aguardando o GitHub Actions iniciar...' -ForegroundColor Cyan
     for ($attempt = 0; $attempt -lt 30 -and -not $runId; $attempt++) {
         Start-Sleep -Seconds 3
-        $runsJson = & gh run list --workflow mobile-release.yml --limit 30 --json databaseId,displayTitle,headSha,status,conclusion
+        $runsJson = & gh run list -R $Repository --workflow mobile-release.yml --limit 30 --json databaseId,displayTitle,headSha,status,conclusion
         if ($LASTEXITCODE -ne 0) {
             continue
         }
@@ -119,7 +121,7 @@ try {
     }
 
     Write-Host "GitHub Actions run: $runId" -ForegroundColor Green
-    & gh run watch $runId --exit-status
+    & gh run watch $runId -R $Repository --exit-status
     $workflowExit = $LASTEXITCODE
 
     if ([string]::IsNullOrWhiteSpace($OutputDirectory)) {
@@ -128,7 +130,7 @@ try {
     New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 
     Write-Host 'Baixando artefatos gerados...' -ForegroundColor Cyan
-    & gh run download $runId --dir $OutputDirectory
+    & gh run download $runId -R $Repository --dir $OutputDirectory
     $downloadExit = $LASTEXITCODE
 
     Write-Host ''
@@ -140,10 +142,10 @@ try {
     }
 
     if ($workflowExit -ne 0) {
-        throw "O GitHub Actions terminou com erro. Abra: gh run view $runId --log-failed"
+        throw "O GitHub Actions terminou com erro. Abra: gh run view $runId -R $Repository --log-failed"
     }
     if ($downloadExit -ne 0) {
-        throw "O build terminou, mas houve falha ao baixar os artefatos. Execute: gh run download $runId"
+        throw "O build terminou, mas houve falha ao baixar os artefatos. Execute: gh run download $runId -R $Repository"
     }
 
     Write-Host ''
