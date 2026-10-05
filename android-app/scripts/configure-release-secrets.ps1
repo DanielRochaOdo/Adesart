@@ -1,5 +1,6 @@
 param(
     [string]$AndroidKeystore = '',
+    [string]$GooglePlayServiceAccountJson = '',
     [string]$IosCertificateP12 = '',
     [string]$IosProvisioningProfile = '',
     [string]$IosTeamId = ''
@@ -80,6 +81,32 @@ if ($props['publicAppUrl']) {
         throw 'Falha ao gravar PUBLIC_APP_URL.'
     }
     Write-Host 'OK: PUBLIC_APP_URL' -ForegroundColor Green
+}
+
+if ($GooglePlayServiceAccountJson) {
+    if (-not (Test-Path $GooglePlayServiceAccountJson)) {
+        throw "JSON da service account Google Play nao encontrado: $GooglePlayServiceAccountJson"
+    }
+
+    $googlePlayJson = Get-Content -Raw -Path $GooglePlayServiceAccountJson
+    try {
+        $parsedGooglePlay = $googlePlayJson | ConvertFrom-Json
+    }
+    catch {
+        throw 'O arquivo informado em -GooglePlayServiceAccountJson nao e um JSON valido.'
+    }
+
+    if (-not $parsedGooglePlay.client_email -or -not $parsedGooglePlay.private_key) {
+        throw 'O JSON informado nao parece ser uma chave de Service Account do Google Cloud.'
+    }
+
+    Set-GitHubSecret 'GOOGLE_PLAY_SERVICE_ACCOUNT_JSON' $googlePlayJson
+}
+else {
+    Write-Host ''
+    Write-Host 'ATENCAO: GOOGLE_PLAY_SERVICE_ACCOUNT_JSON ainda nao foi configurado.' -ForegroundColor Yellow
+    Write-Host 'O release Android esta configurado para publicar diretamente em PRODUCAO e falhara sem esse secret.'
+    Write-Host 'Rode novamente com: -GooglePlayServiceAccountJson "C:\caminho\service-account.json"'
 }
 
 $iosValues = @($IosCertificateP12, $IosProvisioningProfile, $IosTeamId)
