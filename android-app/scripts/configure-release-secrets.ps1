@@ -1,4 +1,5 @@
 param(
+    [string]$Repository = 'DanielRochaOdo/Adesart',
     [string]$AndroidKeystore = '',
     [string]$GooglePlayServiceAccountJson = '',
     [string]$IosCertificateP12 = '',
@@ -47,7 +48,7 @@ function Set-GitHubSecret {
     if ([string]::IsNullOrWhiteSpace($Value)) {
         throw "Valor vazio para secret $Name."
     }
-    $Value | & gh secret set $Name
+    $Value | & gh secret set $Name -R $Repository
     if ($LASTEXITCODE -ne 0) {
         throw "Falha ao gravar GitHub Secret $Name."
     }
@@ -76,7 +77,7 @@ Set-GitHubSecret 'SUPABASE_URL' $props['supabaseUrl']
 Set-GitHubSecret 'SUPABASE_ANON_KEY' $props['supabaseAnonKey']
 
 if ($props['publicAppUrl']) {
-    $props['publicAppUrl'] | & gh variable set PUBLIC_APP_URL
+    $props['publicAppUrl'] | & gh variable set PUBLIC_APP_URL -R $Repository
     if ($LASTEXITCODE -ne 0) {
         throw 'Falha ao gravar PUBLIC_APP_URL.'
     }
