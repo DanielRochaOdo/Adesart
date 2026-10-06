@@ -75,6 +75,8 @@ import br.com.vendamais.mobile.util.ErpFileCompressor
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.request.header
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -242,6 +244,8 @@ data class AppUiState(
     val appUpdateChecking: Boolean = false,
     val appUpdateDownloading: Boolean = false,
     val appUpdateError: String? = null,
+    val appVersionBlocked: Boolean = false,
+    val minimumSupportedVersionCode: Int? = null,
     val activeTab: MainTab = MainTab.DASHBOARD,
     val cadastroTab: CadastroAreaTab = CadastroAreaTab.NOVO,
     val cadastroFiltro: CadastroFiltro = CadastroFiltro.PENDENTES,
@@ -305,6 +309,8 @@ class AppViewModel(
                             appUpdateChecking = it.appUpdateChecking,
                             appUpdateDownloading = it.appUpdateDownloading,
                             appUpdateError = it.appUpdateError,
+                            appVersionBlocked = it.appVersionBlocked,
+                            minimumSupportedVersionCode = it.minimumSupportedVersionCode,
                         )
                     }
                 } else {
@@ -3609,6 +3615,8 @@ class AppViewModel(
                 linkWorkspace = LinkWorkspaceState(),
                 cadastroOverlay = null,
                 errorMessage = null,
+                appVersionBlocked = false,
+                minimumSupportedVersionCode = null,
             )
         }
 
@@ -3640,6 +3648,9 @@ class AppViewModel(
             }
             .onFailure { throwable ->
                 Log.e(logTag, "Falha ao carregar dados completos da sessao", throwable)
+                if (handleMinimumVersionBlock(throwable)) {
+                    return@onFailure
+                }
                 runCatching { withContext(Dispatchers.IO) { loadFallbackSessionData(session) } }
                     .onSuccess { fallback ->
                         applyCriticalSessionData(
@@ -3650,6 +3661,9 @@ class AppViewModel(
                     }
                     .onFailure { fallbackThrowable ->
                         Log.e(logTag, "Falha ao carregar fallback da sessao", fallbackThrowable)
+                        if (handleMinimumVersionBlock(fallbackThrowable)) {
+                            return@onFailure
+                        }
                         inMemorySessionActive = false
                         currentSession = null
                         sessionStore.clear()
@@ -3667,6 +3681,29 @@ class AppViewModel(
                         }
                     }
             }
+    }
+
+    private fun handleMinimumVersionBlock(throwable: Throwable): Boolean {
+        val message = throwable.message.orEmpty()
+        if (!message.contains("VENDA_MOBILE_UPDATE_REQUIRED")) return false
+
+        val minimumVersion = Regex("""minimum=(\\d+)""")
+            .find(message)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.toIntOrNull()
+
+        stopCadastrosAutoSync()
+        _uiState.update {
+            it.copy(
+                loading = false,
+                appVersionBlocked = true,
+                minimumSupportedVersionCode = minimumVersion,
+                errorMessage = null,
+                noticeMessage = null,
+            )
+        }
+        return true
     }
 
     private suspend fun registerCurrentAppVersionBestEffort(session: SavedSession) {
@@ -4248,6 +4285,11 @@ class AppViewModel(
                 coerceInputValues = true
             }
             val client = HttpClient(OkHttp) {
+                defaultRequest {
+                    header("X-VendaMais-Platform", "android")
+                    header("X-VendaMais-Version-Code", br.com.vendamais.mobile.BuildConfig.VERSION_CODE.toString())
+                    header("X-VendaMais-Version-Name", br.com.vendamais.mobile.BuildConfig.VERSION_NAME)
+                }
                 install(ContentNegotiation) {
                     json(json)
                 }
