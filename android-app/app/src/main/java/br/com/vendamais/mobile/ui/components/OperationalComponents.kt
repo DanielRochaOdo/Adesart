@@ -245,20 +245,13 @@ fun VendaMetricCard(
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val shape = RoundedCornerShape(VendaRadius.lg)
     val baseColor = if (containerColor == MaterialTheme.colorScheme.surface) {
-        if (dark) Color(0xFF142135) else Color(0xFFF1F7F4)
+        if (dark) Color(0xFF0F172A).copy(alpha = 0.66f) else Color(0xFFEFF6F2).copy(alpha = 0.80f)
     } else {
         containerColor
     }
-    val metricBrush = Brush.verticalGradient(
-        listOf(
-            baseColor.copy(alpha = if (dark) 0.68f else 0.72f),
-            baseColor.copy(alpha = if (dark) 0.46f else 0.54f),
-        ),
-    )
-    val metricSpecular = Brush.linearGradient(
+    val metricHighlight = Brush.verticalGradient(
         colors = listOf(
-            Color.Transparent,
-            Color.White.copy(alpha = if (dark) 0.07f else 0.48f),
+            Color.White.copy(alpha = if (dark) 0.026f else 0.28f),
             Color.Transparent,
         ),
     )
@@ -267,16 +260,16 @@ fun VendaMetricCard(
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .animateContentSize()
             .shadow(
-                elevation = if (dark) 14.dp else 11.dp,
+                elevation = if (dark) 10.dp else 8.dp,
                 shape = shape,
-                ambientColor = if (dark) Color.Black.copy(alpha = 0.30f) else Color(0xFF0F172A).copy(alpha = 0.10f),
-                spotColor = if (dark) Color.Black.copy(alpha = 0.32f) else Color(0xFF0F172A).copy(alpha = 0.08f),
+                ambientColor = if (dark) Color.Black.copy(alpha = 0.20f) else Color(0xFF0F172A).copy(alpha = 0.07f),
+                spotColor = if (dark) Color.Black.copy(alpha = 0.22f) else Color(0xFF0F172A).copy(alpha = 0.055f),
             )
-            .background(metricBrush, shape)
-            .background(metricSpecular, shape)
+            .background(baseColor, shape)
+            .background(metricHighlight, shape)
             .border(
                 1.dp,
-                if (dark) Color.White.copy(alpha = 0.13f) else Color.White.copy(alpha = 0.58f),
+                if (dark) Color.White.copy(alpha = 0.075f) else Color(0xFF1E293B).copy(alpha = 0.14f),
                 shape,
             ),
     ) {
