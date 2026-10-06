@@ -542,25 +542,14 @@ private fun AppHeaderBar(
 ) {
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val shape = RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp)
-    val glassBrush = if (dark) {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFF182A45).copy(alpha = 0.72f),
-                Color(0xFF081321).copy(alpha = 0.58f),
-            ),
-        )
+    val glassColor = if (dark) {
+        Color(0xFF0F172A).copy(alpha = 0.80f)
     } else {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFFF8FCFA).copy(alpha = 0.76f),
-                Color(0xFFDCEBE4).copy(alpha = 0.56f),
-            ),
-        )
+        Color(0xFFF7FAF8).copy(alpha = 0.88f)
     }
-    val specularBrush = Brush.linearGradient(
+    val highlightBrush = Brush.verticalGradient(
         colors = listOf(
-            Color.Transparent,
-            if (dark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.62f),
+            Color.White.copy(alpha = if (dark) 0.035f else 0.20f),
             Color.Transparent,
         ),
     )
@@ -569,16 +558,16 @@ private fun AppHeaderBar(
             .fillMaxWidth()
             .statusBarsPadding()
             .shadow(
-                elevation = if (dark) 20.dp else 15.dp,
+                elevation = if (dark) 12.dp else 9.dp,
                 shape = shape,
-                ambientColor = if (dark) Color.Black.copy(alpha = 0.40f) else Color(0xFF0F172A).copy(alpha = 0.13f),
-                spotColor = if (dark) Color.Black.copy(alpha = 0.42f) else Color(0xFF0F172A).copy(alpha = 0.10f),
+                ambientColor = if (dark) Color.Black.copy(alpha = 0.24f) else Color(0xFF0F172A).copy(alpha = 0.08f),
+                spotColor = if (dark) Color.Black.copy(alpha = 0.26f) else Color(0xFF0F172A).copy(alpha = 0.06f),
             )
-            .background(glassBrush, shape)
-            .background(specularBrush, shape)
+            .background(glassColor, shape)
+            .background(highlightBrush, shape)
             .border(
                 1.dp,
-                if (dark) Color.White.copy(alpha = 0.13f) else Color.White.copy(alpha = 0.64f),
+                if (dark) Color.White.copy(alpha = 0.075f) else Color(0xFF1E293B).copy(alpha = 0.14f),
                 shape,
             ),
     ) {
@@ -633,25 +622,14 @@ private fun MagicBottomNavigationBar(
 
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
-    val glassBrush = if (dark) {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFF172940).copy(alpha = 0.70f),
-                Color(0xFF081321).copy(alpha = 0.56f),
-            ),
-        )
+    val glassColor = if (dark) {
+        Color(0xFF0F172A).copy(alpha = 0.80f)
     } else {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFFF8FCFA).copy(alpha = 0.74f),
-                Color(0xFFDDEBE4).copy(alpha = 0.54f),
-            ),
-        )
+        Color(0xFFF7FAF8).copy(alpha = 0.88f)
     }
-    val navSpecularBrush = Brush.linearGradient(
+    val navHighlightBrush = Brush.verticalGradient(
         colors = listOf(
-            Color.Transparent,
-            if (dark) Color.White.copy(alpha = 0.07f) else Color.White.copy(alpha = 0.58f),
+            Color.White.copy(alpha = if (dark) 0.035f else 0.18f),
             Color.Transparent,
         ),
     )
@@ -660,16 +638,16 @@ private fun MagicBottomNavigationBar(
             .fillMaxWidth()
             .navigationBarsPadding()
             .shadow(
-                elevation = if (dark) 22.dp else 16.dp,
+                elevation = if (dark) 13.dp else 10.dp,
                 shape = shape,
-                ambientColor = if (dark) Color.Black.copy(alpha = 0.42f) else Color(0xFF0F172A).copy(alpha = 0.14f),
-                spotColor = if (dark) Color.Black.copy(alpha = 0.44f) else Color(0xFF0F172A).copy(alpha = 0.11f),
+                ambientColor = if (dark) Color.Black.copy(alpha = 0.25f) else Color(0xFF0F172A).copy(alpha = 0.085f),
+                spotColor = if (dark) Color.Black.copy(alpha = 0.27f) else Color(0xFF0F172A).copy(alpha = 0.07f),
             )
-            .background(glassBrush, shape)
-            .background(navSpecularBrush, shape)
+            .background(glassColor, shape)
+            .background(navHighlightBrush, shape)
             .border(
                 1.dp,
-                if (dark) Color.White.copy(alpha = 0.13f) else Color.White.copy(alpha = 0.62f),
+                if (dark) Color.White.copy(alpha = 0.075f) else Color(0xFF1E293B).copy(alpha = 0.14f),
                 shape,
             ),
     ) {
