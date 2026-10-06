@@ -21,6 +21,7 @@ DECLARE
   v_origin text := lower(trim(COALESCE(v_headers ->> 'origin', '')));
   v_platform_header text := lower(trim(COALESCE(v_headers ->> 'x-vendamais-platform', '')));
   v_version_header text := trim(COALESCE(v_headers ->> 'x-vendamais-version-code', ''));
+  v_request_path text := ltrim(trim(COALESCE(current_setting('request.path', true), '')), '/');
   v_platform text;
   v_version_code integer;
   v_minimum_version_code integer;
@@ -51,6 +52,18 @@ BEGIN
   WHERE platform = 'android';
 
   IF NOT FOUND OR NOT COALESCE(v_enabled, false) THEN
+    RETURN;
+  END IF;
+
+  IF v_platform_header = '' AND v_request_path = ANY (
+    ARRAY[
+      'profiles',
+      'teams',
+      'rpc/get_cadastros_stats',
+      'rpc/get_stats_from_cache',
+      'rpc/record_profile_app_seen'
+    ]
+  ) THEN
     RETURN;
   END IF;
 
