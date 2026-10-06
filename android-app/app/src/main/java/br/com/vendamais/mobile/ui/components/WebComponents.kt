@@ -16,9 +16,11 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -80,7 +82,11 @@ fun ScreenBackground(content: @Composable () -> Unit) {
                 }
             },
     ) {
-        content()
+        CompositionLocalProvider(
+            LocalContentColor provides MaterialTheme.colorScheme.onBackground,
+        ) {
+            content()
+        }
     }
 }
 
@@ -135,8 +141,12 @@ fun WebCard(
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.58f))
                 }
             }
-            Box(modifier = Modifier.padding(contentPadding)) {
-                content()
+            CompositionLocalProvider(
+                LocalContentColor provides MaterialTheme.colorScheme.onSurface,
+            ) {
+                Box(modifier = Modifier.padding(contentPadding)) {
+                    content()
+                }
             }
         }
     }
