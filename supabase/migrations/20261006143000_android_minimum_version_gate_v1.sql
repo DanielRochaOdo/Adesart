@@ -5,8 +5,8 @@
   - Descontinuar Android com versionCode abaixo de 140.
   - Preservar Web/iOS e chamadas com service_role.
   - Permitir que versões Android atuais se identifiquem por header.
-  - Manter fallback para APKs legados que já registram a versão em profiles.
-  - Tornar o corte ajustável no banco sem novo APK.
+  - Usar a última versão registrada em profiles para APKs legados.
+  - Registrar o pre-request também no escopo do banco para evitar override.
 */
 
 CREATE TABLE IF NOT EXISTS public.mobile_app_release_policy (
@@ -68,13 +68,14 @@ DECLARE
   v_blocked_message text;
   v_enabled boolean;
 BEGIN
-  -- A regra é exclusiva para usuários autenticados da aplicação.
-  -- anon mantém os fluxos públicos e service_role mantém workers/administrações.
+  -- O login do Supabase Auth não passa pelo PostgREST. A trava começa na
+  -- primeira chamada autenticada ao Data API.
   IF auth.uid() IS NULL OR auth.role() <> 'authenticated' THEN
     RETURN;
   END IF;
 
-  -- Navegadores enviam Origin. Isso preserva o Web e o iOS baseado em WebView.
+  -- Web e iOS/WebView executam no navegador e enviam Origin nas chamadas CORS.
+  -- A trava abaixo é exclusiva para cliente nativo sem Origin.
   IF v_origin <> '' THEN
     RETURN;
   END IF;
@@ -97,7 +98,7 @@ BEGIN
   END IF;
 
   IF v_platform_header <> '' THEN
-    -- Clientes novos declaram explicitamente a plataforma.
+    -- Builds novos: a versão declarada no request é a fonte de verdade.
     IF v_platform_header <> 'android' THEN
       RETURN;
     END IF;
@@ -106,12 +107,11 @@ BEGIN
     IF v_version_header ~ '^[0-9]+$' THEN
       v_version_code := v_version_header::integer;
     ELSE
-      -- Um Android novo sem versionCode válido é tratado como não suportado.
+      -- Android que se identifica sem versionCode válido é bloqueado.
       v_version_code := 0;
     END IF;
   ELSE
-    -- APKs legados não enviam headers próprios. Neles usamos a última versão
-    -- registrada pelo RPC record_profile_app_seen.
+    -- Builds legados: usam a versão registrada pelo próprio APK em profiles.
     SELECT
       lower(trim(COALESCE(last_app_platform, ''))),
       last_app_version_code
@@ -121,26 +121,25 @@ BEGIN
     FROM public.profiles
     WHERE id = auth.uid();
 
-    -- Perfil sem telemetria conhecida não é bloqueado preventivamente.
-    -- Assim que uma versão legada >= 1.0.60 registrar a versão, a regra passa
-    -- a valer nas requisições seguintes.
-    IF v_platform IS NULL OR v_platform = '' OR v_version_code IS NULL THEN
-      RETURN;
+    -- Se já sabemos que é Android, ausência de versionCode também bloqueia.
+    IF v_platform = 'android' AND v_version_code IS NULL THEN
+      v_version_code := 0;
     END IF;
 
-    IF v_platform <> 'android' THEN
+    -- Sem evidência de cliente Android, não atingir Web/outros consumidores.
+    IF v_platform IS NULL OR v_platform = '' OR v_platform <> 'android' THEN
       RETURN;
     END IF;
   END IF;
 
-  IF v_version_code < v_minimum_version_code THEN
+  IF COALESCE(v_version_code, 0) < v_minimum_version_code THEN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = format(
         '%s VENDA_MOBILE_UPDATE_REQUIRED|minimum=%s|current=%s|store=%s',
         COALESCE(v_blocked_message, 'Atualização obrigatória.'),
         v_minimum_version_code,
-        v_version_code,
+        COALESCE(v_version_code, 0),
         COALESCE(v_store_url, '')
       );
   END IF;
@@ -148,9 +147,24 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.enforce_mobile_app_minimum_version() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.enforce_mobile_app_minimum_version()
+  TO authenticator, anon, authenticated, service_role;
 
--- Executa antes de cada chamada ao Data API (PostgREST).
+-- Configuração em nível de role.
 ALTER ROLE authenticator
   SET pgrst.db_pre_request = 'public.enforce_mobile_app_minimum_version';
 
+-- Configuração em nível do banco. Ela prevalece sobre uma configuração
+-- genérica da role e evita que outro valor já existente neutralize a trava.
+DO $$
+BEGIN
+  EXECUTE format(
+    'ALTER ROLE authenticator IN DATABASE %I SET pgrst.db_pre_request = %L',
+    current_database(),
+    'public.enforce_mobile_app_minimum_version'
+  );
+END;
+$$;
+
 NOTIFY pgrst, 'reload config';
+NOTIFY pgrst, 'reload schema';
