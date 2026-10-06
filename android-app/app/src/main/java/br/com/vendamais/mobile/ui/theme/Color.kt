@@ -56,15 +56,16 @@ val GlassDarkStrong = Color(0xDB0F172A)
 val GlassBorderLight = Color(0x26334155)
 val GlassBorderDark = Color(0x22FFFFFF)
 
-// Liquid Glass high-intensity optical palette.
-val LiquidGlassLight = Color(0x8AF1F8F4)
-val LiquidGlassLightStrong = Color(0xB8F7FBF9)
-val LiquidGlassDark = Color(0x7A0A1423)
-val LiquidGlassDarkStrong = Color(0xA60F1B2D)
-val LiquidSpecularLight = Color(0xB8FFFFFF)
-val LiquidSpecularDark = Color(0x24FFFFFF)
-val LiquidGreenGlow = Color(0x3810B981)
-val LiquidCyanGlow = Color(0x1F2DD4BF)
+// Liquid Glass alinhado ao Web: superfícies discretas, borda legível e brilho
+// concentrado no topo. Evita o aspecto de "mancha" no centro da tela.
+val LiquidGlassLight = Color(0xB8F1F7F4)
+val LiquidGlassLightStrong = Color(0xE0F7FAF8)
+val LiquidGlassDark = Color(0x940F172A)
+val LiquidGlassDarkStrong = Color(0xCC0F172A)
+val LiquidSpecularLight = Color(0x33FFFFFF)
+val LiquidSpecularDark = Color(0x09FFFFFF)
+val LiquidGreenGlow = Color(0x2410B981)
+val LiquidCyanGlow = Color(0x1214B8A6)
 
 val ActionPrimary = Emerald
 val ActionPrimaryPressed = EmeraldDark
