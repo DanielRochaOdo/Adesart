@@ -43,10 +43,20 @@ private fun iosMobileNavigationScript(appVersion: String, buildNumber: String): 
 
   function normalizeRole() {
     var nav = document.querySelector('nav.vm-glass-nav');
-    var text = nav ? (nav.textContent || '').toUpperCase() : '';
-    var roles = ['ADMINISTRADOR', 'GERENTE', 'SUPERVISOR', 'CADASTRO', 'VENDEDOR', 'ADESIONISTA', 'GESTOR'];
+    if (!nav) return '';
+
+    var roles = ['ADMINISTRADOR', 'ADMIN', 'GERENTE', 'SUPERVISOR', 'CADASTRO', 'VENDEDOR', 'ADESIONISTA', 'GESTOR'];
+    var roleNodes = nav.querySelectorAll('.vm-meta-text');
+
+    for (var nodeIndex = 0; nodeIndex < roleNodes.length; nodeIndex += 1) {
+      var exactRole = (roleNodes[nodeIndex].textContent || '').trim().toUpperCase();
+      if (roles.indexOf(exactRole) >= 0) return exactRole;
+    }
+
+    var text = (nav.textContent || '').toUpperCase();
     for (var i = 0; i < roles.length; i += 1) {
-      if (text.indexOf(roles[i]) >= 0) return roles[i];
+      var pattern = new RegExp('(^|\\\\s)' + roles[i] + '(\\\\s|$)');
+      if (pattern.test(text)) return roles[i];
     }
     return '';
   }
@@ -74,14 +84,14 @@ private fun iosMobileNavigationScript(appVersion: String, buildNumber: String): 
     var people = [];
     var admin = [];
 
-    if (['ADMINISTRADOR', 'GERENTE', 'SUPERVISOR', 'CADASTRO'].indexOf(role) >= 0) {
+    if (['ADMINISTRADOR', 'ADMIN', 'GERENTE', 'SUPERVISOR', 'CADASTRO'].indexOf(role) >= 0) {
       people.push({ label: 'Usuários', path: routes.users });
     }
-    if (['ADMINISTRADOR', 'GERENTE', 'SUPERVISOR', 'CADASTRO', 'VENDEDOR', 'ADESIONISTA'].indexOf(role) >= 0) {
+    if (['ADMINISTRADOR', 'ADMIN', 'GERENTE', 'SUPERVISOR', 'CADASTRO', 'VENDEDOR', 'ADESIONISTA'].indexOf(role) >= 0) {
       people.push({ label: 'Equipes', path: routes.teams });
     }
 
-    if (role === 'ADMINISTRADOR') {
+    if (role === 'ADMINISTRADOR' || role === 'ADMIN') {
       admin.push({ label: 'Configurações', path: routes.configuracoes });
       admin.push({ label: 'Auditoria Lemmit', path: routes.auditoria });
       admin.push({ label: 'Fila Upload ERP', path: routes.fila });
@@ -334,8 +344,14 @@ private fun iosMobileNavigationScript(appVersion: String, buildNumber: String): 
     var row = shell.querySelector('.vm-ios-shell-row');
     if (!row) return;
 
-    var signature = groups.map(function (group) { return group.key; }).join('|');
+    var signature = groups.map(function (group) {
+      var modules = group.modules.map(function (module) {
+        return module.label + ':' + (module.path || module.action || '');
+      }).join(',');
+      return group.key + '[' + modules + ']';
+    }).join('|');
     if (row.getAttribute('data-signature') !== signature) {
+      closeSheet();
       row.setAttribute('data-signature', signature);
       row.innerHTML = '';
 
