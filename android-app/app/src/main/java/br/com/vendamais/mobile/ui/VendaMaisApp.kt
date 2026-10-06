@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -64,6 +65,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.AppConfig
+import br.com.vendamais.mobile.BuildConfig
 import br.com.vendamais.mobile.domain.cadastro.isPendingCadastroStatus
 import br.com.vendamais.mobile.ui.components.ScreenBackground
 import br.com.vendamais.mobile.ui.components.VendaBrandIcon
@@ -130,6 +132,34 @@ fun VendaMaisApp(
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AppConfig.publicAppUrl)))
             }
         }
+    }
+    val openPlayStore = remember(context) {
+        {
+            val packageId = context.packageName
+            val marketIntent = Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("market://details?id=$packageId"),
+            ).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val webIntent = Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("https://play.google.com/store/apps/details?id=$packageId"),
+            ).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+
+            runCatching { context.startActivity(marketIntent) }
+                .onFailure { context.startActivity(webIntent) }
+        }
+    }
+
+    if (state.appVersionBlocked) {
+        MandatoryAppUpdateScreen(
+            installedVersion = BuildConfig.VERSION_NAME,
+            onUpdate = openPlayStore,
+        )
+        return
     }
 
     LaunchedEffect(deepLinkToken) {
@@ -533,6 +563,62 @@ fun VendaMaisApp(
         state = state,
         viewModel = viewModel,
     )
+}
+
+@Composable
+private fun MandatoryAppUpdateScreen(
+    installedVersion: String,
+    onUpdate: () -> Unit,
+) {
+    ScreenBackground {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                shadowElevation = 10.dp,
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    VendaBrandIcon(
+                        modifier = Modifier.size(58.dp),
+                        showPlusBubble = false,
+                    )
+                    Text(
+                        text = "Atualização obrigatória",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "Esta versão do Venda+ foi descontinuada e não pode mais ser utilizada. Atualize o aplicativo pela Google Play para continuar.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = "Versão instalada: $installedVersion",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Button(
+                        onClick = onUpdate,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Atualizar pela Google Play")
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
