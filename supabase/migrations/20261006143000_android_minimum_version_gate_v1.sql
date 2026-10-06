@@ -61,6 +61,7 @@ DECLARE
   v_origin text := lower(trim(COALESCE(v_headers ->> 'origin', '')));
   v_platform_header text := lower(trim(COALESCE(v_headers ->> 'x-vendamais-platform', '')));
   v_version_header text := trim(COALESCE(v_headers ->> 'x-vendamais-version-code', ''));
+  v_request_path text := ltrim(trim(COALESCE(current_setting('request.path', true), '')), '/');
   v_platform text;
   v_version_code integer;
   v_minimum_version_code integer;
@@ -94,6 +95,23 @@ BEGIN
   WHERE platform = 'android';
 
   IF NOT FOUND OR NOT COALESCE(v_enabled, false) THEN
+    RETURN;
+  END IF;
+
+  IF v_platform_header = '' AND v_request_path = ANY (
+    ARRAY[
+      'profiles',
+      'teams',
+      'rpc/get_cadastros_stats',
+      'rpc/get_stats_from_cache',
+      'rpc/record_profile_app_seen'
+    ]
+  ) THEN
+    -- Builds 140-145 já distribuídos não possuem os novos headers.
+    -- Eles precisam concluir o bootstrap antigo para chamar
+    -- record_profile_app_seen e atualizar o próprio versionCode no perfil.
+    -- APKs <140 também passam apenas por este conjunto mínimo; as demais
+    -- rotas continuam bloqueadas assim que tentarem operar o sistema.
     RETURN;
   END IF;
 
