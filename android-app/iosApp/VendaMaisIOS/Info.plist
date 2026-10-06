@@ -24,6 +24,8 @@
     <false/>
     <key>LSRequiresIPhoneOS</key>
     <true/>
+    <key>CADisableMinimumFrameDurationOnPhone</key>
+    <true/>
     <key>NSCameraUsageDescription</key>
     <string>O Venda+ usa a camera somente quando um fluxo autorizado precisar capturar um documento ou imagem.</string>
     <key>NSMicrophoneUsageDescription</key>
