@@ -8,6 +8,7 @@ import androidx.compose.ui.viewinterop.UIKitInteropProperties
 import androidx.compose.ui.viewinterop.UIKitView
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.CoreGraphics.CGRectMake
+import platform.Foundation.NSBundle
 import platform.Foundation.NSURL
 import platform.Foundation.NSURLRequest
 import platform.WebKit.WKUserScript
@@ -16,7 +17,7 @@ import platform.WebKit.WKWebView
 import platform.WebKit.WKWebViewConfiguration
 import platform.WebKit.WKWebsiteDataStore
 
-private val iosMobileNavigationScript = """
+private fun iosMobileNavigationScript(appVersion: String, buildNumber: String): String = """
 (function () {
   if (window.__vendaMaisIosShellInstalled) return;
   window.__vendaMaisIosShellInstalled = true;
@@ -24,6 +25,9 @@ private val iosMobileNavigationScript = """
   var shellId = 'vm-ios-mobile-shell';
   var sheetId = 'vm-ios-mobile-sheet';
   var styleId = 'vm-ios-mobile-shell-style';
+  var accountExperienceId = 'vm-ios-account-experience';
+  var iosAppVersion = '$appVersion';
+  var iosBuildNumber = '$buildNumber';
 
   var routes = {
     dashboard: '/dashboard',
@@ -99,9 +103,7 @@ private val iosMobileNavigationScript = """
       label: 'Conta',
       icon: 'account',
       modules: [
-        { label: 'Meu Perfil', path: routes.profile },
-        { label: 'Alternar tema', action: 'theme' },
-        { label: 'Sair', action: 'logout' }
+        { label: 'Meu Perfil', path: routes.profile }
       ]
     });
 
@@ -129,6 +131,88 @@ private val iosMobileNavigationScript = """
       if (logoutButton) logoutButton.click();
       closeSheet();
     }
+  }
+
+  function ensureAccountExperience() {
+    var existing = document.getElementById(accountExperienceId);
+    if (window.location.pathname !== routes.profile) {
+      if (existing) existing.remove();
+      return;
+    }
+
+    var main = document.querySelector('main');
+    var profileRoot = main ? main.firstElementChild : null;
+    if (!profileRoot) return;
+
+    if (!existing) {
+      existing = document.createElement('div');
+      existing.id = accountExperienceId;
+      existing.className = 'vm-ios-account-stack';
+      existing.innerHTML = [
+        '<section class="vm-ios-account-card">',
+          '<div class="vm-ios-account-heading">Preferências</div>',
+          '<div class="vm-ios-account-row">',
+            '<div class="vm-ios-account-copy">',
+              '<strong>Modo escuro</strong>',
+              '<span>Ajusta o tema visual em todas as telas do app.</span>',
+            '</div>',
+            '<button type="button" class="vm-ios-theme-switch" role="switch" aria-label="Alternar modo escuro"><span></span></button>',
+          '</div>',
+        '</section>',
+        '<section class="vm-ios-account-card">',
+          '<div class="vm-ios-account-heading">Privacidade e dados</div>',
+          '<p class="vm-ios-account-description">Consulte como a Odontoart trata dados pessoais e como solicitar exclusão de conta ou dados.</p>',
+          '<button type="button" class="vm-ios-account-action" data-ios-account-action="privacy">Política de privacidade</button>',
+          '<button type="button" class="vm-ios-account-action" data-ios-account-action="delete-data">Solicitar exclusão de conta e dados</button>',
+        '</section>',
+        '<section class="vm-ios-account-card">',
+          '<div class="vm-ios-account-heading">Aplicativo</div>',
+          '<div class="vm-ios-version-row">',
+            '<span>Versão instalada</span>',
+            '<strong>' + iosAppVersion + (iosBuildNumber ? ' (' + iosBuildNumber + ')' : '') + '</strong>',
+          '</div>',
+          '<button type="button" class="vm-ios-account-action" data-ios-account-action="refresh">Atualizar dados</button>',
+          '<button type="button" class="vm-ios-account-action vm-ios-account-danger" data-ios-account-action="logout">Sair da conta</button>',
+        '</section>'
+      ].join('');
+
+      profileRoot.appendChild(existing);
+
+      var themeSwitch = existing.querySelector('.vm-ios-theme-switch');
+      if (themeSwitch) {
+        themeSwitch.addEventListener('click', function () {
+          performAction('theme');
+          window.setTimeout(updateAccountThemeState, 80);
+        });
+      }
+
+      existing.querySelectorAll('[data-ios-account-action]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          var action = button.getAttribute('data-ios-account-action');
+          if (action === 'privacy') {
+            window.location.href = 'https://odontoart.com/privacy-policy/';
+          } else if (action === 'delete-data') {
+            window.location.href = 'mailto:odontoart@odontoart.com?subject=Venda%2B%20-%20Solicitacao%20de%20exclusao%20de%20conta%20e%20dados';
+          } else if (action === 'refresh') {
+            window.location.reload();
+          } else if (action === 'logout') {
+            performAction('logout');
+          }
+        });
+      });
+    }
+
+    updateAccountThemeState();
+  }
+
+  function updateAccountThemeState() {
+    var root = document.getElementById(accountExperienceId);
+    if (!root) return;
+    var themeSwitch = root.querySelector('.vm-ios-theme-switch');
+    if (!themeSwitch) return;
+    var isDark = document.documentElement.classList.contains('dark');
+    themeSwitch.setAttribute('aria-checked', isDark ? 'true' : 'false');
+    themeSwitch.classList.toggle('is-on', isDark);
   }
 
   function closeSheet() {
@@ -210,7 +294,28 @@ private val iosMobileNavigationScript = """
       '.vm-ios-sheet-item.is-active{color:#047857;background:rgba(16,185,129,.13);border-color:rgba(5,150,105,.26);}',
       'html.dark .vm-ios-sheet-item{color:#e2e8f0;background:rgba(30,41,59,.78);border-color:rgba(255,255,255,.10);}',
       'html.dark .vm-ios-sheet-item.is-active{color:#6ee7b7;background:rgba(16,185,129,.16);border-color:rgba(52,211,153,.22);}',
-      '.vm-ios-sheet-close{display:block;margin:6px 0 0 auto;border:0;background:transparent;color:#059669;font:700 14px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:10px 4px;}'
+      '.vm-ios-sheet-close{display:block;margin:6px 0 0 auto;border:0;background:transparent;color:#059669;font:700 14px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:10px 4px;}',
+      '.vm-ios-account-stack{display:grid;gap:16px;margin-top:16px;padding-bottom:6px;}',
+      '.vm-ios-account-card{border-radius:20px;padding:16px;background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.01)),rgba(239,246,242,.80);border:1px solid rgba(30,41,59,.14);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 12px 30px rgba(15,23,42,.06);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}',
+      'html.dark .vm-ios-account-card{background:linear-gradient(180deg,rgba(255,255,255,.024),transparent),rgba(15,23,42,.66);border-color:rgba(255,255,255,.075);box-shadow:inset 0 1px 0 rgba(255,255,255,.025),0 16px 38px rgba(0,0,0,.20);}',
+      '.vm-ios-account-heading{margin:0 0 14px;color:#162033;font:700 18px/1.25 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;}',
+      'html.dark .vm-ios-account-heading{color:#f4f7fb;}',
+      '.vm-ios-account-row,.vm-ios-version-row{display:flex;align-items:center;justify-content:space-between;gap:16px;}',
+      '.vm-ios-account-copy{display:flex;min-width:0;flex:1;flex-direction:column;gap:4px;}',
+      '.vm-ios-account-copy strong,.vm-ios-version-row strong{color:#162033;font-size:15px;}',
+      '.vm-ios-account-copy span,.vm-ios-version-row span,.vm-ios-account-description{color:#647388;font-size:13px;line-height:1.45;}',
+      'html.dark .vm-ios-account-copy strong,html.dark .vm-ios-version-row strong{color:#f4f7fb;}',
+      'html.dark .vm-ios-account-copy span,html.dark .vm-ios-version-row span,html.dark .vm-ios-account-description{color:#94a3b8;}',
+      '.vm-ios-theme-switch{position:relative;flex:0 0 auto;width:51px;height:31px;border:0;border-radius:999px;padding:0;background:#cbd5e1;box-shadow:inset 0 1px 3px rgba(15,23,42,.14);transition:background .18s ease;}',
+      '.vm-ios-theme-switch span{position:absolute;left:2px;top:2px;width:27px;height:27px;border-radius:50%;background:white;box-shadow:0 2px 7px rgba(15,23,42,.22);transition:transform .18s ease;}',
+      '.vm-ios-theme-switch.is-on{background:#10b981;}',
+      '.vm-ios-theme-switch.is-on span{transform:translateX(20px);}',
+      '.vm-ios-account-description{margin:0 0 12px;}',
+      '.vm-ios-account-action{display:block;width:100%;margin-top:9px;padding:12px 14px;border-radius:14px;border:1px solid rgba(30,41,59,.14);background:rgba(247,250,248,.82);color:#162033;text-align:center;font:650 14px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;box-shadow:inset 0 1px 0 rgba(255,255,255,.52);}',
+      'html.dark .vm-ios-account-action{background:rgba(30,41,59,.68);border-color:rgba(255,255,255,.10);color:#f4f7fb;box-shadow:inset 0 1px 0 rgba(255,255,255,.025);}',
+      '.vm-ios-version-row{padding:2px 0 8px;}',
+      '.vm-ios-account-danger{background:rgba(254,226,226,.76);border-color:rgba(185,28,28,.20);color:#b42318;}',
+      'html.dark .vm-ios-account-danger{background:rgba(127,29,29,.25);border-color:rgba(248,113,113,.22);color:#fca5a5;}'
     ].join('');
     document.head.appendChild(style);
   }
@@ -283,6 +388,7 @@ private val iosMobileNavigationScript = """
 
     var groups = availableGroups(normalizeRole());
     renderShell(groups);
+    ensureAccountExperience();
     shell = document.getElementById(shellId);
     if (shell) shell.style.display = 'block';
   }
@@ -323,11 +429,16 @@ actual fun PlatformWebView(url: String, modifier: Modifier) {
             isNativeAccessibilityEnabled = true,
         ),
         factory = {
+            val appVersion = NSBundle.mainBundle
+                .objectForInfoDictionaryKey("CFBundleShortVersionString") as? String ?: "-"
+            val buildNumber = NSBundle.mainBundle
+                .objectForInfoDictionaryKey("CFBundleVersion") as? String ?: ""
+
             val configuration = WKWebViewConfiguration().apply {
                 websiteDataStore = WKWebsiteDataStore.defaultDataStore()
                 userContentController.addUserScript(
                     WKUserScript(
-                        source = iosMobileNavigationScript,
+                        source = iosMobileNavigationScript(appVersion, buildNumber),
                         injectionTime = WKUserScriptInjectionTime.WKUserScriptInjectionTimeAtDocumentEnd,
                         forMainFrameOnly = true,
                     ),
