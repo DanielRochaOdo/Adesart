@@ -137,11 +137,11 @@ BEGIN
     RAISE EXCEPTION USING
       ERRCODE = 'P0001',
       MESSAGE = format(
-        'VENDA_MOBILE_UPDATE_REQUIRED|minimum=%s|current=%s|store=%s|message=%s',
+        '%s VENDA_MOBILE_UPDATE_REQUIRED|minimum=%s|current=%s|store=%s',
+        COALESCE(v_blocked_message, 'Atualização obrigatória.'),
         v_minimum_version_code,
         v_version_code,
-        COALESCE(v_store_url, ''),
-        COALESCE(v_blocked_message, 'Atualização obrigatória.')
+        COALESCE(v_store_url, '')
       );
   END IF;
 END;
