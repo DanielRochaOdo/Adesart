@@ -3687,7 +3687,7 @@ class AppViewModel(
         val message = throwable.message.orEmpty()
         if (!message.contains("VENDA_MOBILE_UPDATE_REQUIRED")) return false
 
-        val minimumVersion = Regex("""minimum=(\\d+)""")
+        val minimumVersion = Regex("""minimum=(\d+)""")
             .find(message)
             ?.groupValues
             ?.getOrNull(1)
