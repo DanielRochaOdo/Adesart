@@ -46,6 +46,7 @@ import br.com.vendamais.mobile.data.models.PublicCadastroCheckCpfResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroContractPayload
 import br.com.vendamais.mobile.data.models.PublicCadastroContractPrepareResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroDependentLookupResponse
+import br.com.vendamais.mobile.data.models.PublicCadastroDependente
 import br.com.vendamais.mobile.data.models.PublicCadastroLinkResolveResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroPayload
 import br.com.vendamais.mobile.data.models.PublicCadastroSubmitResponse
@@ -2544,6 +2545,20 @@ class AppViewModel(
         cpf: String,
     ): PublicCadastroDependentLookupResponse {
         return workflowRepository.lookupPublicDependent(attemptToken, cpf)
+    }
+
+    suspend fun submitPublicDependents(
+        attemptToken: String,
+        confirmedPhone: String,
+        confirmedEmail: String,
+        dependents: List<PublicCadastroDependente>,
+    ): PublicCadastroSubmitResponse {
+        return workflowRepository.submitPublicDependents(
+            attemptToken = attemptToken,
+            confirmedPhone = confirmedPhone,
+            confirmedEmail = confirmedEmail,
+            dependents = dependents,
+        )
     }
 
     suspend fun preparePublicContract(
