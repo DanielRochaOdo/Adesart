@@ -136,6 +136,35 @@ jobs:
           aab_path = os.environ["AAB_PATH"]
           service_account_info = json.loads(os.environ["GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"])
 
+          client_email = str(service_account_info.get("client_email") or "").strip()
+          project_id = str(service_account_info.get("project_id") or "").strip()
+          if not client_email:
+              raise RuntimeError("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON sem client_email.")
+
+          print(f"Google Play service account: {client_email}")
+          if project_id:
+              print(f"Google Cloud project: {project_id}")
+          print(f"Google Play package: {package_name}")
+          print(f"Release solicitada: {version_name} ({expected_version_code})")
+
+          def ensure_google_response(response, stage):
+              if response.ok:
+                  return
+              try:
+                  payload = response.json()
+                  detail = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+              except Exception:
+                  detail = (response.text or "<sem corpo de resposta>").strip()
+              if len(detail) > 6000:
+                  detail = detail[:6000] + "...<truncado>"
+              print(
+                  f"::error title=Google Play API - {stage}::"
+                  f"HTTP {response.status_code}: {detail}"
+              )
+              raise RuntimeError(
+                  f"Google Play API falhou em '{stage}' com HTTP {response.status_code}."
+              )
+
           credentials = service_account.Credentials.from_service_account_info(
               service_account_info,
               scopes=["https://www.googleapis.com/auth/androidpublisher"],
@@ -146,7 +175,7 @@ jobs:
           base = f"https://androidpublisher.googleapis.com/androidpublisher/v3/applications/{package_name}"
 
           response = requests.post(f"{base}/edits", headers=auth_headers, json={}, timeout=60)
-          response.raise_for_status()
+          ensure_google_response(response, "create edit")
           edit_id = response.json()["id"]
           print(f"Google Play edit criado: {edit_id}")
 
@@ -162,7 +191,7 @@ jobs:
                   data=bundle,
                   timeout=600,
               )
-          response.raise_for_status()
+          ensure_google_response(response, "upload bundle")
           uploaded_version_code = str(response.json()["versionCode"])
 
           if uploaded_version_code != expected_version_code:
@@ -187,14 +216,14 @@ jobs:
               json=track_payload,
               timeout=60,
           )
-          response.raise_for_status()
+          ensure_google_response(response, "update production track")
 
           response = requests.post(
               f"{base}/edits/{edit_id}:commit",
               headers=auth_headers,
               timeout=60,
           )
-          response.raise_for_status()
+          ensure_google_response(response, "commit edit")
 
           print(
               f"Venda+ {version_name} ({uploaded_version_code}) enviado ao track production do Google Play."
