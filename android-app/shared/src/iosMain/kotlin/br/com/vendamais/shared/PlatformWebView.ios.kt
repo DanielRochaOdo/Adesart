@@ -9,13 +9,74 @@ import androidx.compose.ui.viewinterop.UIKitView
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.CoreGraphics.CGRectMake
 import platform.Foundation.NSBundle
+import platform.Foundation.NSObject
 import platform.Foundation.NSURL
 import platform.Foundation.NSURLRequest
+import platform.UIKit.UIAlertAction
+import platform.UIKit.UIAlertActionStyleCancel
+import platform.UIKit.UIAlertActionStyleDefault
+import platform.UIKit.UIAlertController
+import platform.UIKit.UIAlertControllerStyleAlert
+import platform.UIKit.UIApplication
+import platform.UIKit.UIViewController
+import platform.WebKit.WKFrameInfo
+import platform.WebKit.WKUIDelegateProtocol
 import platform.WebKit.WKUserScript
 import platform.WebKit.WKUserScriptInjectionTime
 import platform.WebKit.WKWebView
 import platform.WebKit.WKWebViewConfiguration
 import platform.WebKit.WKWebsiteDataStore
+
+private fun topViewController(): UIViewController? {
+    var controller = UIApplication.sharedApplication.keyWindow?.rootViewController
+    while (controller?.presentedViewController != null) {
+        controller = controller.presentedViewController
+    }
+    return controller
+}
+
+private object VendaMaisWebViewUiDelegate : NSObject(), WKUIDelegateProtocol {
+    override fun webView(
+        webView: WKWebView,
+        runJavaScriptConfirmPanelWithMessage: String,
+        initiatedByFrame: WKFrameInfo,
+        completionHandler: (Boolean) -> Unit,
+    ) {
+        val presenter = topViewController()
+        if (presenter == null) {
+            completionHandler(false)
+            return
+        }
+
+        val alert = UIAlertController.alertControllerWithTitle(
+            title = webView.URL?.host ?: "Venda+",
+            message = runJavaScriptConfirmPanelWithMessage,
+            preferredStyle = UIAlertControllerStyleAlert,
+        )
+        alert.addAction(
+            UIAlertAction.actionWithTitle(
+                title = "Cancelar",
+                style = UIAlertActionStyleCancel,
+            ) { _ ->
+                completionHandler(false)
+            },
+        )
+        alert.addAction(
+            UIAlertAction.actionWithTitle(
+                title = "OK",
+                style = UIAlertActionStyleDefault,
+            ) { _ ->
+                completionHandler(true)
+            },
+        )
+
+        presenter.presentViewController(
+            alert,
+            animated = true,
+            completion = null,
+        )
+    }
+}
 
 private fun iosMobileNavigationScript(appVersion: String, buildNumber: String): String = """
 (function () {
@@ -465,6 +526,7 @@ actual fun PlatformWebView(url: String, modifier: Modifier) {
                 frame = CGRectMake(0.0, 0.0, 0.0, 0.0),
                 configuration = configuration,
             ).apply {
+                UIDelegate = VendaMaisWebViewUiDelegate
                 allowsBackForwardNavigationGestures = true
                 val nsUrl = NSURL(string = url)
                 if (nsUrl != null) {
