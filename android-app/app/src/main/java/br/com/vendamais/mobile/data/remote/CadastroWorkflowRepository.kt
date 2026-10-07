@@ -18,6 +18,7 @@ import br.com.vendamais.mobile.data.models.PublicCadastroCheckCpfResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroContractPayload
 import br.com.vendamais.mobile.data.models.PublicCadastroContractPrepareResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroDependentLookupResponse
+import br.com.vendamais.mobile.data.models.PublicCadastroDependente
 import br.com.vendamais.mobile.data.models.PublicCadastroLinkResolveResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroPayload
 import br.com.vendamais.mobile.data.models.PublicCadastroSubmitResponse
@@ -2247,6 +2248,28 @@ class CadastroWorkflowRepository(
             body = buildJsonObject {
                 put("attemptToken", attemptToken.trim())
                 put("cpf", CadastroPayloadBuilder.normalizeDigits(cpf))
+            },
+        )
+    }
+
+    suspend fun submitPublicDependents(
+        attemptToken: String,
+        confirmedPhone: String,
+        confirmedEmail: String,
+        dependents: List<PublicCadastroDependente>,
+    ): PublicCadastroSubmitResponse {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-dependent-submit",
+            json = json,
+            body = buildJsonObject {
+                put("attemptToken", attemptToken.trim())
+                put("confirmedPhone", CadastroPayloadBuilder.normalizeDigits(confirmedPhone))
+                put("confirmedEmail", confirmedEmail.trim().lowercase(Locale.ROOT))
+                put("dependents", buildJsonArray {
+                    dependents.forEach { dependent ->
+                        add(json.encodeToJsonElement(PublicCadastroDependente.serializer(), dependent))
+                    }
+                })
             },
         )
     }
