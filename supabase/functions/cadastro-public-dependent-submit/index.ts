@@ -180,6 +180,9 @@ Deno.serve(async (req: Request) => {
     }
 
     const companyCode = Number(holder?.codigoDaEmpresa);
+    if (!Number.isInteger(companyCode) || companyCode <= 0) {
+      return jsonResponse({ error: "Empresa do associado nao identificada no ERP", code: "MEMBER_COMPANY_NOT_FOUND" }, 409);
+    }
     const catalog = await companyPlans(companyCode);
     const planMap = new Map<number, any>(catalog.plans.map((plan: any) => [Number(plan.Plano), plan]));
     for (const dep of normalized) {
