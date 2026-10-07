@@ -30,7 +30,7 @@ import platform.WebKit.WKWebsiteDataStore
 private fun topViewController(): UIViewController? {
     var controller = UIApplication.sharedApplication.keyWindow?.rootViewController
     while (controller?.presentedViewController != null) {
-        controller = controller.presentedViewController
+        controller = controller?.presentedViewController
     }
     return controller
 }
