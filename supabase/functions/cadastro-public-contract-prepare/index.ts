@@ -322,7 +322,7 @@ const prepareExistingMemberContract = async (
       titularPlano: 0,
       titularPlanoNome: "",
       titularPlanoValor: 0,
-      dependentes,
+      dependentes: dependents,
       valorMensalTotal: totalMonthlyValue,
       beneficiarios: dependents.map((dep) => dep.nome),
       duracaoContratoMeses: vigenciaMeses,
