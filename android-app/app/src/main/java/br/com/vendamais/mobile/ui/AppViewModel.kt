@@ -2549,12 +2549,20 @@ class AppViewModel(
 
     suspend fun submitPublicDependents(
         attemptToken: String,
+        contractToken: String,
+        acceptedTerms: Boolean,
+        acceptedData: Boolean,
+        acceptedCoverage: Boolean,
         confirmedPhone: String,
         confirmedEmail: String,
         dependents: List<PublicCadastroDependente>,
     ): PublicCadastroSubmitResponse {
         return workflowRepository.submitPublicDependents(
             attemptToken = attemptToken,
+            contractToken = contractToken,
+            acceptedTerms = acceptedTerms,
+            acceptedData = acceptedData,
+            acceptedCoverage = acceptedCoverage,
             confirmedPhone = confirmedPhone,
             confirmedEmail = confirmedEmail,
             dependents = dependents,

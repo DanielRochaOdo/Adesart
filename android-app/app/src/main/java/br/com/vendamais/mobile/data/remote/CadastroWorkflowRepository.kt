@@ -2254,6 +2254,10 @@ class CadastroWorkflowRepository(
 
     suspend fun submitPublicDependents(
         attemptToken: String,
+        contractToken: String,
+        acceptedTerms: Boolean,
+        acceptedData: Boolean,
+        acceptedCoverage: Boolean,
         confirmedPhone: String,
         confirmedEmail: String,
         dependents: List<PublicCadastroDependente>,
@@ -2263,6 +2267,10 @@ class CadastroWorkflowRepository(
             json = json,
             body = buildJsonObject {
                 put("attemptToken", attemptToken.trim())
+                put("contractToken", contractToken.trim())
+                put("acceptedTerms", acceptedTerms)
+                put("acceptedData", acceptedData)
+                put("acceptedCoverage", acceptedCoverage)
                 put("confirmedPhone", CadastroPayloadBuilder.normalizeDigits(confirmedPhone))
                 put("confirmedEmail", confirmedEmail.trim().lowercase(Locale.ROOT))
                 put("dependents", buildJsonArray {
