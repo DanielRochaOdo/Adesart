@@ -373,6 +373,12 @@ export function PublicCadastroLink() {
         setStage('completed');
         return;
       }
+      if (result.state === 'existing_member_completed') {
+        setFlowMode('existing_member');
+        setSuccessMessage('Esta solicitação de inclusão de dependentes já foi concluída.');
+        setStage('success');
+        return;
+      }
       if (result.state === 'not_eligible') {
         setStage('not_eligible');
         return;
