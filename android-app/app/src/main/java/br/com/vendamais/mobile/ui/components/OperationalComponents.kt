@@ -143,11 +143,11 @@ fun VendaButton(
             shape = RoundedCornerShape(VendaRadius.md),
             border = BorderStroke(
                 1.dp,
-                if (enabled) MaterialTheme.colorScheme.outline.copy(alpha = 0.72f)
-                else MaterialTheme.colorScheme.outline.copy(alpha = 0.38f),
+                if (enabled) Color.White.copy(alpha = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) 0.13f else 0.58f)
+                else MaterialTheme.colorScheme.outline.copy(alpha = 0.34f),
             ),
             colors = ButtonDefaults.outlinedButtonColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.70f),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.54f),
                 contentColor = MaterialTheme.colorScheme.onSurface,
                 disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f),
                 disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
@@ -245,35 +245,38 @@ fun VendaMetricCard(
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val shape = RoundedCornerShape(VendaRadius.lg)
     val baseColor = if (containerColor == MaterialTheme.colorScheme.surface) {
-        if (dark) Color(0xFF142135) else Color(0xFFF1F7F4)
+        if (dark) Color(0xFF0F172A).copy(alpha = 0.66f) else Color(0xFFEFF6F2).copy(alpha = 0.80f)
     } else {
         containerColor
     }
-    val metricBrush = Brush.verticalGradient(
-        listOf(
-            baseColor.copy(alpha = if (dark) 0.84f else 0.88f),
-            baseColor.copy(alpha = if (dark) 0.66f else 0.72f),
+    val metricHighlight = Brush.verticalGradient(
+        colors = listOf(
+            Color.White.copy(alpha = if (dark) 0.026f else 0.28f),
+            Color.Transparent,
         ),
     )
-    Column(
+    Box(
         modifier = modifier
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .animateContentSize()
             .shadow(
-                elevation = if (dark) 9.dp else 7.dp,
+                elevation = if (dark) 10.dp else 8.dp,
                 shape = shape,
-                ambientColor = if (dark) Color.Black.copy(alpha = 0.30f) else Color(0xFF0F172A).copy(alpha = 0.10f),
-                spotColor = if (dark) Color.Black.copy(alpha = 0.32f) else Color(0xFF0F172A).copy(alpha = 0.08f),
+                ambientColor = if (dark) Color.Black.copy(alpha = 0.20f) else Color(0xFF0F172A).copy(alpha = 0.07f),
+                spotColor = if (dark) Color.Black.copy(alpha = 0.22f) else Color(0xFF0F172A).copy(alpha = 0.055f),
             )
-            .background(metricBrush, shape)
+            .background(baseColor, shape)
+            .background(metricHighlight, shape)
             .border(
                 1.dp,
-                if (dark) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.24f),
+                if (dark) Color.White.copy(alpha = 0.075f) else Color(0xFF1E293B).copy(alpha = 0.14f),
                 shape,
-            )
-            .padding(VendaSpacing.x3),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
+            ),
     ) {
+        Column(
+            modifier = Modifier.padding(VendaSpacing.x3),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
         Text(
             text = value,
             style = MaterialTheme.typography.headlineSmall,
@@ -296,6 +299,7 @@ fun VendaMetricCard(
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
         }
     }
 }

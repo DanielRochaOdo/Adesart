@@ -75,7 +75,10 @@ private const val ASSOCIADO_GOOGLE_PLAY_URL =
 private enum class PublicStage {
     IDENTIFY,
     DETAILS,
+    EXISTING_MEMBER,
     DEPENDENTS,
+    EXISTING_CONTACT,
+    EXISTING_REVIEW,
     REVIEW,
     CONTRACT,
     SUCCESS,
@@ -176,6 +179,12 @@ fun PublicAdesaoParityScreen(
     var acceptedCoverage by rememberSaveable(token) { mutableStateOf(false) }
     var preparedCoverageUrl by rememberSaveable(token) { mutableStateOf("") }
     var successMessage by rememberSaveable(token) { mutableStateOf("") }
+    var flowMode by rememberSaveable(token) { mutableStateOf("new_member") }
+    var existingMemberName by rememberSaveable(token) { mutableStateOf("") }
+    var existingMemberCompany by rememberSaveable(token) { mutableStateOf("") }
+    var existingPhone by rememberSaveable(token) { mutableStateOf("") }
+    var existingEmail by rememberSaveable(token) { mutableStateOf("") }
+    var existingPlans by remember(token) { mutableStateOf<List<PublicSecurePlan>>(emptyList()) }
     val linkVisitId = rememberSaveable(token) { UUID.randomUUID().toString() }
 
     fun setStage(value: PublicStage) {
@@ -203,8 +212,10 @@ fun PublicAdesaoParityScreen(
     }
 
     val currentLink = link
-    val plans = remember(currentLink?.id, currentLink?.planos, currentLink?.planosRaw) {
-        if (currentLink?.planos.orEmpty().isNotEmpty()) {
+    val plans = remember(flowMode, existingPlans, currentLink?.id, currentLink?.planos, currentLink?.planosRaw) {
+        if (flowMode == "existing_member") {
+            existingPlans
+        } else if (currentLink?.planos.orEmpty().isNotEmpty()) {
             currentLink!!.planos.map {
                 PublicSecurePlan(
                     codigo = it.plano,
@@ -266,7 +277,7 @@ fun PublicAdesaoParityScreen(
 
     if (stage == PublicStage.SUCCESS) {
         PublicFinalStateScreen(
-            title = "Adesão recebida",
+            title = if (flowMode == "existing_member") "Dependente(s) incluído(s)" else "Adesão recebida",
             message = successMessage,
             consultantName = currentLink.vendedorNome,
             consultantPhone = currentLink.vendedorTelefone,
@@ -292,24 +303,37 @@ fun PublicAdesaoParityScreen(
             ) {
                 OdontoartBrandMark(modifier = Modifier.fillMaxWidth())
                 ScreenHeading(
-                    "Nova Adesão",
-                    "Empresa: ${currentLink.empresaNome}" +
+                    if (flowMode == "existing_member") "Inclusão de dependente" else "Nova Adesão",
+                    "Empresa: ${if (flowMode == "existing_member") existingMemberCompany.ifBlank { currentLink.empresaNome } else currentLink.empresaNome}" +
                         (currentLink.vendedorNome?.takeIf { it.isNotBlank() }?.let { " · Consultor: $it" } ?: ""),
                 )
                 ConsultantContactCard(currentLink.vendedorNome, currentLink.vendedorTelefone)
 
-                if (stage != PublicStage.IDENTIFY) {
-                    val progressStep = when (stage) {
-                        PublicStage.DETAILS -> 1
-                        PublicStage.DEPENDENTS -> 2
-                        PublicStage.REVIEW -> 3
-                        PublicStage.CONTRACT -> 4
-                        else -> 1
+                if (stage != PublicStage.IDENTIFY && stage != PublicStage.EXISTING_MEMBER) {
+                    if (flowMode == "existing_member") {
+                        val progressStep = when (stage) {
+                            PublicStage.DEPENDENTS -> 1
+                            PublicStage.EXISTING_CONTACT -> 2
+                            PublicStage.EXISTING_REVIEW -> 3
+                            else -> 1
+                        }
+                        VendaWizardProgress(
+                            currentStep = progressStep,
+                            labels = listOf("Dependentes", "Contato", "Confirmação"),
+                        )
+                    } else {
+                        val progressStep = when (stage) {
+                            PublicStage.DETAILS -> 1
+                            PublicStage.DEPENDENTS -> 2
+                            PublicStage.REVIEW -> 3
+                            PublicStage.CONTRACT -> 4
+                            else -> 1
+                        }
+                        VendaWizardProgress(
+                            currentStep = progressStep,
+                            labels = listOf("Dados", "Plano", "Dependentes", "Confirmação"),
+                        )
                     }
-                    VendaWizardProgress(
-                        currentStep = progressStep,
-                        labels = listOf("Dados", "Plano", "Dependentes", "Confirmação"),
-                    )
                 }
 
                 error?.let {
@@ -384,13 +408,19 @@ fun PublicAdesaoParityScreen(
                                             }.onSuccess { response ->
                                                 when (response.state) {
                                                     "completed" -> setStage(PublicStage.COMPLETED)
+                                                    "existing_member_completed" -> {
+                                                        flowMode = "existing_member"
+                                                        successMessage = "Esta solicitação de inclusão de dependentes já foi concluída."
+                                                        setStage(PublicStage.SUCCESS)
+                                                    }
                                                     "not_eligible" -> setStage(PublicStage.NOT_ELIGIBLE)
-                                                    "authenticated" -> {
+                                                    "authenticated", "existing_member" -> {
                                                         val person = response.person
                                                         val sessionToken = response.attemptToken
                                                         if (person == null || sessionToken.isNullOrBlank()) {
                                                             error = "Nao foi possivel iniciar a adesao."
                                                         } else {
+                                                            val isExistingMember = response.state == "existing_member"
                                                             attemptToken = sessionToken
                                                             cpf = person.cpf?.filter(Char::isDigit)?.take(11)
                                                                 ?.takeIf { it.isNotBlank() } ?: cpfDigits
@@ -431,8 +461,40 @@ fun PublicAdesaoParityScreen(
                                                                 idMunicipio = address.idMunicipio
                                                                 idUf = address.idUf
                                                             }
-                                                            if (plans.size == 1) titularPlano = plans.first().codigo
-                                                            setStage(PublicStage.DETAILS)
+
+                                                            if (isExistingMember) {
+                                                                flowMode = "existing_member"
+                                                                existingMemberName = response.member?.nome.orEmpty().ifBlank { nome }
+                                                                existingMemberCompany = response.member?.empresa.orEmpty().ifBlank { currentLink.empresaNome }
+                                                                existingPlans = response.plans.map { plan ->
+                                                                    PublicSecurePlan(
+                                                                        codigo = plan.plano,
+                                                                        nome = plan.nomeExibicao.ifBlank { "Plano ${plan.plano}" },
+                                                                        valorTitular = plan.valorTitular,
+                                                                        valorDependente = plan.valorDependente,
+                                                                    )
+                                                                }
+                                                                existingPhone = response.member?.telefone.orEmpty().ifBlank {
+                                                                    person.contatos.firstOrNull {
+                                                                        it.tipo in setOf("whatsapp", "celular") && it.principal
+                                                                    }?.valor ?: person.contatos.firstOrNull {
+                                                                        it.tipo in setOf("whatsapp", "celular", "fixo")
+                                                                    }?.valor.orEmpty()
+                                                                }
+                                                                existingEmail = response.member?.email.orEmpty().ifBlank {
+                                                                    person.contatos.firstOrNull {
+                                                                        it.tipo == "email" && it.principal
+                                                                    }?.valor ?: person.contatos.firstOrNull {
+                                                                        it.tipo == "email"
+                                                                    }?.valor.orEmpty()
+                                                                }
+                                                                dependentes.clear()
+                                                                setStage(PublicStage.EXISTING_MEMBER)
+                                                            } else {
+                                                                flowMode = "new_member"
+                                                                if (plans.size == 1) titularPlano = plans.first().codigo
+                                                                setStage(PublicStage.DETAILS)
+                                                            }
                                                         }
                                                     }
                                                     else -> error = response.error ?: "Nao foi possivel validar seus dados."
@@ -449,6 +511,42 @@ fun PublicAdesaoParityScreen(
                                     loading = busy,
                                     enabled = !busy,
                                     modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        }
+                    }
+
+                    PublicStage.EXISTING_MEMBER -> {
+                        WebCard {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(
+                                    "Que bom ter você com a gente!",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    "Você já possui um plano ativo e pode aproveitar este momento para incluir novos dependentes de forma rápida e fácil.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                ReviewLine("Associado", existingMemberName.ifBlank { nome })
+                                ReviewLine("Empresa", existingMemberCompany.ifBlank { currentLink.empresaNome })
+                                VendaButton(
+                                    label = "Incluir dependente",
+                                    onClick = {
+                                        if (dependentes.isEmpty()) {
+                                            val onlyPlan = plans.singleOrNull()
+                                            dependentes.add(
+                                                PublicDependentDraft(
+                                                    plano = onlyPlan?.codigo ?: 0,
+                                                    planoValor = onlyPlan?.dependenteValor() ?: "0,00",
+                                                ),
+                                            )
+                                        }
+                                        setStage(PublicStage.DEPENDENTS)
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = !busy,
                                 )
                             }
                         }
@@ -672,6 +770,127 @@ fun PublicAdesaoParityScreen(
                                 }
                             },
                         )
+                    }
+
+                    PublicStage.EXISTING_CONTACT -> {
+                        WebCard {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(
+                                    "Confirme seus dados de contato",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    "Usaremos estes dados para confirmar sua solicitação.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                OutlinedTextField(
+                                    value = existingPhone,
+                                    onValueChange = { existingPhone = it.filter(Char::isDigit).take(11) },
+                                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                    label = { Text("Telefone / WhatsApp") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                    enabled = !busy,
+                                )
+                                OutlinedTextField(
+                                    value = existingEmail,
+                                    onValueChange = { existingEmail = it },
+                                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                    label = { Text("E-mail") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                    enabled = !busy,
+                                )
+                                VendaButton(
+                                    label = "Continuar",
+                                    onClick = {
+                                        val pending = listOfNotNull(
+                                            if (existingPhone.filter(Char::isDigit).length < 10) "Telefone / WhatsApp" else null,
+                                            if (!isValidEmail(existingEmail)) "E-mail" else null,
+                                        )
+                                        if (pending.isNotEmpty()) {
+                                            validationErrors = pending
+                                            error = null
+                                        } else {
+                                            setStage(PublicStage.EXISTING_REVIEW)
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = !busy,
+                                )
+                            }
+                        }
+                    }
+
+                    PublicStage.EXISTING_REVIEW -> {
+                        WebCard {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(
+                                    "Revise sua solicitação",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                ReviewLine("Responsável", existingMemberName.ifBlank { nome })
+                                ReviewLine("Empresa", existingMemberCompany.ifBlank { currentLink.empresaNome })
+                                ReviewLine("Dependentes", dependentes.size.toString())
+                                dependentes.forEach { dep ->
+                                    Text(
+                                        "${dep.nome} - ${plans.firstOrNull { it.codigo == dep.plano }?.nome ?: "-"}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                ReviewLine("Telefone", formatPhone(existingPhone))
+                                ReviewLine("E-mail", existingEmail)
+                                VendaButton(
+                                    label = "Confirmar inclusão",
+                                    onClick = {
+                                        busy = true
+                                        error = null
+                                        scope.launch {
+                                            val payloadDependentes = dependentes.map { dep ->
+                                                PublicCadastroDependente(
+                                                    tipo = dep.tipo,
+                                                    nome = dep.nome.trim(),
+                                                    dataNascimento = dep.dataNascimento.trim(),
+                                                    cpf = dep.cpf.filter(Char::isDigit),
+                                                    sexo = dep.sexo,
+                                                    sexoDescricao = if (dep.sexo == 1) "Masculino" else "Feminino",
+                                                    plano = dep.plano,
+                                                    planoValor = dep.planoValor,
+                                                    nomeMae = dep.nomeMae.trim(),
+                                                )
+                                            }
+                                            runCatching {
+                                                viewModel.submitPublicDependents(
+                                                    attemptToken = attemptToken,
+                                                    confirmedPhone = existingPhone,
+                                                    confirmedEmail = existingEmail,
+                                                    dependents = payloadDependentes,
+                                                )
+                                            }.onSuccess { response ->
+                                                if (!response.ok) {
+                                                    error = response.error ?: "Nao foi possivel incluir os dependentes."
+                                                } else {
+                                                    successMessage = response.message
+                                                        ?: "Dependente(s) incluído(s) com sucesso!"
+                                                    setStage(PublicStage.SUCCESS)
+                                                }
+                                            }.onFailure {
+                                                error = CadastroApiErrorMapper.mapUserMessage(
+                                                    it.message,
+                                                    "Nao foi possivel incluir os dependentes.",
+                                                )
+                                            }
+                                            busy = false
+                                        }
+                                    },
+                                    loading = busy,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = !busy,
+                                )
+                            }
+                        }
                     }
 
                     PublicStage.REVIEW -> {
@@ -899,20 +1118,39 @@ fun PublicAdesaoParityScreen(
                     ) {
                         VendaButton(
                             label = "Voltar",
-                            onClick = { setStage(PublicStage.DETAILS) },
+                            onClick = {
+                                setStage(
+                                    if (flowMode == "existing_member") PublicStage.EXISTING_MEMBER
+                                    else PublicStage.DETAILS,
+                                )
+                            },
                             style = VendaButtonStyle.TERTIARY,
                             size = VendaButtonSize.MEDIUM,
                             modifier = Modifier.weight(0.8f),
                             enabled = !busy,
                         )
                         VendaButton(
-                            label = if (dependentes.isEmpty()) "Continuar sem dependentes" else "Continuar",
+                            label = if (flowMode != "existing_member" && dependentes.isEmpty()) {
+                                "Continuar sem dependentes"
+                            } else {
+                                "Continuar"
+                            },
                             onClick = {
-                                val validation = validateDependents(cpf, dependentes)
-                                if (validation != null) {
-                                    validationErrors = listOf(validation)
+                                if (flowMode == "existing_member" && dependentes.isEmpty()) {
+                                    validationErrors = listOf("Adicione ao menos um dependente.")
                                     error = null
-                                } else setStage(PublicStage.REVIEW)
+                                } else {
+                                    val validation = validateDependents(cpf, dependentes)
+                                    if (validation != null) {
+                                        validationErrors = listOf(validation)
+                                        error = null
+                                    } else {
+                                        setStage(
+                                            if (flowMode == "existing_member") PublicStage.EXISTING_CONTACT
+                                            else PublicStage.REVIEW,
+                                        )
+                                    }
+                                }
                             },
                             size = VendaButtonSize.MEDIUM,
                             modifier = Modifier.weight(1.2f),

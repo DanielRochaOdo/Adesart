@@ -12,11 +12,15 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -27,53 +31,62 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.ui.theme.VendaRadius
 import br.com.vendamais.mobile.ui.theme.VendaSpacing
+import br.com.vendamais.mobile.ui.theme.LiquidGlassDark
+import br.com.vendamais.mobile.ui.theme.LiquidGlassDarkStrong
+import br.com.vendamais.mobile.ui.theme.LiquidGlassLight
+import br.com.vendamais.mobile.ui.theme.LiquidGlassLightStrong
+import kotlin.math.max
 
 @Composable
 fun ScreenBackground(content: @Composable () -> Unit) {
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
-    val backgroundBrush = if (dark) {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFF08111F),
-                Color(0xFF0A1524),
-                Color(0xFF07101D),
-            ),
-        )
+    val baseColor = if (dark) Color(0xFF08111F) else Color(0xFFE7EEEB)
+    val greenGlow = if (dark) {
+        Color(0xFF10B981).copy(alpha = 0.15f)
     } else {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFFDCE8E2),
-                Color(0xFFE7EEEB),
-                Color(0xFFEAF1ED),
-            ),
-        )
+        Color(0xFF10B981).copy(alpha = 0.14f)
     }
-    val glowBrush = if (dark) {
-        Brush.radialGradient(
-            colors = listOf(
-                Color(0xFF10B981).copy(alpha = 0.16f),
-                Color.Transparent,
-            ),
-        )
+    val cyanGlow = if (dark) {
+        Color(0xFF0E7490).copy(alpha = 0.08f)
     } else {
-        Brush.radialGradient(
-            colors = listOf(
-                Color(0xFF10B981).copy(alpha = 0.13f),
-                Color.Transparent,
-            ),
-        )
+        Color(0xFF14B8A6).copy(alpha = 0.07f)
     }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(backgroundBrush),
+            .drawWithCache {
+                val largestSide = max(size.width, size.height)
+                val greenBrush = Brush.radialGradient(
+                    colors = listOf(greenGlow, Color.Transparent),
+                    center = Offset(size.width * 0.10f, -size.height * 0.08f),
+                    radius = largestSide * 0.70f,
+                )
+                val cyanBrush = Brush.radialGradient(
+                    colors = listOf(cyanGlow, Color.Transparent),
+                    center = Offset(size.width * 0.92f, size.height * 0.06f),
+                    radius = largestSide * 0.58f,
+                )
+                val topWash = Brush.verticalGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = if (dark) 0.012f else 0.055f),
+                        Color.Transparent,
+                    ),
+                    endY = size.height * 0.30f,
+                )
+                onDrawBehind {
+                    drawRect(baseColor)
+                    drawRect(greenBrush)
+                    drawRect(cyanBrush)
+                    drawRect(topWash)
+                }
+            },
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(glowBrush),
-        )
-        content()
+        CompositionLocalProvider(
+            LocalContentColor provides MaterialTheme.colorScheme.onBackground,
+        ) {
+            content()
+        }
     }
 }
 
@@ -90,47 +103,29 @@ fun WebCard(
 ) {
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val shape = RoundedCornerShape(VendaRadius.xl)
-    val surfaceBrush = if (dark) {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFF172338).copy(alpha = 0.84f),
-                Color(0xFF0F1A2C).copy(alpha = 0.72f),
-            ),
-        )
-    } else {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFFF8FBF9).copy(alpha = 0.90f),
-                Color(0xFFEFF6F2).copy(alpha = 0.76f),
-            ),
-        )
-    }
-    val glowBrush = Brush.radialGradient(
+    val baseColor = if (dark) LiquidGlassDark else LiquidGlassLight
+    val highlightBrush = Brush.verticalGradient(
         colors = listOf(
-            MaterialTheme.colorScheme.primary.copy(alpha = if (dark) 0.10f else 0.09f),
-            Color.Transparent,
+            Color.White.copy(alpha = if (dark) 0.022f else 0.20f),
+            Color.White.copy(alpha = if (dark) 0.006f else 0.015f),
         ),
     )
     Box(
         modifier = modifier
             .shadow(
-                elevation = if (dark) 14.dp else 10.dp,
+                elevation = if (dark) 12.dp else 10.dp,
                 shape = shape,
-                ambientColor = if (dark) Color.Black.copy(alpha = 0.38f) else Color(0xFF0F172A).copy(alpha = 0.13f),
-                spotColor = if (dark) Color.Black.copy(alpha = 0.42f) else Color(0xFF0F172A).copy(alpha = 0.10f),
+                ambientColor = if (dark) Color.Black.copy(alpha = 0.24f) else Color(0xFF0F172A).copy(alpha = 0.085f),
+                spotColor = if (dark) Color.Black.copy(alpha = 0.26f) else Color(0xFF0F172A).copy(alpha = 0.07f),
             )
-            .background(surfaceBrush, shape)
+            .background(baseColor, shape)
+            .background(highlightBrush, shape)
             .border(
                 1.dp,
-                if (dark) Color.White.copy(alpha = 0.09f) else Color(0xFF334155).copy(alpha = 0.14f),
+                if (dark) Color.White.copy(alpha = 0.075f) else Color(0xFF1E293B).copy(alpha = 0.14f),
                 shape,
             ),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(glowBrush, shape),
-        )
         Column {
             if (title != null) {
                 Column {
@@ -146,8 +141,12 @@ fun WebCard(
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.58f))
                 }
             }
-            Box(modifier = Modifier.padding(contentPadding)) {
-                content()
+            CompositionLocalProvider(
+                LocalContentColor provides MaterialTheme.colorScheme.onSurface,
+            ) {
+                Box(modifier = Modifier.padding(contentPadding)) {
+                    content()
+                }
             }
         }
     }
@@ -162,24 +161,10 @@ fun ScreenHeading(
 ) {
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val shape = RoundedCornerShape(VendaRadius.xxl)
-    val heroBrush = if (dark) {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFF183047).copy(alpha = 0.94f),
-                Color(0xFF0F1A2C).copy(alpha = 0.82f),
-            ),
-        )
-    } else {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFFE1F2E9).copy(alpha = 0.95f),
-                Color(0xFFF4F8F6).copy(alpha = 0.84f),
-            ),
-        )
-    }
-    val heroGlow = Brush.radialGradient(
+    val heroColor = if (dark) LiquidGlassDarkStrong else LiquidGlassLightStrong
+    val heroHighlight = Brush.verticalGradient(
         colors = listOf(
-            MaterialTheme.colorScheme.primary.copy(alpha = if (dark) 0.18f else 0.16f),
+            Color.White.copy(alpha = if (dark) 0.025f else 0.26f),
             Color.Transparent,
         ),
     )
@@ -187,23 +172,19 @@ fun ScreenHeading(
         modifier = modifier
             .fillMaxWidth()
             .shadow(
-                elevation = if (dark) 15.dp else 11.dp,
+                elevation = if (dark) 14.dp else 11.dp,
                 shape = shape,
-                ambientColor = if (dark) Color.Black.copy(alpha = 0.40f) else Color(0xFF0F172A).copy(alpha = 0.13f),
-                spotColor = if (dark) Color.Black.copy(alpha = 0.42f) else Color(0xFF0F172A).copy(alpha = 0.10f),
+                ambientColor = if (dark) Color.Black.copy(alpha = 0.26f) else Color(0xFF0F172A).copy(alpha = 0.10f),
+                spotColor = if (dark) Color.Black.copy(alpha = 0.28f) else Color(0xFF0F172A).copy(alpha = 0.08f),
             )
-            .background(heroBrush, shape)
+            .background(heroColor, shape)
+            .background(heroHighlight, shape)
             .border(
                 1.dp,
-                if (dark) Color.White.copy(alpha = 0.09f) else Color(0xFF059669).copy(alpha = 0.20f),
+                if (dark) Color.White.copy(alpha = 0.075f) else Color(0xFF1E293B).copy(alpha = 0.14f),
                 shape,
             ),
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(heroGlow, shape),
-        )
         Column(
             modifier = Modifier.padding(horizontal = VendaSpacing.x5, vertical = VendaSpacing.x5),
             verticalArrangement = Arrangement.spacedBy(VendaSpacing.x1),

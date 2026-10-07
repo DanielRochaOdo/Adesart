@@ -116,6 +116,9 @@ Deno.serve(async (req: Request) => {
     const supabase = createServiceClient();
     const attempt = await resolveAttempt(supabase, attemptToken);
     if (!attempt || attempt.status !== "authenticated" || !attempt.profile_snapshot) return jsonResponse({ error: "Sessao expirada. Inicie novamente.", code: "SESSION_EXPIRED" }, 401);
+    if ((attempt.flow_mode || "new_member") !== "new_member") {
+      return jsonResponse({ error: "Esta sessao nao permite preparar uma nova adesao.", code: "INVALID_FLOW_MODE" }, 409);
+    }
 
     const { data: link, error: linkError } = await supabase.from("cadastro_links").select("*").eq("id", attempt.link_id).maybeSingle();
     if (linkError || !link || !link.is_active) return jsonResponse({ error: "Link indisponivel" }, 410);
