@@ -555,6 +555,9 @@ Deno.serve(async (req: Request) => {
     stage = "resolve_attempt";
     const attempt = await resolveAttempt(supabase, body.attemptToken);
     if (!attempt || attempt.status !== "authenticated") return jsonResponse({ error: "Sessao expirada" }, 401);
+    if ((attempt.flow_mode || "new_member") !== "new_member") {
+      return jsonResponse({ error: "Esta sessao nao permite concluir uma nova adesao.", code: "INVALID_FLOW_MODE" }, 409);
+    }
 
     stage = "load_contract_session";
     const tokenHash = await sha256(body.contractToken.trim());
