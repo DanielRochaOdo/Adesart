@@ -18,6 +18,7 @@ import br.com.vendamais.mobile.data.models.PublicCadastroCheckCpfResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroContractPayload
 import br.com.vendamais.mobile.data.models.PublicCadastroContractPrepareResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroDependentLookupResponse
+import br.com.vendamais.mobile.data.models.PublicCadastroDependente
 import br.com.vendamais.mobile.data.models.PublicCadastroLinkResolveResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroPayload
 import br.com.vendamais.mobile.data.models.PublicCadastroSubmitResponse
@@ -368,17 +369,16 @@ class CadastroWorkflowRepository(
         val payload = buildJsonObject {
             put("is_active", false)
             put("deleted_at", java.time.OffsetDateTime.now().toString())
+            put("deleted_by", session.userId)
         }
 
-        client.safePost<List<CadastroLinkItem>>(
+        client.safePatch<List<CadastroLinkItem>>(
             url = "${AppConfig.supabaseUrl}/rest/v1/cadastro_links?id=eq.$linkId",
             json = json,
             body = payload,
         ) {
             applyAuthHeaders(session)
             header("Prefer", "return=representation")
-            method = io.ktor.http.HttpMethod.Patch
-            contentType(ContentType.Application.Json)
         }
     }
 
@@ -2247,6 +2247,36 @@ class CadastroWorkflowRepository(
             body = buildJsonObject {
                 put("attemptToken", attemptToken.trim())
                 put("cpf", CadastroPayloadBuilder.normalizeDigits(cpf))
+            },
+        )
+    }
+
+    suspend fun submitPublicDependents(
+        attemptToken: String,
+        contractToken: String,
+        acceptedTerms: Boolean,
+        acceptedData: Boolean,
+        acceptedCoverage: Boolean,
+        confirmedPhone: String,
+        confirmedEmail: String,
+        dependents: List<PublicCadastroDependente>,
+    ): PublicCadastroSubmitResponse {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-dependent-submit",
+            json = json,
+            body = buildJsonObject {
+                put("attemptToken", attemptToken.trim())
+                put("contractToken", contractToken.trim())
+                put("acceptedTerms", acceptedTerms)
+                put("acceptedData", acceptedData)
+                put("acceptedCoverage", acceptedCoverage)
+                put("confirmedPhone", CadastroPayloadBuilder.normalizeDigits(confirmedPhone))
+                put("confirmedEmail", confirmedEmail.trim().lowercase(Locale.ROOT))
+                put("dependents", buildJsonArray {
+                    dependents.forEach { dependent ->
+                        add(json.encodeToJsonElement(PublicCadastroDependente.serializer(), dependent))
+                    }
+                })
             },
         )
     }

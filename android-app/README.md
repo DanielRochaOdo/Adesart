@@ -1,107 +1,82 @@
-# Android App
+# Venda+ Mobile — Android + iOS
 
-Aplicação Android nativa em Kotlin + Jetpack Compose do Adesart.
+Workspace mobile do Adesart/Venda+.
 
-Este diretório faz parte do repositório canônico `Tecnologia-odonto/Adesart`. O Android é outro cliente do mesmo produto e deve consumir as mesmas Edge Functions, migrations e regras de negócio usadas pelo Web. Não existe backend específico do Mobile.
+O produto possui tres clientes que devem permanecer em paridade por padrao:
 
-## Estado atual
+- Web: `../src/`
+- Android: `app/`
+- iOS: `iosApp/`
+- Codigo compartilhado: `shared/`
 
-- Login nativo com Supabase Auth.
-- Sessao persistida com refresh de token.
-- Dashboard nativo com indicadores do mes e drill-down por vendedor.
-- Modulo de cadastros nativo com listagem, filtro e detalhe.
-- Perfil do usuario e contexto do app.
-- Build debug validado localmente.
+O backend continua canonico no Supabase. Nao existe backend exclusivo para Android ou iOS.
 
-## O que ainda depende de configuracao
+## Android
 
-Preencha `android-app/local.properties` com:
+O Android permanece nativo em Kotlin + Jetpack Compose, com os fluxos existentes preservados.
 
-- `sdk.dir`
-- `supabaseUrl`
-- `supabaseAnonKey`
-- `publicAppUrl`
-
-Sem `supabaseUrl` e `supabaseAnonKey`, o app abre mas nao autentica.
-
-## Build
-
-Opcao 1:
+Build de teste:
 
 ```powershell
 cd android-app
-.\build-debug.ps1
+.\gradlew.bat assembleStandardDebug
 ```
 
-Opcao 2:
+Release APK + AAB:
 
 ```powershell
 cd android-app
-$env:JAVA_HOME='C:\Program Files\Microsoft\jdk-21.0.10.7-hotspot'
-$env:Path="$env:JAVA_HOME\bin;$env:Path"
-.\gradlew.bat assembleDebug
+.\gradlew.bat renameReleaseApk renameReleaseBundle
 ```
 
-APK de debug gerado em:
+Os artefatos ficam em:
 
-`android-app/app/build/outputs/apk/debug/app-debug.apk`
+`android-app/app/build/outputs/release-artifacts/`
 
-## Release para Play Store
+## Shared Kotlin Multiplatform
 
-Para publicar na Google Play, gere o bundle de release:
+O modulo `shared/` fornece a fundacao Kotlin Multiplatform/Compose Multiplatform utilizada pelo iOS e preparada para receber regras e telas compartilhadas gradualmente.
 
-```powershell
+Targets configurados:
+
+- Android
+- iOS device arm64
+- iOS Simulator arm64
+- iOS Simulator x64
+
+A camada compartilhada ja inclui:
+
+- configuracao canonica do Venda+;
+- cliente HTTP Ktor multiplataforma;
+- gateway Supabase comum;
+- shell Compose Multiplatform;
+- WebView de paridade para disponibilizar imediatamente o produto completo no iOS sem duplicar regras.
+
+## iOS
+
+O host Xcode esta em:
+
+`android-app/iosApp/VendaMaisIOS.xcodeproj`
+
+Requisitos para compilar/instalar:
+
+- macOS;
+- Xcode;
+- JDK 17+;
+- Apple Developer Team para dispositivo fisico/TestFlight/App Store.
+
+Antes de abrir o Xcode, sincronize a versao:
+
+```bash
 cd android-app
-.\gradlew.bat bundleRelease
+./gradlew syncIosVersion
+open iosApp/VendaMaisIOS.xcodeproj
 ```
 
-Bundle gerado em:
+No primeiro uso em um Mac, selecione o seu Development Team no target `VendaMaisIOS`.
 
-`android-app/app/build/outputs/bundle/release/app-release.aab`
+Para detalhes de release consulte `IOS_RELEASE.md`.
 
-Antes do envio, confirme:
+## Paridade
 
-- `local.properties` com `releaseStoreFile`, `releaseStorePassword`, `releaseKeyAlias` e `releaseKeyPassword`
-- `supabaseUrl`, `supabaseAnonKey` e `publicAppUrl` apontando para ambiente de producao
-- `updateMetadataUrl` apontando para um JSON publico com os dados da versao
-- `updateApkUrl` apontando para o APK publico de fallback
-- `version.properties` com `VERSION_CODE` sempre maior que o envio anterior
-- assinatura de release valida e testada
-- politica de privacidade publica e ficha Data Safety preenchida no Console do Google Play
-
-## Atualizacao propria
-
-O app pode checar um JSON publico com este formato:
-
-```json
-{
-  "versionCode": 85,
-  "versionName": "1.0.85",
-  "apkUrl": "https://seudominio.com/updates/vendamais-mobile-v1.0.85.apk",
-  "notes": "Atualizacao da versao 1.0.85"
-}
-```
-
-Se a `versionCode` for maior que a atual, o app mostra um aviso, baixa o APK e abre o instalador do Android.
-
-### Hospedagem na HostGator
-
-Use uma pasta publica dentro de `public_html`, por exemplo:
-
-- `https://seudominio.com/updates/android-update.json`
-- `https://seudominio.com/updates/vendamais-mobile-v1.0.85.apk`
-
-No `android-app/local.properties`, configure:
-
-```properties
-updateMetadataUrl=https://seudominio.com/updates/android-update.json
-updateApkUrl=https://seudominio.com/updates/vendamais-mobile-v1.0.85.apk
-```
-
-O ideal e manter `android-update.json` com URL fixa e trocar apenas o conteudo interno a cada versao.
-
-## Estrategia de migracao
-
-1. Manter autenticacao, dashboard e operacao principal de cadastros em Compose.
-2. Reaproveitar RPCs e Edge Functions ja existentes no Supabase.
-3. Evoluir criacao/edicao completa de cadastro e uploads em telas nativas incrementais.
+Por regra do projeto, mudancas funcionais devem ser avaliadas em Web + Android + iOS, salvo instrucao explicita em contrario. Consulte o `AGENTS.md` da raiz.

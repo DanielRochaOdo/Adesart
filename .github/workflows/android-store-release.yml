@@ -1,0 +1,231 @@
+name: Android Store Release
+run-name: Android Store Release ${{ github.ref_name }}
+
+on:
+  push:
+    tags:
+      - "android-store-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build + Google Play
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release metadata
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+
+          if [[ ! "$tag" =~ ^android-store-v([0-9]+\.[0-9]+\.[0-9]+)-b([0-9]+)-[0-9]{14}$ ]]; then
+            echo "::error::Tag de release Android invalida: $tag"
+            exit 1
+          fi
+
+          echo "version_name=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Validate Android production secrets
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD SUPABASE_URL SUPABASE_ANON_KEY GOOGLE_PLAY_SERVICE_ACCOUNT_JSON; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::GitHub Secret ausente: $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Prepare Android signing and configuration
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          PUBLIC_APP_URL: ${{ vars.PUBLIC_APP_URL }}
+        run: |
+          set -euo pipefail
+          mkdir -p android-app/keystore
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android-app/keystore/ci-release.jks
+
+          public_app_url="${PUBLIC_APP_URL:-https://vendamais.odontoart.com}"
+          cat > android-app/local.properties <<EOF
+          supabaseUrl=${SUPABASE_URL}
+          supabaseAnonKey=${SUPABASE_ANON_KEY}
+          publicAppUrl=${public_app_url}
+          releaseStoreFile=keystore/ci-release.jks
+          releaseStorePassword=${ANDROID_KEYSTORE_PASSWORD}
+          releaseKeyAlias=${ANDROID_KEY_ALIAS}
+          releaseKeyPassword=${ANDROID_KEY_PASSWORD}
+          EOF
+
+      - name: Build signed APK and AAB
+        working-directory: android-app
+        shell: bash
+        env:
+          VENDA_VERSION_NAME: ${{ steps.release.outputs.version_name }}
+          VENDA_VERSION_CODE: ${{ steps.release.outputs.version_code }}
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon :app:renameReleaseApk :app:renameReleaseBundle
+
+          test -f "app/build/outputs/release-artifacts/vendamais-mobile-v${VENDA_VERSION_NAME}.apk"
+          test -f "app/build/outputs/release-artifacts/vendamais-mobile-v${VENDA_VERSION_NAME}.aab"
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vendamais-android-store-v${{ steps.release.outputs.version_name }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            android-app/app/build/outputs/release-artifacts/vendamais-mobile-v${{ steps.release.outputs.version_name }}.apk
+            android-app/app/build/outputs/release-artifacts/vendamais-mobile-v${{ steps.release.outputs.version_name }}.aab
+
+      - name: Install Google Play API dependencies
+        shell: bash
+        run: |
+          python3 -m pip install --disable-pip-version-check --quiet google-auth requests
+
+      - name: Publish AAB to Google Play production
+        shell: bash
+        env:
+          GOOGLE_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          VERSION_NAME: ${{ steps.release.outputs.version_name }}
+          VERSION_CODE: ${{ steps.release.outputs.version_code }}
+          PACKAGE_NAME: br.com.vendamais.mobile
+          AAB_PATH: android-app/app/build/outputs/release-artifacts/vendamais-mobile-v${{ steps.release.outputs.version_name }}.aab
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          import requests
+          from google.auth.transport.requests import Request as GoogleAuthRequest
+          from google.oauth2 import service_account
+
+          package_name = os.environ["PACKAGE_NAME"]
+          version_name = os.environ["VERSION_NAME"]
+          expected_version_code = str(os.environ["VERSION_CODE"])
+          aab_path = os.environ["AAB_PATH"]
+          service_account_info = json.loads(os.environ["GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"])
+
+          client_email = str(service_account_info.get("client_email") or "").strip()
+          project_id = str(service_account_info.get("project_id") or "").strip()
+          if not client_email:
+              raise RuntimeError("GOOGLE_PLAY_SERVICE_ACCOUNT_JSON sem client_email.")
+
+          print(f"Google Play service account: {client_email}")
+          if project_id:
+              print(f"Google Cloud project: {project_id}")
+          print(f"Google Play package: {package_name}")
+          print(f"Release solicitada: {version_name} ({expected_version_code})")
+
+          def ensure_google_response(response, stage):
+              if response.ok:
+                  return
+              try:
+                  payload = response.json()
+                  detail = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+              except Exception:
+                  detail = (response.text or "<sem corpo de resposta>").strip()
+              if len(detail) > 6000:
+                  detail = detail[:6000] + "...<truncado>"
+              print(
+                  f"::error title=Google Play API - {stage}::"
+                  f"HTTP {response.status_code}: {detail}"
+              )
+              raise RuntimeError(
+                  f"Google Play API falhou em '{stage}' com HTTP {response.status_code}."
+              )
+
+          credentials = service_account.Credentials.from_service_account_info(
+              service_account_info,
+              scopes=["https://www.googleapis.com/auth/androidpublisher"],
+          )
+          credentials.refresh(GoogleAuthRequest())
+          auth_headers = {"Authorization": f"Bearer {credentials.token}"}
+
+          base = f"https://androidpublisher.googleapis.com/androidpublisher/v3/applications/{package_name}"
+
+          response = requests.post(f"{base}/edits", headers=auth_headers, json={}, timeout=60)
+          ensure_google_response(response, "create edit")
+          edit_id = response.json()["id"]
+          print(f"Google Play edit criado: {edit_id}")
+
+          upload_url = (
+              f"https://androidpublisher.googleapis.com/upload/androidpublisher/v3/"
+              f"applications/{package_name}/edits/{edit_id}/bundles"
+          )
+          with open(aab_path, "rb") as bundle:
+              response = requests.post(
+                  upload_url,
+                  params={"uploadType": "media"},
+                  headers={**auth_headers, "Content-Type": "application/octet-stream"},
+                  data=bundle,
+                  timeout=600,
+              )
+          ensure_google_response(response, "upload bundle")
+          uploaded_version_code = str(response.json()["versionCode"])
+
+          if uploaded_version_code != expected_version_code:
+              raise RuntimeError(
+                  f"Version code do AAB ({uploaded_version_code}) difere do solicitado ({expected_version_code})."
+              )
+
+          track_payload = {
+              "track": "production",
+              "releases": [
+                  {
+                      "name": f"Venda+ {version_name}",
+                      "versionCodes": [uploaded_version_code],
+                      "status": "completed",
+                  }
+              ],
+          }
+
+          response = requests.put(
+              f"{base}/edits/{edit_id}/tracks/production",
+              headers={**auth_headers, "Content-Type": "application/json"},
+              json=track_payload,
+              timeout=60,
+          )
+          ensure_google_response(response, "update production track")
+
+          response = requests.post(
+              f"{base}/edits/{edit_id}:commit",
+              headers=auth_headers,
+              timeout=60,
+          )
+          ensure_google_response(response, "commit edit")
+
+          print(
+              f"Venda+ {version_name} ({uploaded_version_code}) enviado ao track production do Google Play."
+          )
+          PY

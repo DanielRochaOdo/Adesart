@@ -14,5 +14,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "VendaMaisMobileAndroid"
+rootProject.name = "VendaMaisMobile"
 include(":app")
+include(":shared")

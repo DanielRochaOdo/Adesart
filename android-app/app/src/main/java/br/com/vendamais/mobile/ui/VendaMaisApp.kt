@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -64,6 +65,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.AppConfig
+import br.com.vendamais.mobile.BuildConfig
 import br.com.vendamais.mobile.domain.cadastro.isPendingCadastroStatus
 import br.com.vendamais.mobile.ui.components.ScreenBackground
 import br.com.vendamais.mobile.ui.components.VendaBrandIcon
@@ -130,6 +132,35 @@ fun VendaMaisApp(
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(AppConfig.publicAppUrl)))
             }
         }
+    }
+    val openPlayStore = remember(context) {
+        {
+            val packageId = context.packageName
+            val marketIntent = Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("market://details?id=$packageId"),
+            ).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val webIntent = Intent(
+                Intent.ACTION_VIEW,
+                Uri.parse("https://play.google.com/store/apps/details?id=$packageId"),
+            ).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+
+            runCatching { context.startActivity(marketIntent) }
+                .onFailure { context.startActivity(webIntent) }
+            Unit
+        }
+    }
+
+    if (state.appVersionBlocked) {
+        MandatoryAppUpdateScreen(
+            installedVersion = BuildConfig.VERSION_NAME,
+            onUpdate = openPlayStore,
+        )
+        return
     }
 
     LaunchedEffect(deepLinkToken) {
@@ -536,41 +567,94 @@ fun VendaMaisApp(
 }
 
 @Composable
+private fun MandatoryAppUpdateScreen(
+    installedVersion: String,
+    onUpdate: () -> Unit,
+) {
+    ScreenBackground {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                shadowElevation = 10.dp,
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    VendaBrandIcon(
+                        modifier = Modifier.size(58.dp),
+                        showPlusBubble = false,
+                    )
+                    Text(
+                        text = "Atualização obrigatória",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "Esta versão do Venda+ foi descontinuada e não pode mais ser utilizada. Atualize o aplicativo pela Google Play para continuar.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = "Versão instalada: $installedVersion",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Button(
+                        onClick = onUpdate,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Atualizar pela Google Play")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun AppHeaderBar(
     profileName: String,
     profileRole: String,
 ) {
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val shape = RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp)
-    val glassBrush = if (dark) {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFF172338).copy(alpha = 0.92f),
-                Color(0xFF0E192A).copy(alpha = 0.82f),
-            ),
-        )
+    val glassColor = if (dark) {
+        Color(0xFF0F172A).copy(alpha = 0.80f)
     } else {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFFF9FCFA).copy(alpha = 0.94f),
-                Color(0xFFEAF2EE).copy(alpha = 0.84f),
-            ),
-        )
+        Color(0xFFF7FAF8).copy(alpha = 0.88f)
     }
+    val highlightBrush = Brush.verticalGradient(
+        colors = listOf(
+            Color.White.copy(alpha = if (dark) 0.035f else 0.20f),
+            Color.Transparent,
+        ),
+    )
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
             .shadow(
-                elevation = if (dark) 14.dp else 10.dp,
+                elevation = if (dark) 12.dp else 9.dp,
                 shape = shape,
-                ambientColor = if (dark) Color.Black.copy(alpha = 0.40f) else Color(0xFF0F172A).copy(alpha = 0.13f),
-                spotColor = if (dark) Color.Black.copy(alpha = 0.42f) else Color(0xFF0F172A).copy(alpha = 0.10f),
+                ambientColor = if (dark) Color.Black.copy(alpha = 0.24f) else Color(0xFF0F172A).copy(alpha = 0.08f),
+                spotColor = if (dark) Color.Black.copy(alpha = 0.26f) else Color(0xFF0F172A).copy(alpha = 0.06f),
             )
-            .background(glassBrush, shape)
+            .background(glassColor, shape)
+            .background(highlightBrush, shape)
             .border(
                 1.dp,
-                if (dark) Color.White.copy(alpha = 0.08f) else Color(0xFF334155).copy(alpha = 0.12f),
+                if (dark) Color.White.copy(alpha = 0.075f) else Color(0xFF1E293B).copy(alpha = 0.14f),
                 shape,
             ),
     ) {
@@ -625,35 +709,32 @@ private fun MagicBottomNavigationBar(
 
     val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
-    val glassBrush = if (dark) {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFF152136).copy(alpha = 0.88f),
-                Color(0xFF0B1525).copy(alpha = 0.82f),
-            ),
-        )
+    val glassColor = if (dark) {
+        Color(0xFF0F172A).copy(alpha = 0.80f)
     } else {
-        Brush.verticalGradient(
-            listOf(
-                Color(0xFFF8FBF9).copy(alpha = 0.92f),
-                Color(0xFFE8F0EC).copy(alpha = 0.84f),
-            ),
-        )
+        Color(0xFFF7FAF8).copy(alpha = 0.88f)
     }
+    val navHighlightBrush = Brush.verticalGradient(
+        colors = listOf(
+            Color.White.copy(alpha = if (dark) 0.035f else 0.18f),
+            Color.Transparent,
+        ),
+    )
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
             .shadow(
-                elevation = if (dark) 16.dp else 11.dp,
+                elevation = if (dark) 13.dp else 10.dp,
                 shape = shape,
-                ambientColor = if (dark) Color.Black.copy(alpha = 0.42f) else Color(0xFF0F172A).copy(alpha = 0.14f),
-                spotColor = if (dark) Color.Black.copy(alpha = 0.44f) else Color(0xFF0F172A).copy(alpha = 0.11f),
+                ambientColor = if (dark) Color.Black.copy(alpha = 0.25f) else Color(0xFF0F172A).copy(alpha = 0.085f),
+                spotColor = if (dark) Color.Black.copy(alpha = 0.27f) else Color(0xFF0F172A).copy(alpha = 0.07f),
             )
-            .background(glassBrush, shape)
+            .background(glassColor, shape)
+            .background(navHighlightBrush, shape)
             .border(
                 1.dp,
-                if (dark) Color.White.copy(alpha = 0.08f) else Color(0xFF334155).copy(alpha = 0.12f),
+                if (dark) Color.White.copy(alpha = 0.075f) else Color(0xFF1E293B).copy(alpha = 0.14f),
                 shape,
             ),
     ) {
@@ -687,9 +768,9 @@ private fun MagicBottomNavigationBar(
                     Surface(
                         modifier = Modifier.size(width = 44.dp, height = 32.dp),
                         shape = RoundedCornerShape(16.dp),
-                        color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (dark) 0.72f else 0.82f) else Color.Transparent,
+                        color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = if (dark) 0.54f else 0.62f) else Color.Transparent,
                         border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.20f)) else null,
-                        shadowElevation = if (selected) 3.dp else 0.dp,
+                        shadowElevation = if (selected) 7.dp else 0.dp,
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
