@@ -641,7 +641,7 @@ export function PublicCadastroLink() {
       });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || 'Não foi possível incluir os dependentes.');
-      setSuccessMessage(result.warning || result.message || 'Dependente(s) incluído(s) com sucesso!');
+      setSuccessMessage(result.message || 'Dependente(s) incluído(s) com sucesso!');
       sessionStorage.removeItem('adesart-public-attempt-token');
       setStage('success');
     } catch (submitError) {
