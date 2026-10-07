@@ -9,7 +9,7 @@ import androidx.compose.ui.viewinterop.UIKitView
 import kotlinx.cinterop.ExperimentalForeignApi
 import platform.CoreGraphics.CGRectMake
 import platform.Foundation.NSBundle
-import platform.Foundation.NSObject
+import platform.darwin.NSObject
 import platform.Foundation.NSURL
 import platform.Foundation.NSURLRequest
 import platform.UIKit.UIAlertAction
