@@ -1115,20 +1115,39 @@ fun PublicAdesaoParityScreen(
                     ) {
                         VendaButton(
                             label = "Voltar",
-                            onClick = { setStage(PublicStage.DETAILS) },
+                            onClick = {
+                                setStage(
+                                    if (flowMode == "existing_member") PublicStage.EXISTING_MEMBER
+                                    else PublicStage.DETAILS,
+                                )
+                            },
                             style = VendaButtonStyle.TERTIARY,
                             size = VendaButtonSize.MEDIUM,
                             modifier = Modifier.weight(0.8f),
                             enabled = !busy,
                         )
                         VendaButton(
-                            label = if (dependentes.isEmpty()) "Continuar sem dependentes" else "Continuar",
+                            label = if (flowMode != "existing_member" && dependentes.isEmpty()) {
+                                "Continuar sem dependentes"
+                            } else {
+                                "Continuar"
+                            },
                             onClick = {
-                                val validation = validateDependents(cpf, dependentes)
-                                if (validation != null) {
-                                    validationErrors = listOf(validation)
+                                if (flowMode == "existing_member" && dependentes.isEmpty()) {
+                                    validationErrors = listOf("Adicione ao menos um dependente.")
                                     error = null
-                                } else setStage(PublicStage.REVIEW)
+                                } else {
+                                    val validation = validateDependents(cpf, dependentes)
+                                    if (validation != null) {
+                                        validationErrors = listOf(validation)
+                                        error = null
+                                    } else {
+                                        setStage(
+                                            if (flowMode == "existing_member") PublicStage.EXISTING_CONTACT
+                                            else PublicStage.REVIEW,
+                                        )
+                                    }
+                                }
                             },
                             size = VendaButtonSize.MEDIUM,
                             modifier = Modifier.weight(1.2f),
