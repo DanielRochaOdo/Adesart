@@ -21,7 +21,7 @@ import { useConfigCadastro } from '../contexts/ConfigCadastroContext';
 import { formatCEP, formatCPF, formatMobilePhone, formatPhone, removeCPFMask, validateCPF } from '../lib/cpf';
 import { getPublicLinkVisitId } from '../lib/publicLinkVisit';
 
-type Stage = 'identify' | 'details' | 'dependents' | 'review' | 'contract' | 'success' | 'completed' | 'not_eligible';
+type Stage = 'identify' | 'details' | 'existing_member' | 'dependents' | 'existing_contact' | 'existing_review' | 'review' | 'contract' | 'success' | 'completed' | 'not_eligible';
 
 type PublicPlan = {
   Plano: number;
@@ -296,8 +296,14 @@ export function PublicCadastroLink() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [acceptedData, setAcceptedData] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [flowMode, setFlowMode] = useState<'new_member' | 'existing_member'>('new_member');
+  const [existingMember, setExistingMember] = useState<{ nome: string; empresa: string } | null>(null);
+  const [existingPlans, setExistingPlans] = useState<PublicPlan[]>([]);
 
-  const plans = useMemo(() => linkData?.planos || [], [linkData]);
+  const plans = useMemo(
+    () => flowMode === 'existing_member' ? existingPlans : (linkData?.planos || []),
+    [existingPlans, flowMode, linkData],
+  );
   const coverageCode = form.titularPlano;
   const coverageName = coverageNameFromCode(coverageCode);
   // A preparacao no servidor determina se ha cobertura para TODOS os planos.
@@ -371,7 +377,9 @@ export function PublicCadastroLink() {
         setStage('not_eligible');
         return;
       }
-      if (result.state !== 'authenticated' || !result.attemptToken || !result.person) {
+
+      const isExistingMember = result.state === 'existing_member';
+      if ((!isExistingMember && result.state !== 'authenticated') || !result.attemptToken || !result.person) {
         throw new Error('Não foi possível iniciar a adesão.');
       }
 
@@ -381,10 +389,18 @@ export function PublicCadastroLink() {
         || contacts.find((item) => ['whatsapp', 'celular', 'fixo'].includes(item.tipo));
       const primaryEmail = contacts.find((item) => item.tipo === 'email' && item.principal)
         || contacts.find((item) => item.tipo === 'email');
+      const memberPlans = Array.isArray(result.plans) ? result.plans as PublicPlan[] : [];
 
       setAttemptToken(result.attemptToken);
       sessionStorage.setItem('adesart-public-attempt-token', result.attemptToken);
       setCpf(formatCPF(normalizedCpf));
+      setFlowMode(isExistingMember ? 'existing_member' : 'new_member');
+      setExistingMember(isExistingMember ? {
+        nome: String(result.member?.nome || person.nome || ''),
+        empresa: String(result.member?.empresa || ''),
+      } : null);
+      setExistingPlans(isExistingMember ? memberPlans : []);
+      setDependents([]);
       setForm({
         nome: person.nome || '',
         dataNascimento: person.dataNascimento || birthDate,
@@ -395,8 +411,13 @@ export function PublicCadastroLink() {
         email: primaryEmail?.valor || '',
         contatosOriginais: contacts,
         endereco: { ...emptyAddress, ...(person.endereco || {}) },
-        titularPlano: plans.length === 1 ? plans[0].Plano : 0,
+        titularPlano: !isExistingMember && plans.length === 1 ? plans[0].Plano : 0,
       });
+
+      if (isExistingMember) {
+        setStage('existing_member');
+        return;
+      }
       setStage('details');
     } catch (authError) {
       setError(authError instanceof Error ? authError.message : 'Não foi possível validar seus dados.');
@@ -561,10 +582,67 @@ export function PublicCadastroLink() {
   };
 
   const goReview = () => {
+    if (flowMode === 'existing_member' && dependents.length === 0) {
+      setValidationErrors(['Adicione ao menos um dependente.']);
+      setError('');
+      return;
+    }
     const message = dependentsValid();
     if (message) { setValidationErrors([message]); setError(''); return; }
     setError('');
-    setStage('review');
+    setStage(flowMode === 'existing_member' ? 'existing_contact' : 'review');
+  };
+
+  const goExistingReview = () => {
+    const pending = [
+      normalizePhone(form.telefone).length < 10 && 'Telefone / WhatsApp',
+      !isEmail(form.email) && 'E-mail',
+    ].filter(Boolean) as string[];
+    if (pending.length) {
+      setValidationErrors(pending);
+      setError('');
+      return;
+    }
+    setError('');
+    setStage('existing_review');
+  };
+
+  const submitExistingDependents = async () => {
+    const message = dependentsValid();
+    if (message || dependents.length === 0) {
+      setValidationErrors([message || 'Adicione ao menos um dependente.']);
+      setError('');
+      return;
+    }
+    if (normalizePhone(form.telefone).length < 10 || !isEmail(form.email)) {
+      setStage('existing_contact');
+      setValidationErrors(['Confirme um telefone e e-mail válidos.']);
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+    try {
+      const response = await fetch(apiUrl('cadastro-public-dependent-submit'), {
+        method: 'POST',
+        headers: publicHeaders(),
+        body: JSON.stringify({
+          attemptToken,
+          confirmedPhone: normalizePhone(form.telefone),
+          confirmedEmail: form.email.trim().toLowerCase(),
+          dependents: dependents.map(({ id: _id, ...dep }) => dep),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Não foi possível incluir os dependentes.');
+      setSuccessMessage(result.warning || result.message || 'Dependente(s) incluído(s) com sucesso!');
+      sessionStorage.removeItem('adesart-public-attempt-token');
+      setStage('success');
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'Não foi possível incluir os dependentes.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const buildContacts = (): Contact[] => {
@@ -667,8 +745,8 @@ export function PublicCadastroLink() {
         <header className="vm-public-header px-5 py-6 text-white sm:px-7 sm:py-7">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-xs font-medium uppercase tracking-[0.16em] text-emerald-100">Adesão Odontoart</p>
-              <h1 className="truncate text-lg font-semibold">{linkData?.empresaNome || 'Plano odontológico'}</h1>
+              <p className="text-xs font-medium uppercase tracking-[0.16em] text-emerald-100">{flowMode === 'existing_member' ? 'Inclusão de dependente' : 'Adesão Odontoart'}</p>
+              <h1 className="truncate text-lg font-semibold">{flowMode === 'existing_member' ? (existingMember?.empresa || linkData?.empresaNome || 'Plano odontológico') : (linkData?.empresaNome || 'Plano odontológico')}</h1>
               {(linkData || knownConsultant)?.vendedorNome && <p className="mt-1 text-xs text-emerald-100">Consultor: {(linkData || knownConsultant)?.vendedorNome}</p>}
               {(linkData || knownConsultant)?.vendedorTelefone && <p className="mt-0.5 text-xs text-emerald-100">WhatsApp: {formatMobilePhone((linkData || knownConsultant)?.vendedorTelefone || '')}</p>}
             </div>
@@ -679,12 +757,21 @@ export function PublicCadastroLink() {
           {whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) && <a href={whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) || '#'} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-extrabold text-white shadow-lg ring-2 ring-orange-200 transition-colors hover:bg-orange-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-300"><MessageCircle className="h-5 w-5" />Precisa de ajuda? Fale com seu consultor</a>}
         </header>
         <div className="vm-public-content p-5 sm:p-7">
-          {linkData && !['success', 'completed', 'not_eligible'].includes(stage) && <div aria-label="Progresso da adesão" className="vm-public-progress mb-5 grid grid-cols-4 gap-1.5 rounded-2xl p-1.5 text-center text-[10px] font-semibold">
-            {['Dados', 'Plano', 'Dependentes', 'Confirmação'].map((label, index) => {
-              const currentStep = stage === 'identify' ? 0 : stage === 'details' ? (form.titularPlano ? 1 : 0) : stage === 'dependents' ? 2 : 3;
-              return <span key={label} className={`rounded-xl border px-1 py-2 ${index <= currentStep ? 'vm-public-step-active' : 'vm-public-step'}`}>{label}</span>;
-            })}
-          </div>}
+          {linkData && !['success', 'completed', 'not_eligible', 'existing_member'].includes(stage) && (
+            flowMode === 'existing_member'
+              ? <div aria-label="Progresso da inclusão" className="vm-public-progress mb-5 grid grid-cols-3 gap-1.5 rounded-2xl p-1.5 text-center text-[10px] font-semibold">
+                  {['Dependentes', 'Contato', 'Confirmação'].map((label, index) => {
+                    const currentStep = stage === 'dependents' ? 0 : stage === 'existing_contact' ? 1 : 2;
+                    return <span key={label} className={`rounded-xl border px-1 py-2 ${index <= currentStep ? 'vm-public-step-active' : 'vm-public-step'}`}>{label}</span>;
+                  })}
+                </div>
+              : <div aria-label="Progresso da adesão" className="vm-public-progress mb-5 grid grid-cols-4 gap-1.5 rounded-2xl p-1.5 text-center text-[10px] font-semibold">
+                  {['Dados', 'Plano', 'Dependentes', 'Confirmação'].map((label, index) => {
+                    const currentStep = stage === 'identify' ? 0 : stage === 'details' ? (form.titularPlano ? 1 : 0) : stage === 'dependents' ? 2 : 3;
+                    return <span key={label} className={`rounded-xl border px-1 py-2 ${index <= currentStep ? 'vm-public-step-active' : 'vm-public-step'}`}>{label}</span>;
+                  })}
+                </div>
+          )}
           {children}
         </div>
       </main>
@@ -716,11 +803,11 @@ export function PublicCadastroLink() {
   if (stage === 'success') return shell(
     <div className="py-4 text-center">
       <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600" />
-      <h2 className="mt-4 text-2xl font-bold text-slate-900">Adesão recebida</h2>
-      <p className="mt-3 font-semibold text-emerald-700">Parabéns! Sua adesão foi recebida com sucesso.</p>
+      <h2 className="mt-4 text-2xl font-bold text-slate-900">{flowMode === 'existing_member' ? 'Dependente(s) incluído(s)' : 'Adesão recebida'}</h2>
+      <p className="mt-3 font-semibold text-emerald-700">{flowMode === 'existing_member' ? 'Sua solicitação foi concluída com sucesso.' : 'Parabéns! Sua adesão foi recebida com sucesso.'}</p>
       <p className="mt-2 text-sm leading-6 text-slate-600">{successMessage}</p>
       <ConsultantContact link={linkData} />
-      <div className="mt-5"><AppButtons /></div>
+      {flowMode !== 'existing_member' && <div className="mt-5"><AppButtons /></div>}
     </div>
   );
 
@@ -740,6 +827,32 @@ export function PublicCadastroLink() {
             </Button>
             {validationErrors.length > 0 && <p role="alert" className="text-sm text-red-700">Corrija os campos: {validationErrors.join(', ')}.</p>}
           </div>
+        </section>
+      )}
+
+      {stage === 'existing_member' && (
+        <section className="vm-public-section rounded-3xl p-5 sm:p-6">
+          <div className="text-center">
+            <CheckCircle2 className="mx-auto h-12 w-12 text-emerald-600" />
+            <h2 className="mt-4 text-2xl font-bold text-slate-900">Que bom ter você com a gente!</h2>
+            <p className="mx-auto mt-3 max-w-lg text-sm leading-6 text-slate-600">
+              Você já possui um plano ativo e pode aproveitar este momento para incluir novos dependentes de forma rápida e fácil.
+            </p>
+          </div>
+          <div className="vm-public-info mt-5 rounded-2xl p-4 text-sm">
+            <p><span className="text-slate-500">Associado:</span> <strong className="text-slate-900">{existingMember?.nome || form.nome}</strong></p>
+            <p className="mt-2"><span className="text-slate-500">Empresa:</span> <strong className="text-slate-900">{existingMember?.empresa || linkData.empresaNome}</strong></p>
+          </div>
+          <Button
+            onClick={() => {
+              if (dependents.length === 0) addDependent();
+              setError('');
+              setStage('dependents');
+            }}
+            className="mt-5 min-h-12 w-full text-base"
+          >
+            <Plus className="mr-2 h-5 w-5" />Incluir dependente
+          </Button>
         </section>
       )}
 
@@ -774,8 +887,8 @@ export function PublicCadastroLink() {
 
       {stage === 'dependents' && (
         <section className="vm-public-section rounded-3xl p-4 sm:p-5">
-          <button type="button" onClick={() => setStage('details')} className="mb-4 inline-flex items-center text-sm font-medium text-slate-600"><ChevronLeft className="mr-1 h-4 w-4" />Voltar</button>
-          <div className="flex items-start justify-between gap-4"><div><h2 className="text-xl font-bold text-slate-900">Dependentes</h2><p className="mt-1 text-sm text-slate-600">Inclua os dependentes que deseja cadastrar nesta adesão.</p></div><span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">{dependents.length}</span></div>
+          <button type="button" onClick={() => setStage(flowMode === 'existing_member' ? 'existing_member' : 'details')} className="mb-4 inline-flex items-center text-sm font-medium text-slate-600"><ChevronLeft className="mr-1 h-4 w-4" />Voltar</button>
+          <div className="flex items-start justify-between gap-4"><div><h2 className="text-xl font-bold text-slate-900">Dependentes</h2><p className="mt-1 text-sm text-slate-600">{flowMode === 'existing_member' ? 'Inclua os dependentes que deseja adicionar ao seu plano.' : 'Inclua os dependentes que deseja cadastrar nesta adesão.'}</p></div><span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">{dependents.length}</span></div>
           <div className="mt-5 space-y-4">
             {dependents.map((dep, index) => (
               <div key={dep.id} className="vm-public-info rounded-2xl p-4 sm:p-5">
@@ -795,8 +908,36 @@ export function PublicCadastroLink() {
             ))}
           </div>
           <button type="button" onClick={addDependent} className="vm-public-info mt-4 flex min-h-12 w-full items-center justify-center rounded-2xl border border-dashed border-emerald-500/40 px-4 text-sm font-semibold text-emerald-700 dark:text-emerald-300"><Plus className="mr-2 h-4 w-4" />Adicionar dependente</button>
-          <Button onClick={goReview} className="mt-5 min-h-12 w-full text-base">Continuar {dependents.length === 0 ? 'sem dependentes' : ''}</Button>
+          <Button onClick={goReview} className="mt-5 min-h-12 w-full text-base">Continuar {flowMode !== 'existing_member' && dependents.length === 0 ? 'sem dependentes' : ''}</Button>
           {validationErrors.length > 0 && <div role="alert" className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800">Corrija as pendências: {validationErrors.join(', ')}.</div>}
+        </section>
+      )}
+
+      {stage === 'existing_contact' && (
+        <section className="vm-public-section space-y-5 rounded-3xl p-5 sm:p-6">
+          <button type="button" onClick={() => setStage('dependents')} className="inline-flex items-center text-sm font-medium text-slate-600"><ChevronLeft className="mr-1 h-4 w-4" />Voltar</button>
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Confirme seus dados de contato</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-600">Usaremos estes dados para confirmar sua solicitação.</p>
+          </div>
+          <Input label="Telefone / WhatsApp" inputMode="tel" value={formatPhone(form.telefone)} onChange={(event) => setForm((prev) => ({ ...prev, telefone: event.target.value }))} required className="min-h-12" />
+          <Input label="E-mail" type="email" value={form.email} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} required className="min-h-12" />
+          <Button onClick={goExistingReview} className="min-h-12 w-full text-base">Continuar</Button>
+          {validationErrors.length > 0 && <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800">Corrija os campos: {validationErrors.join(', ')}.</div>}
+        </section>
+      )}
+
+      {stage === 'existing_review' && (
+        <section className="vm-public-section rounded-3xl p-4 sm:p-5">
+          <button type="button" onClick={() => setStage('existing_contact')} className="mb-4 inline-flex items-center text-sm font-medium text-slate-600"><ChevronLeft className="mr-1 h-4 w-4" />Voltar</button>
+          <h2 className="text-xl font-bold text-slate-900">Revise sua solicitação</h2>
+          <div className="mt-5 space-y-3 text-sm">
+            <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Responsável</span><strong className="mt-1 block text-slate-900">{existingMember?.nome || form.nome}</strong><span className="text-slate-600">{formatCPF(cpf)}</span></div>
+            <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Empresa</span><strong className="mt-1 block text-slate-900">{existingMember?.empresa || linkData.empresaNome}</strong></div>
+            <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Dependentes</span><strong className="mt-1 block text-slate-900">{dependents.length}</strong>{dependents.map((dep) => <p key={dep.id} className="mt-2 text-slate-600">{dep.nome} - {plans.find((plan) => plan.Plano === dep.plano)?.nomeExibicao}</p>)}</div>
+            <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Contato</span><strong className="mt-1 block text-slate-900">{formatPhone(form.telefone)}</strong><span className="text-slate-600">{form.email}</span></div>
+          </div>
+          <Button onClick={submitExistingDependents} disabled={busy} className="mt-5 min-h-12 w-full text-base">{busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}Confirmar inclusão</Button>
         </section>
       )}
 
