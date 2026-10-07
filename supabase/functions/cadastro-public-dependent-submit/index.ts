@@ -184,7 +184,9 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Empresa do associado nao identificada no ERP", code: "MEMBER_COMPANY_NOT_FOUND" }, 409);
     }
     const catalog = await companyPlans(companyCode);
-    const planMap = new Map<number, any>(catalog.plans.map((plan: any) => [Number(plan.Plano), plan]));
+    const planMap = new Map<number, any>(
+      catalog.plans.map((plan: any): [number, any] => [Number(plan.Plano), plan]),
+    );
     for (const dep of normalized) {
       if (!planMap.has(dep.plano)) {
         return jsonResponse({ error: "Um dos planos selecionados nao esta mais disponivel.", code: "PLAN_NOT_AVAILABLE" }, 409);
