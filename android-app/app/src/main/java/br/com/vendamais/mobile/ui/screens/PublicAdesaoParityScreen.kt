@@ -75,7 +75,10 @@ private const val ASSOCIADO_GOOGLE_PLAY_URL =
 private enum class PublicStage {
     IDENTIFY,
     DETAILS,
+    EXISTING_MEMBER,
     DEPENDENTS,
+    EXISTING_CONTACT,
+    EXISTING_REVIEW,
     REVIEW,
     CONTRACT,
     SUCCESS,
@@ -176,6 +179,12 @@ fun PublicAdesaoParityScreen(
     var acceptedCoverage by rememberSaveable(token) { mutableStateOf(false) }
     var preparedCoverageUrl by rememberSaveable(token) { mutableStateOf("") }
     var successMessage by rememberSaveable(token) { mutableStateOf("") }
+    var flowMode by rememberSaveable(token) { mutableStateOf("new_member") }
+    var existingMemberName by rememberSaveable(token) { mutableStateOf("") }
+    var existingMemberCompany by rememberSaveable(token) { mutableStateOf("") }
+    var existingPhone by rememberSaveable(token) { mutableStateOf("") }
+    var existingEmail by rememberSaveable(token) { mutableStateOf("") }
+    var existingPlans by remember(token) { mutableStateOf<List<PublicSecurePlan>>(emptyList()) }
     val linkVisitId = rememberSaveable(token) { UUID.randomUUID().toString() }
 
     fun setStage(value: PublicStage) {
@@ -203,8 +212,10 @@ fun PublicAdesaoParityScreen(
     }
 
     val currentLink = link
-    val plans = remember(currentLink?.id, currentLink?.planos, currentLink?.planosRaw) {
-        if (currentLink?.planos.orEmpty().isNotEmpty()) {
+    val plans = remember(flowMode, existingPlans, currentLink?.id, currentLink?.planos, currentLink?.planosRaw) {
+        if (flowMode == "existing_member") {
+            existingPlans
+        } else if (currentLink?.planos.orEmpty().isNotEmpty()) {
             currentLink!!.planos.map {
                 PublicSecurePlan(
                     codigo = it.plano,
