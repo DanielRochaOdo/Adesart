@@ -462,6 +462,8 @@ data class PublicCadastroPrefill(
 data class PublicExistingMemberInfo(
     val nome: String = "",
     val empresa: String = "",
+    val telefone: String = "",
+    val email: String = "",
 )
 
 @Serializable
