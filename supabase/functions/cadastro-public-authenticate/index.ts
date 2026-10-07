@@ -96,6 +96,50 @@ const isActiveErpStatus = (dep: any) => {
   return statusCode === 1 || statusName === "ATIVO";
 };
 
+const extractErpMemberContacts = (associado: any) => {
+  const contatos = Array.isArray(associado?.contatos) ? associado.contatos : [];
+  const contactValues = contatos.map((item: any) => ({
+    tipo: String(item?.tipo ?? item?.tipoContato ?? "").toLowerCase(),
+    valor: String(item?.valor ?? item?.dado ?? item?.telefone ?? item?.numero ?? item?.email ?? "").trim(),
+  }));
+
+  const directEmail = [
+    associado?.email,
+    associado?.email1,
+    associado?.email2,
+    associado?.emailPrincipal,
+  ].map((value) => String(value || "").trim().toLowerCase())
+    .find((value) => value.includes("@")) || "";
+
+  const contactEmail = contactValues
+    .map((item) => item.valor.toLowerCase())
+    .find((value) => value.includes("@")) || "";
+
+  const directPhone = [
+    associado?.whatsapp,
+    associado?.celular,
+    associado?.numeroCelular,
+    associado?.telefoneCelular,
+    associado?.celular1,
+    associado?.celular2,
+    associado?.telefone,
+    associado?.telefone1,
+    associado?.telefone2,
+    associado?.numeroTelefone,
+    associado?.fone,
+  ].map((value) => normalizeDigits(value))
+    .find((value) => value.length >= 10) || "";
+
+  const contactPhone = contactValues
+    .map((item) => normalizeDigits(item.valor))
+    .find((value) => value.length >= 10) || "";
+
+  return {
+    telefone: directPhone || contactPhone,
+    email: directEmail || contactEmail,
+  };
+};
+
 const checkErpEligibility = async (cpf: string) => {
   const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
   let ERP_BASE_URL = Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
@@ -124,6 +168,7 @@ const checkErpEligibility = async (cpf: string) => {
 
     for (const dep of candidates) {
       if (!isActiveErpStatus(dep)) continue;
+      const memberContacts = extractErpMemberContacts(associado);
       activeRecords.push({
         codigoAssociado: associado?.codigo ?? null,
         codigoEmpresa: associado?.codigoDaEmpresa ?? null,
@@ -133,6 +178,8 @@ const checkErpEligibility = async (cpf: string) => {
         nomeSituacao: dep?.nomeSituacao ?? null,
         nomeAssociado: String(associado?.nome || "").trim(),
         empresaNome: String(associado?.nomeFantasiaDaEmpresa || associado?.razaoSocialDaEmpresa || "").trim(),
+        telefone: memberContacts.telefone,
+        email: memberContacts.email,
         isResponsible,
       });
     }
@@ -250,6 +297,8 @@ const finishAuthentication = async (
       member: {
         nome: activeRecord.nomeAssociado || person?.nome || "",
         empresa: activeRecord.empresaNome || "",
+        telefone: activeRecord.telefone || "",
+        email: activeRecord.email || "",
       },
       plans,
     });
