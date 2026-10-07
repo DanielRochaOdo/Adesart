@@ -230,11 +230,12 @@ fun PublicAdesaoParityScreen(
     }
     // Apenas a sessao preparada pelo servidor determina se ha cobertura a apresentar.
     val coverageUrl = preparedCoverageUrl
-    val coverageLabel = coverageFamilyLabel(titularPlano)
+    val coveragePlanCode = if (flowMode == "existing_member") dependentes.firstOrNull()?.plano ?: 0 else titularPlano
+    val coverageLabel = coverageFamilyLabel(coveragePlanCode)
     val scrollState = rememberScrollState()
     LaunchedEffect(stageName) { scrollState.scrollTo(0) }
-    LaunchedEffect(titularPlano) { preparedCoverageUrl = "" }
-    LaunchedEffect(titularPlano, coverageUrl) { acceptedCoverage = false }
+    LaunchedEffect(coveragePlanCode) { preparedCoverageUrl = "" }
+    LaunchedEffect(coveragePlanCode, coverageUrl) { acceptedCoverage = false }
     val relationships = remember(currentLink?.id, currentLink?.parentescos) {
         currentLink?.parentescos.orEmpty()
             .filter { it.ativo && it.resolvedId > 1 }
@@ -314,7 +315,7 @@ fun PublicAdesaoParityScreen(
                         val progressStep = when (stage) {
                             PublicStage.DEPENDENTS -> 1
                             PublicStage.EXISTING_CONTACT -> 2
-                            PublicStage.EXISTING_REVIEW -> 3
+                            PublicStage.EXISTING_REVIEW, PublicStage.CONTRACT -> 3
                             else -> 1
                         }
                         VendaWizardProgress(
@@ -805,8 +806,8 @@ fun PublicAdesaoParityScreen(
                                     label = "Continuar",
                                     onClick = {
                                         val pending = listOfNotNull(
-                                            if (existingPhone.filter(Char::isDigit).length < 10) "Telefone / WhatsApp" else null,
-                                            if (!isValidEmail(existingEmail)) "E-mail" else null,
+                                            if (existingPhone.filter(Char::isDigit).length < 10) "Telefone / WhatsApp: informe um número válido com DDD." else null,
+                                            if (!isValidEmail(existingEmail)) "E-mail: informe um endereço válido." else null,
                                         )
                                         if (pending.isNotEmpty()) {
                                             validationErrors = pending
@@ -843,49 +844,12 @@ fun PublicAdesaoParityScreen(
                                 ReviewLine("Telefone", formatPhone(existingPhone))
                                 ReviewLine("E-mail", existingEmail)
                                 VendaButton(
-                                    label = "Confirmar inclusão",
+                                    label = "Revisar termos da inclusão",
                                     onClick = {
-                                        busy = true
+                                        emailToConfirm = existingEmail
+                                        emailDialogOpen = true
                                         error = null
-                                        scope.launch {
-                                            val payloadDependentes = dependentes.map { dep ->
-                                                PublicCadastroDependente(
-                                                    tipo = dep.tipo,
-                                                    nome = dep.nome.trim(),
-                                                    dataNascimento = dep.dataNascimento.trim(),
-                                                    cpf = dep.cpf.filter(Char::isDigit),
-                                                    sexo = dep.sexo,
-                                                    sexoDescricao = if (dep.sexo == 1) "Masculino" else "Feminino",
-                                                    plano = dep.plano,
-                                                    planoValor = dep.planoValor,
-                                                    nomeMae = dep.nomeMae.trim(),
-                                                )
-                                            }
-                                            runCatching {
-                                                viewModel.submitPublicDependents(
-                                                    attemptToken = attemptToken,
-                                                    confirmedPhone = existingPhone,
-                                                    confirmedEmail = existingEmail,
-                                                    dependents = payloadDependentes,
-                                                )
-                                            }.onSuccess { response ->
-                                                if (!response.ok) {
-                                                    error = response.error ?: "Nao foi possivel incluir os dependentes."
-                                                } else {
-                                                    successMessage = response.message
-                                                        ?: "Dependente(s) incluído(s) com sucesso!"
-                                                    setStage(PublicStage.SUCCESS)
-                                                }
-                                            }.onFailure {
-                                                error = CadastroApiErrorMapper.mapUserMessage(
-                                                    it.message,
-                                                    "Nao foi possivel incluir os dependentes.",
-                                                )
-                                            }
-                                            busy = false
-                                        }
                                     },
-                                    loading = busy,
                                     modifier = Modifier.fillMaxWidth(),
                                     enabled = !busy,
                                 )
@@ -942,7 +906,7 @@ fun PublicAdesaoParityScreen(
                         WebCard {
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text(
-                                    "Contrato de adesao",
+                                    if (flowMode == "existing_member") "Termos da inclusão de dependentes" else "Contrato de adesao",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
                                 )
@@ -970,7 +934,13 @@ fun PublicAdesaoParityScreen(
                                     WebCard {
                                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                             Text("Cobertura do plano $coverageLabel", fontWeight = FontWeight.Bold)
-                                            Text("Leia os procedimentos cobertos antes de concluir a sua adesão.")
+                                            Text(
+                                                if (flowMode == "existing_member") {
+                                                    "Leia os procedimentos cobertos antes de concluir a inclusão."
+                                                } else {
+                                                    "Leia os procedimentos cobertos antes de concluir a sua adesão."
+                                                },
+                                            )
                                             VendaButton(
                                                 label = "Ver cobertura do plano",
                                                 onClick = {
@@ -1007,7 +977,11 @@ fun PublicAdesaoParityScreen(
                                         enabled = !busy,
                                     )
                                     Text(
-                                        "Li e aceito os termos e condicoes do contrato apresentado.",
+                                        if (flowMode == "existing_member") {
+                                            "Li e aceito os termos apresentados para a inclusão dos dependentes."
+                                        } else {
+                                            "Li e aceito os termos e condicoes do contrato apresentado."
+                                        },
                                         modifier = Modifier.padding(top = 12.dp),
                                     )
                                 }
@@ -1176,18 +1150,25 @@ fun PublicAdesaoParityScreen(
                     ) {
                         VendaButton(
                             label = "Voltar",
-                            onClick = { setStage(PublicStage.REVIEW) },
+                            onClick = {
+                                setStage(
+                                    if (flowMode == "existing_member") PublicStage.EXISTING_REVIEW
+                                    else PublicStage.REVIEW,
+                                )
+                            },
                             style = VendaButtonStyle.TERTIARY,
                             size = VendaButtonSize.MEDIUM,
                             modifier = Modifier.weight(0.8f),
                             enabled = !busy,
                         )
                         VendaButton(
-                            label = "Aceitar e concluir",
+                            label = if (flowMode == "existing_member") "Aceitar e concluir inclusão" else "Aceitar e concluir",
                             onClick = finalize@{
                                 if (!acceptedTerms || !acceptedData || (coverageUrl.isNotBlank() && !acceptedCoverage)) {
                                     error = if (coverageUrl.isNotBlank()) {
                                         "Marque os três aceites para concluir. A cobertura está disponível para consulta, caso deseje."
+                                    } else if (flowMode == "existing_member") {
+                                        "Aceite os termos da inclusão e confirme os dados para concluir."
                                     } else {
                                         "Aceite os termos do contrato e confirme os dados para concluir."
                                     }
@@ -1197,18 +1178,51 @@ fun PublicAdesaoParityScreen(
                                 error = null
                                 scope.launch {
                                     runCatching {
-                                        viewModel.submitPublicCadastroSecure(
-                                            attemptToken = attemptToken,
-                                            contractToken = contractToken,
-                                            acceptedTerms = acceptedTerms,
-                                            acceptedData = acceptedData,
-                                            acceptedCoverage = coverageUrl.isNotBlank() && acceptedCoverage,
-                                        )
+                                        if (flowMode == "existing_member") {
+                                            val payloadDependentes = dependentes.map { dep ->
+                                                PublicCadastroDependente(
+                                                    tipo = dep.tipo,
+                                                    nome = dep.nome.trim(),
+                                                    dataNascimento = dep.dataNascimento.trim(),
+                                                    cpf = dep.cpf.filter(Char::isDigit),
+                                                    sexo = dep.sexo,
+                                                    sexoDescricao = if (dep.sexo == 1) "Masculino" else "Feminino",
+                                                    plano = dep.plano,
+                                                    planoValor = dep.planoValor,
+                                                    nomeMae = dep.nomeMae.trim(),
+                                                )
+                                            }
+                                            viewModel.submitPublicDependents(
+                                                attemptToken = attemptToken,
+                                                contractToken = contractToken,
+                                                acceptedTerms = acceptedTerms,
+                                                acceptedData = acceptedData,
+                                                acceptedCoverage = coverageUrl.isNotBlank() && acceptedCoverage,
+                                                confirmedPhone = existingPhone,
+                                                confirmedEmail = existingEmail,
+                                                dependents = payloadDependentes,
+                                            )
+                                        } else {
+                                            viewModel.submitPublicCadastroSecure(
+                                                attemptToken = attemptToken,
+                                                contractToken = contractToken,
+                                                acceptedTerms = acceptedTerms,
+                                                acceptedData = acceptedData,
+                                                acceptedCoverage = coverageUrl.isNotBlank() && acceptedCoverage,
+                                            )
+                                        }
                                     }.onSuccess { response ->
                                         if (!response.ok) {
-                                            error = response.error ?: "Nao foi possivel concluir a adesao."
+                                            error = response.error ?: if (flowMode == "existing_member") {
+                                                "Nao foi possivel concluir a inclusao."
+                                            } else {
+                                                "Nao foi possivel concluir a adesao."
+                                            }
                                         } else {
-                                            successMessage = if (response.message?.contains("processada", ignoreCase = true) == true) {
+                                            successMessage = if (flowMode == "existing_member") {
+                                                response.message
+                                                    ?: "Dependente(s) incluído(s) com sucesso! O termo aceito será enviado para o e-mail confirmado e anexado ao ERP."
+                                            } else if (response.message?.contains("processada", ignoreCase = true) == true) {
                                                 "Recebemos sua adesão e ela está sendo processada. Não é necessário preencher novamente."
                                             } else {
                                                 "Adesão concluída com sucesso! Seu contrato será enviado para o e-mail confirmado. Agora você já pode aproveitar os benefícios e utilizar o App Odontoart Associado."
@@ -1218,7 +1232,11 @@ fun PublicAdesaoParityScreen(
                                     }.onFailure {
                                         error = CadastroApiErrorMapper.mapUserMessage(
                                             it.message,
-                                            "Nao foi possivel concluir a adesao.",
+                                            if (flowMode == "existing_member") {
+                                                "Nao foi possivel concluir a inclusao."
+                                            } else {
+                                                "Nao foi possivel concluir a adesao."
+                                            },
                                         )
                                     }
                                     busy = false
@@ -1246,12 +1264,18 @@ fun PublicAdesaoParityScreen(
             title = { Text("Confirme seu e-mail") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("O contrato sera enviado para este endereco. Voce pode corrigi-lo antes de continuar.")
+                    Text(
+                        if (flowMode == "existing_member") {
+                            "O termo aceito sera enviado para este endereco e anexado ao ERP. Voce pode corrigir o e-mail antes de continuar."
+                        } else {
+                            "O contrato sera enviado para este endereco. Voce pode corrigi-lo antes de continuar."
+                        },
+                    )
                     OutlinedTextField(
                         value = emailToConfirm,
                         onValueChange = { emailToConfirm = it },
                         modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
-                        label = { Text("E-mail do contrato") },
+                        label = { Text(if (flowMode == "existing_member") "E-mail para envio do termo" else "E-mail do contrato") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
                         enabled = !busy,
                     )
@@ -1270,6 +1294,14 @@ fun PublicAdesaoParityScreen(
                             error = "Confirme um e-mail valido."
                             return@prepare
                         }
+                        val contractContacts = if (flowMode == "existing_member") {
+                            listOf(
+                                PublicContactDraft(tipo = "whatsapp", valor = existingPhone, principal = true),
+                                PublicContactDraft(tipo = "email", valor = emailToConfirm, principal = true),
+                            )
+                        } else {
+                            contatos.toList()
+                        }
                         val payload = buildContractPayload(
                             cpf = cpf,
                             nome = nome,
@@ -1277,7 +1309,7 @@ fun PublicAdesaoParityScreen(
                             sexo = sexo,
                             nomeMae = nomeMae,
                             numeroMatricula = numeroMatricula,
-                            contatos = contatos,
+                            contatos = contractContacts,
                             cep = cep,
                             tipoLogradouro = tipoLogradouro,
                             logradouro = logradouro,
@@ -1320,6 +1352,9 @@ fun PublicAdesaoParityScreen(
                                     acceptedTerms = false
                                     acceptedData = false
                                     acceptedCoverage = false
+                                    if (flowMode == "existing_member") {
+                                        existingEmail = emailToConfirm.trim().lowercase(Locale.ROOT)
+                                    }
                                     emailDialogOpen = false
                                     setStage(PublicStage.CONTRACT)
                                 }
@@ -1720,7 +1755,7 @@ private fun validateDependents(
         if (!CadastroPayloadBuilder.validateCpf(depCpf)) {
             return "Dependente ${index + 1}: informe um CPF valido."
         }
-        if (!seenCpfs.add(depCpf)) return "Existem CPFs duplicados no cadastro."
+        if (!seenCpfs.add(depCpf)) return "Dependente ${index + 1}: este CPF ja foi informado na solicitacao."
         if (dep.tipo <= 1) return "Dependente ${index + 1}: selecione o grau de parentesco."
         if (dep.nome.isBlank()) return "Dependente ${index + 1}: nome e obrigatorio."
         if (!isIsoDate(dep.dataNascimento)) return "Dependente ${index + 1}: data de nascimento invalida."
