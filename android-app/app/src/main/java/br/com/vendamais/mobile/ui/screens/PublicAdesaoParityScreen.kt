@@ -872,8 +872,7 @@ fun PublicAdesaoParityScreen(
                                                 if (!response.ok) {
                                                     error = response.error ?: "Nao foi possivel incluir os dependentes."
                                                 } else {
-                                                    successMessage = response.warning
-                                                        ?: response.message
+                                                    successMessage = response.message
                                                         ?: "Dependente(s) incluído(s) com sucesso!"
                                                     setStage(PublicStage.SUCCESS)
                                                 }
