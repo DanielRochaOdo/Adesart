@@ -277,7 +277,7 @@ fun PublicAdesaoParityScreen(
 
     if (stage == PublicStage.SUCCESS) {
         PublicFinalStateScreen(
-            title = "Adesão recebida",
+            title = if (flowMode == "existing_member") "Dependente(s) incluído(s)" else "Adesão recebida",
             message = successMessage,
             consultantName = currentLink.vendedorNome,
             consultantPhone = currentLink.vendedorTelefone,
@@ -303,24 +303,37 @@ fun PublicAdesaoParityScreen(
             ) {
                 OdontoartBrandMark(modifier = Modifier.fillMaxWidth())
                 ScreenHeading(
-                    "Nova Adesão",
-                    "Empresa: ${currentLink.empresaNome}" +
+                    if (flowMode == "existing_member") "Inclusão de dependente" else "Nova Adesão",
+                    "Empresa: ${if (flowMode == "existing_member") existingMemberCompany.ifBlank { currentLink.empresaNome } else currentLink.empresaNome}" +
                         (currentLink.vendedorNome?.takeIf { it.isNotBlank() }?.let { " · Consultor: $it" } ?: ""),
                 )
                 ConsultantContactCard(currentLink.vendedorNome, currentLink.vendedorTelefone)
 
-                if (stage != PublicStage.IDENTIFY) {
-                    val progressStep = when (stage) {
-                        PublicStage.DETAILS -> 1
-                        PublicStage.DEPENDENTS -> 2
-                        PublicStage.REVIEW -> 3
-                        PublicStage.CONTRACT -> 4
-                        else -> 1
+                if (stage != PublicStage.IDENTIFY && stage != PublicStage.EXISTING_MEMBER) {
+                    if (flowMode == "existing_member") {
+                        val progressStep = when (stage) {
+                            PublicStage.DEPENDENTS -> 1
+                            PublicStage.EXISTING_CONTACT -> 2
+                            PublicStage.EXISTING_REVIEW -> 3
+                            else -> 1
+                        }
+                        VendaWizardProgress(
+                            currentStep = progressStep,
+                            labels = listOf("Dependentes", "Contato", "Confirmação"),
+                        )
+                    } else {
+                        val progressStep = when (stage) {
+                            PublicStage.DETAILS -> 1
+                            PublicStage.DEPENDENTS -> 2
+                            PublicStage.REVIEW -> 3
+                            PublicStage.CONTRACT -> 4
+                            else -> 1
+                        }
+                        VendaWizardProgress(
+                            currentStep = progressStep,
+                            labels = listOf("Dados", "Plano", "Dependentes", "Confirmação"),
+                        )
                     }
-                    VendaWizardProgress(
-                        currentStep = progressStep,
-                        labels = listOf("Dados", "Plano", "Dependentes", "Confirmação"),
-                    )
                 }
 
                 error?.let {
