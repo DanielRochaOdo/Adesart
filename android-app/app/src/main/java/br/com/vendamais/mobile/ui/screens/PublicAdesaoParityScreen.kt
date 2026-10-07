@@ -395,13 +395,19 @@ fun PublicAdesaoParityScreen(
                                             }.onSuccess { response ->
                                                 when (response.state) {
                                                     "completed" -> setStage(PublicStage.COMPLETED)
+                                                    "existing_member_completed" -> {
+                                                        flowMode = "existing_member"
+                                                        successMessage = "Esta solicitação de inclusão de dependentes já foi concluída."
+                                                        setStage(PublicStage.SUCCESS)
+                                                    }
                                                     "not_eligible" -> setStage(PublicStage.NOT_ELIGIBLE)
-                                                    "authenticated" -> {
+                                                    "authenticated", "existing_member" -> {
                                                         val person = response.person
                                                         val sessionToken = response.attemptToken
                                                         if (person == null || sessionToken.isNullOrBlank()) {
                                                             error = "Nao foi possivel iniciar a adesao."
                                                         } else {
+                                                            val isExistingMember = response.state == "existing_member"
                                                             attemptToken = sessionToken
                                                             cpf = person.cpf?.filter(Char::isDigit)?.take(11)
                                                                 ?.takeIf { it.isNotBlank() } ?: cpfDigits
@@ -442,8 +448,36 @@ fun PublicAdesaoParityScreen(
                                                                 idMunicipio = address.idMunicipio
                                                                 idUf = address.idUf
                                                             }
-                                                            if (plans.size == 1) titularPlano = plans.first().codigo
-                                                            setStage(PublicStage.DETAILS)
+
+                                                            if (isExistingMember) {
+                                                                flowMode = "existing_member"
+                                                                existingMemberName = response.member?.nome.orEmpty().ifBlank { nome }
+                                                                existingMemberCompany = response.member?.empresa.orEmpty().ifBlank { currentLink.empresaNome }
+                                                                existingPlans = response.plans.map { plan ->
+                                                                    PublicSecurePlan(
+                                                                        codigo = plan.plano,
+                                                                        nome = plan.nomeExibicao.ifBlank { "Plano ${plan.plano}" },
+                                                                        valorTitular = plan.valorTitular,
+                                                                        valorDependente = plan.valorDependente,
+                                                                    )
+                                                                }
+                                                                existingPhone = person.contatos.firstOrNull {
+                                                                    it.tipo in setOf("whatsapp", "celular") && it.principal
+                                                                }?.valor ?: person.contatos.firstOrNull {
+                                                                    it.tipo in setOf("whatsapp", "celular", "fixo")
+                                                                }?.valor.orEmpty()
+                                                                existingEmail = person.contatos.firstOrNull {
+                                                                    it.tipo == "email" && it.principal
+                                                                }?.valor ?: person.contatos.firstOrNull {
+                                                                    it.tipo == "email"
+                                                                }?.valor.orEmpty()
+                                                                dependentes.clear()
+                                                                setStage(PublicStage.EXISTING_MEMBER)
+                                                            } else {
+                                                                flowMode = "new_member"
+                                                                if (plans.size == 1) titularPlano = plans.first().codigo
+                                                                setStage(PublicStage.DETAILS)
+                                                            }
                                                         }
                                                     }
                                                     else -> error = response.error ?: "Nao foi possivel validar seus dados."
