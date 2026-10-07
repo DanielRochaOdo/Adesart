@@ -11,6 +11,7 @@ on:
       - 'tsconfig.link-web.json'
       - 'supabase/functions/_shared/**'
       - 'supabase/functions/cadastro-link-resolve/**'
+      - 'supabase/functions/cadastro-public-authenticate/**'
       - 'supabase/functions/cadastro-public-contract-prepare/**'
       - 'supabase/functions/cadastro-public-dependent-submit/**'
       - 'supabase/functions/cadastro-public-submit/**'
@@ -42,6 +43,7 @@ jobs:
           deno check --node-modules-dir=auto \
             supabase/functions/cadastro-link-resolve/index.ts \
             supabase/functions/cadastro-link-history/index.ts \
+            supabase/functions/cadastro-public-authenticate/index.ts \
             supabase/functions/cadastro-public-contract-prepare/index.ts \
             supabase/functions/cadastro-public-dependent-submit/index.ts \
             supabase/functions/cadastro-public-submit/index.ts \
