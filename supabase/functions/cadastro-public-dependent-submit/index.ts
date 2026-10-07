@@ -1,7 +1,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { PDFDocument, StandardFonts } from "npm:pdf-lib@1.17.1";
 import {
   corsHeaders,
   createServiceClient,
+  getRequestIp,
+  hashSensitiveValue,
   jsonResponse,
   normalizeDate,
   normalizeDigits,
@@ -157,26 +160,141 @@ const reconcileDependentsInErp = async (memberCode: number, cpfs: string[]) => {
   return { reconciled: false, holder: null };
 };
 
+
+const makeAcceptedPdf = async (text: string, acceptedAt: string) => {
+  const pdf = await PDFDocument.create();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+  const width = 595.28;
+  const height = 841.89;
+  const margin = 48;
+  const size = 9.5;
+  const lineHeight = 13;
+  const maxWidth = width - margin * 2;
+
+  const clean = (value: string) => value
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/[^\x09\x0A\x0D\x20-\xFF]/g, "");
+
+  const wrap = (value: string) => {
+    const out: string[] = [];
+    let line = "";
+    for (const word of clean(value).split(/\s+/)) {
+      const candidate = line ? `${line} ${word}` : word;
+      if (font.widthOfTextAtSize(candidate, size) <= maxWidth) line = candidate;
+      else {
+        if (line) out.push(line);
+        line = word;
+      }
+    }
+    if (line) out.push(line);
+    return out.length ? out : [""];
+  };
+
+  let page = pdf.addPage([width, height]);
+  let y = height - margin;
+  const ensure = () => {
+    if (y < margin + lineHeight * 2) {
+      page = pdf.addPage([width, height]);
+      y = height - margin;
+    }
+  };
+
+  page.drawText("ODONTOART - CONTRATO DE ADESAO", { x: margin, y, size: 13, font: bold });
+  y -= 24;
+
+  for (const paragraph of clean(text).split("\n")) {
+    ensure();
+    if (!paragraph.trim()) {
+      y -= lineHeight;
+      continue;
+    }
+    for (const line of wrap(paragraph)) {
+      ensure();
+      page.drawText(line, { x: margin, y, size, font });
+      y -= lineHeight;
+    }
+    y -= 3;
+  }
+
+  y -= 8;
+  for (const line of wrap(`Aceite eletrônico realizado em ${acceptedAt}`)) {
+    ensure();
+    page.drawText(line, { x: margin, y, size, font });
+    y -= lineHeight;
+  }
+
+  return new Uint8Array(await pdf.save());
+};
+
+const triggerDeliveryWorker = async (contractSessionId: string) => {
+  const service = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const base = Deno.env.get("SUPABASE_URL") || "";
+  if (!service || !base) return { ok: false, error: "DELIVERY_WORKER_CONFIG_MISSING" };
+
+  try {
+    const response = await fetch(`${base}/functions/v1/process-contract-deliveries`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${service}`,
+        apikey: service,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        source: "cadastro-public-dependent-submit",
+        contractSessionId,
+      }),
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      console.warn("[cadastro-public-dependent-submit] delivery worker HTTP", response.status, result);
+      return { ok: false, status: response.status, error: result?.error || "DELIVERY_WORKER_FAILED" };
+    }
+    return result;
+  } catch (error) {
+    console.warn("[cadastro-public-dependent-submit] delivery trigger", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "DELIVERY_WORKER_FAILED",
+    };
+  }
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Metodo nao permitido" }, 405);
 
   const supabase = createServiceClient();
   let submissionId: string | null = null;
+  let contractSessionId: string | null = null;
+  let erpCommitted = false;
 
   try {
     const body = await req.json() as {
       attemptToken?: string;
+      contractToken?: string;
+      acceptedTerms?: boolean;
+      acceptedData?: boolean;
+      acceptedCoverage?: boolean;
       confirmedPhone?: string;
       confirmedEmail?: string;
       dependents?: DepInput[];
     };
     const attemptToken = String(body.attemptToken || "").trim();
+    const contractToken = String(body.contractToken || "").trim();
     const phone = normalizeDigits(body.confirmedPhone).slice(0, 13);
     const email = String(body.confirmedEmail || "").trim().toLowerCase();
     const deps = Array.isArray(body.dependents) ? body.dependents : [];
 
     if (!attemptToken) return jsonResponse({ error: "Sessao obrigatoria" }, 401);
+    if (!contractToken || body.acceptedTerms !== true || body.acceptedData !== true) {
+      return jsonResponse({
+        error: "Leia e aceite os termos da inclusao e confirme os dados antes de concluir.",
+        code: "CONTRACT_ACCEPTANCE_REQUIRED",
+      }, 400);
+    }
     if (phone.length < 10) return jsonResponse({ error: "Informe um telefone valido" }, 400);
     if (!emailRegex.test(email)) return jsonResponse({ error: "Informe um e-mail valido" }, 400);
     if (!deps.length) return jsonResponse({ error: "Adicione ao menos um dependente" }, 400);
@@ -199,6 +317,69 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Esta sessao nao permite inclusao de dependentes", code: "INVALID_FLOW_MODE" }, 409);
     }
 
+    const tokenHash = await sha256(contractToken);
+    const { data: initialContractSession, error: contractSessionError } = await supabase
+      .from("public_contract_sessions")
+      .select("*")
+      .eq("attempt_id", attempt.id)
+      .eq("contract_token_hash", tokenHash)
+      .maybeSingle();
+    if (contractSessionError || !initialContractSession) {
+      return jsonResponse({ error: "Termos nao encontrados ou expirados. Revise novamente antes de concluir." }, 404);
+    }
+    if (initialContractSession.snapshot?.flowMode !== "existing_member") {
+      return jsonResponse({ error: "Os termos apresentados nao pertencem a esta inclusao.", code: "INVALID_CONTRACT_FLOW" }, 409);
+    }
+
+    if (initialContractSession.status === "completed") {
+      return jsonResponse({
+        ok: true,
+        state: "completed",
+        cadastroId: initialContractSession.cadastro_id || null,
+        message: "Dependente(s) ja incluido(s) com sucesso.",
+      });
+    }
+    if (["erp_registered", "deliveries_pending"].includes(initialContractSession.status)) {
+      const deliveryResult = await triggerDeliveryWorker(initialContractSession.id);
+      return jsonResponse({
+        ok: true,
+        state: initialContractSession.status,
+        cadastroId: initialContractSession.cadastro_id || null,
+        deliveryPending: !deliveryResult?.ok,
+        message: "Inclusao concluida. O termo aceito esta sendo enviado por e-mail e anexado ao ERP.",
+      });
+    }
+    if (initialContractSession.status === "needs_attention") {
+      return jsonResponse({
+        ok: true,
+        state: "needs_attention",
+        cadastroId: initialContractSession.cadastro_id || null,
+        deliveryPending: true,
+        warning: "A inclusao foi concluida, mas a entrega do termo precisa de reprocessamento.",
+        message: "Dependente(s) incluido(s) com sucesso.",
+      });
+    }
+    if (initialContractSession.status === "erp_processing") {
+      return jsonResponse({
+        ok: true,
+        state: "processing",
+        cadastroId: initialContractSession.cadastro_id || null,
+        message: "Sua solicitacao ja esta sendo processada.",
+      }, 202);
+    }
+    if (!["prepared", "erp_failed"].includes(initialContractSession.status)) {
+      return jsonResponse({ error: "Estes termos nao podem mais ser utilizados. Revise a solicitacao novamente." }, 409);
+    }
+
+    const preparedCadastro = initialContractSession.snapshot?.cadastro;
+    const requiresCoverageConsent = preparedCadastro?.coberturaDisponivel === true ||
+      (preparedCadastro?.coberturaDisponivel == null &&
+        Array.isArray(preparedCadastro?.coberturaPlanoArquivos) &&
+        preparedCadastro.coberturaPlanoArquivos.length > 0);
+    if (requiresCoverageConsent && body.acceptedCoverage !== true) {
+      return jsonResponse({ error: "Leia e aceite a cobertura disponibilizada antes de concluir." }, 400);
+    }
+
     const holderCpf = normalizeDigits(attempt.profile_snapshot?.cpf);
     const memberCode = Number(attempt.erp_member_snapshot?.codigoAssociado);
     if (!validCpf(holderCpf) || !Number.isInteger(memberCode) || memberCode <= 0) {
@@ -218,12 +399,44 @@ Deno.serve(async (req: Request) => {
     const seen = new Set<string>([holderCpf]);
     for (let i = 0; i < normalized.length; i += 1) {
       const dep = normalized[i];
-      if (!dep.nome || !dep.nomeMae || !dep.dataNascimento || dep.tipo <= 0 || dep.plano <= 0 || ![0, 1].includes(dep.sexo)) {
-        return jsonResponse({ error: `Preencha todos os dados obrigatorios do dependente ${i + 1}` }, 400);
-      }
-      if (!validCpf(dep.cpf)) return jsonResponse({ error: `CPF invalido no dependente ${i + 1}` }, 400);
-      if (seen.has(dep.cpf)) return jsonResponse({ error: "Existem CPFs duplicados na solicitacao" }, 400);
+      const label = `Dependente ${i + 1}`;
+      if (!validCpf(dep.cpf)) return jsonResponse({ error: `${label}: informe um CPF valido.` }, 400);
+      if (seen.has(dep.cpf)) return jsonResponse({ error: `${label}: este CPF ja foi informado na solicitacao.` }, 400);
       seen.add(dep.cpf);
+      if (dep.tipo <= 1) return jsonResponse({ error: `${label}: selecione o grau de parentesco.` }, 400);
+      if (!dep.nome) return jsonResponse({ error: `${label}: informe o nome completo.` }, 400);
+      if (!dep.dataNascimento) return jsonResponse({ error: `${label}: informe uma data de nascimento valida.` }, 400);
+      if (![0, 1].includes(dep.sexo)) return jsonResponse({ error: `${label}: selecione o sexo.` }, 400);
+      if (!dep.nomeMae) return jsonResponse({ error: `${label}: informe o nome da mae.` }, 400);
+      if (dep.plano <= 0) return jsonResponse({ error: `${label}: selecione o plano.` }, 400);
+    }
+
+    const preparedDependents = Array.isArray(preparedCadastro?.dependentes)
+      ? preparedCadastro.dependentes.map((dep: any) => ({
+        tipo: Number(dep?.tipo || 0),
+        nome: String(dep?.nome || "").trim(),
+        cpf: normalizeDigits(dep?.cpf),
+        dataNascimento: normalizeDate(dep?.dataNascimento),
+        sexo: Number(dep?.sexo),
+        nomeMae: String(dep?.nomeMae || "").trim(),
+        plano: Number(dep?.plano || 0),
+      }))
+      : [];
+    const preparedPhone = (Array.isArray(preparedCadastro?.contatos) ? preparedCadastro.contatos : [])
+      .filter((item: any) => ["celular", "whatsapp", "fixo"].includes(String(item?.tipo || "")))
+      .map((item: any) => normalizeDigits(item?.valor))
+      .find((value: string) => value.length >= 10) || "";
+    const preparedEmail = String(initialContractSession.confirmed_email || "").trim().toLowerCase();
+
+    if (
+      preparedPhone !== phone ||
+      preparedEmail !== email ||
+      stableStringify(preparedDependents) !== stableStringify(normalized)
+    ) {
+      return jsonResponse({
+        error: "Os dados foram alterados depois da apresentacao dos termos. Revise os termos novamente.",
+        code: "CONTRACT_DATA_CHANGED",
+      }, 409);
     }
 
     const records = await fetchAssociados({ codigoAssociado: String(memberCode) });
@@ -255,8 +468,32 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    const now = new Date().toISOString();
+    const ipHash = await hashSensitiveValue(getRequestIp(req));
+    const { data: claimedContractSession, error: claimContractError } = await supabase
+      .from("public_contract_sessions")
+      .update({
+        status: "erp_processing",
+        accepted_terms: true,
+        accepted_data: true,
+        accepted_at: initialContractSession.accepted_at || now,
+        accepted_ip_hash: initialContractSession.accepted_ip_hash || ipHash,
+        accepted_user_agent: initialContractSession.accepted_user_agent || req.headers.get("user-agent") || "unknown",
+        updated_at: now,
+      })
+      .eq("id", initialContractSession.id)
+      .in("status", ["prepared", "erp_failed"])
+      .select("*")
+      .maybeSingle();
+    if (claimContractError) throw claimContractError;
+    if (!claimedContractSession) {
+      return jsonResponse({ ok: true, state: "processing", message: "Sua solicitacao ja esta sendo processada." }, 202);
+    }
+    contractSessionId = claimedContractSession.id;
+
     const requestHash = await sha256(stableStringify({
       attemptId: attempt.id,
+      contractHash: claimedContractSession.contract_hash,
       phone,
       email,
       dependents: normalized,
@@ -386,6 +623,13 @@ Deno.serve(async (req: Request) => {
         last_error: errorMessage,
         updated_at: new Date().toISOString(),
       }).eq("id", submissionId);
+      if (contractSessionId) {
+        await supabase.from("public_contract_sessions").update({
+          status: "erp_failed",
+          erp_response: { error: errorMessage, response: erpResult },
+          updated_at: new Date().toISOString(),
+        }).eq("id", contractSessionId).eq("status", "erp_processing");
+      }
       return jsonResponse({
         error: errorMessage,
         code: transportError ? "ERP_DEPENDENT_RESULT_UNCERTAIN" : "ERP_DEPENDENT_FAILED",
@@ -446,6 +690,118 @@ Deno.serve(async (req: Request) => {
       completed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq("id", submissionId);
+    erpCommitted = true;
+
+    if (!contractSessionId) throw new Error("CONTRACT_SESSION_MISSING_AFTER_ERP");
+
+    const { data: acceptedSession, error: acceptedSessionError } = await supabase
+      .from("public_contract_sessions")
+      .update({
+        status: "erp_registered",
+        cadastro_id: cadastroId,
+        erp_response: erpResult,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", contractSessionId)
+      .select("*")
+      .single();
+    if (acceptedSessionError || !acceptedSession) throw acceptedSessionError || new Error("CONTRACT_SESSION_SYNC_FAILED");
+
+    const acceptedAt = new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Fortaleza",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).format(new Date(acceptedSession.accepted_at || new Date().toISOString())).replace(",", "");
+
+    const pdf = await makeAcceptedPdf(String(acceptedSession.contract_text || ""), acceptedAt);
+    const pdfHash = await sha256(pdf);
+    const storageOwner = cadastroId || submissionId || acceptedSession.id;
+    const storagePath = `${new Date().getUTCFullYear()}/${storageOwner}/contrato-${acceptedSession.id}.pdf`;
+    const { error: uploadError } = await supabase.storage.from("contracts").upload(storagePath, pdf, {
+      contentType: "application/pdf",
+      upsert: true,
+    });
+
+    if (uploadError) {
+      await supabase.from("public_contract_sessions").update({
+        status: "needs_attention",
+        updated_at: new Date().toISOString(),
+      }).eq("id", acceptedSession.id);
+      await supabase.from("public_adesao_attempts").update({
+        status: "completed",
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq("id", attempt.id);
+      return jsonResponse({
+        ok: true,
+        state: "needs_attention",
+        cadastroId,
+        warning: "Inclusao concluida no ERP, mas o termo precisa de reprocessamento.",
+        message: "Dependente(s) incluido(s) com sucesso.",
+      });
+    }
+
+    await supabase.from("public_contract_sessions").update({
+      status: "deliveries_pending",
+      pdf_storage_path: storagePath,
+      pdf_hash: pdfHash,
+      updated_at: new Date().toISOString(),
+    }).eq("id", acceptedSession.id);
+
+    let vendedorTelefone: string | null = null;
+    if (link.vendedor_id) {
+      const { data: vendedorProfile } = await supabase
+        .from("profiles")
+        .select("telefone")
+        .eq("id", link.vendedor_id)
+        .maybeSingle();
+      vendedorTelefone = vendedorProfile?.telefone ?? null;
+    }
+
+    const fileName = `Contrato-Odontoart-Inclusao-Dependentes-${memberCode}.pdf`;
+    const prepared = acceptedSession.snapshot?.cadastro || {};
+    const memberSnapshot = acceptedSession.snapshot?.member || {};
+    const { error: jobsError } = await supabase.from("contract_delivery_jobs").upsert([
+      {
+        contract_session_id: acceptedSession.id,
+        channel: "email",
+        payload: {
+          email: acceptedSession.confirmed_email,
+          nome: String(holder?.nome || attempt.profile_snapshot?.nome || ""),
+          vendedorNome: String(link.vendedor_nome || "") || null,
+          vendedorTelefone,
+          storagePath,
+          fileName,
+          pdfHash,
+          coveragePlanCodes: Array.isArray(prepared.coberturaPlanoCodigos) ? prepared.coberturaPlanoCodigos : [],
+          coverageFiles: Array.isArray(prepared.coberturaPlanoArquivos) ? prepared.coberturaPlanoArquivos : [],
+        },
+        status: "pending",
+        attempts: 0,
+        next_attempt_at: new Date().toISOString(),
+      },
+      {
+        contract_session_id: acceptedSession.id,
+        channel: "erp_document",
+        payload: {
+          cpf: holderCpf,
+          empresaCodigo: companyCode,
+          idFuncionario: sellerCode,
+          idDependente: Number(memberSnapshot.codigoDependente || attempt.erp_member_snapshot?.codigoDependente || 0) || null,
+          storagePath,
+          fileName,
+          pdfHash,
+        },
+        status: "pending",
+        attempts: 0,
+        next_attempt_at: new Date().toISOString(),
+      },
+    ], { onConflict: "contract_session_id,channel" });
+    if (jobsError) throw jobsError;
 
     await supabase.from("public_adesao_attempts").update({
       status: "completed",
@@ -453,22 +809,38 @@ Deno.serve(async (req: Request) => {
       updated_at: new Date().toISOString(),
     }).eq("id", attempt.id);
 
+    const deliveryResult = await triggerDeliveryWorker(acceptedSession.id);
+    const results = Array.isArray(deliveryResult?.results) ? deliveryResult.results : [];
+    const deliveryPending = !deliveryResult?.ok || results.some((item: any) => item?.status !== "sent");
+
     return jsonResponse({
       ok: true,
       state: "completed",
       cadastroId,
       warning,
-      message: "Dependente(s) incluido(s) com sucesso!",
+      contractHash: acceptedSession.contract_hash,
+      pdfHash,
+      deliveryPending,
+      message: deliveryPending
+        ? "Dependente(s) incluido(s) com sucesso! O termo aceito esta sendo enviado por e-mail e anexado ao ERP."
+        : "Dependente(s) incluido(s) com sucesso! O termo aceito foi enviado por e-mail e anexado ao ERP.",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erro inesperado";
     console.error("[cadastro-public-dependent-submit]", error);
-    if (submissionId) {
+    if (submissionId && !erpCommitted) {
       await supabase.from("public_dependent_submissions").update({
         status: "failed",
         last_error: message,
         updated_at: new Date().toISOString(),
       }).eq("id", submissionId);
+    }
+    if (contractSessionId) {
+      await supabase.from("public_contract_sessions").update({
+        status: erpCommitted ? "needs_attention" : "erp_failed",
+        erp_response: { error: message, failed_at: new Date().toISOString() },
+        updated_at: new Date().toISOString(),
+      }).eq("id", contractSessionId).in("status", ["erp_processing", "erp_registered", "deliveries_pending"]);
     }
     if (message === "ERP_VALIDATION_UNAVAILABLE" || message === "ERP_CATALOG_UNAVAILABLE") {
       return jsonResponse({ error: "Nao foi possivel validar os dados no ERP neste momento.", code: message }, 503);
