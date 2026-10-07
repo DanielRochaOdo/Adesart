@@ -512,6 +512,42 @@ fun PublicAdesaoParityScreen(
                         }
                     }
 
+                    PublicStage.EXISTING_MEMBER -> {
+                        WebCard {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(
+                                    "Que bom ter você com a gente!",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    "Você já possui um plano ativo e pode aproveitar este momento para incluir novos dependentes de forma rápida e fácil.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                ReviewLine("Associado", existingMemberName.ifBlank { nome })
+                                ReviewLine("Empresa", existingMemberCompany.ifBlank { currentLink.empresaNome })
+                                VendaButton(
+                                    label = "Incluir dependente",
+                                    onClick = {
+                                        if (dependentes.isEmpty()) {
+                                            val onlyPlan = plans.singleOrNull()
+                                            dependentes.add(
+                                                PublicDependentDraft(
+                                                    plano = onlyPlan?.codigo ?: 0,
+                                                    planoValor = onlyPlan?.dependenteValor() ?: "0,00",
+                                                ),
+                                            )
+                                        }
+                                        setStage(PublicStage.DEPENDENTS)
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = !busy,
+                                )
+                            }
+                        }
+                    }
+
                     PublicStage.DETAILS -> {
                         WebCard {
                             Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -730,6 +766,128 @@ fun PublicAdesaoParityScreen(
                                 }
                             },
                         )
+                    }
+
+                    PublicStage.EXISTING_CONTACT -> {
+                        WebCard {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(
+                                    "Confirme seus dados de contato",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    "Usaremos estes dados para confirmar sua solicitação.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                OutlinedTextField(
+                                    value = existingPhone,
+                                    onValueChange = { existingPhone = it.filter(Char::isDigit).take(11) },
+                                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                    label = { Text("Telefone / WhatsApp") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                                    enabled = !busy,
+                                )
+                                OutlinedTextField(
+                                    value = existingEmail,
+                                    onValueChange = { existingEmail = it },
+                                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                    label = { Text("E-mail") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                                    enabled = !busy,
+                                )
+                                VendaButton(
+                                    label = "Continuar",
+                                    onClick = {
+                                        val pending = listOfNotNull(
+                                            if (existingPhone.filter(Char::isDigit).length < 10) "Telefone / WhatsApp" else null,
+                                            if (!isValidEmail(existingEmail)) "E-mail" else null,
+                                        )
+                                        if (pending.isNotEmpty()) {
+                                            validationErrors = pending
+                                            error = null
+                                        } else {
+                                            setStage(PublicStage.EXISTING_REVIEW)
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = !busy,
+                                )
+                            }
+                        }
+                    }
+
+                    PublicStage.EXISTING_REVIEW -> {
+                        WebCard {
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(
+                                    "Revise sua solicitação",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                ReviewLine("Responsável", existingMemberName.ifBlank { nome })
+                                ReviewLine("Empresa", existingMemberCompany.ifBlank { currentLink.empresaNome })
+                                ReviewLine("Dependentes", dependentes.size.toString())
+                                dependentes.forEach { dep ->
+                                    Text(
+                                        "${dep.nome} - ${plans.firstOrNull { it.codigo == dep.plano }?.nome ?: "-"}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                ReviewLine("Telefone", formatPhone(existingPhone))
+                                ReviewLine("E-mail", existingEmail)
+                                VendaButton(
+                                    label = "Confirmar inclusão",
+                                    onClick = {
+                                        busy = true
+                                        error = null
+                                        scope.launch {
+                                            val payloadDependentes = dependentes.map { dep ->
+                                                PublicCadastroDependente(
+                                                    tipo = dep.tipo,
+                                                    nome = dep.nome.trim(),
+                                                    dataNascimento = dep.dataNascimento.trim(),
+                                                    cpf = dep.cpf.filter(Char::isDigit),
+                                                    sexo = dep.sexo,
+                                                    sexoDescricao = if (dep.sexo == 1) "Masculino" else "Feminino",
+                                                    plano = dep.plano,
+                                                    planoValor = dep.planoValor,
+                                                    nomeMae = dep.nomeMae.trim(),
+                                                )
+                                            }
+                                            runCatching {
+                                                viewModel.submitPublicDependents(
+                                                    attemptToken = attemptToken,
+                                                    confirmedPhone = existingPhone,
+                                                    confirmedEmail = existingEmail,
+                                                    dependents = payloadDependentes,
+                                                )
+                                            }.onSuccess { response ->
+                                                if (!response.ok) {
+                                                    error = response.error ?: "Nao foi possivel incluir os dependentes."
+                                                } else {
+                                                    successMessage = response.warning
+                                                        ?: response.message
+                                                        ?: "Dependente(s) incluído(s) com sucesso!"
+                                                    setStage(PublicStage.SUCCESS)
+                                                }
+                                            }.onFailure {
+                                                error = CadastroApiErrorMapper.mapUserMessage(
+                                                    it.message,
+                                                    "Nao foi possivel incluir os dependentes.",
+                                                )
+                                            }
+                                            busy = false
+                                        }
+                                    },
+                                    loading = busy,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = !busy,
+                                )
+                            }
+                        }
                     }
 
                     PublicStage.REVIEW -> {
