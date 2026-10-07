@@ -304,7 +304,7 @@ export function PublicCadastroLink() {
     () => flowMode === 'existing_member' ? existingPlans : (linkData?.planos || []),
     [existingPlans, flowMode, linkData],
   );
-  const coverageCode = form.titularPlano;
+  const coverageCode = flowMode === 'existing_member' ? (dependents[0]?.plano || 0) : form.titularPlano;
   const coverageName = coverageNameFromCode(coverageCode);
   // A preparacao no servidor determina se ha cobertura para TODOS os planos.
   // Nunca exigir aceite com base apenas em um link antigo da consulta inicial.
@@ -573,18 +573,27 @@ export function PublicCadastroLink() {
     setDependents((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const dependentsValid = () => {
+  const dependentErrors = () => {
+    const errors: string[] = [];
     const seenCpfs = new Set<string>([removeCPFMask(cpf)]);
-    for (const dep of dependents) {
+
+    dependents.forEach((dep, index) => {
+      const label = `Dependente ${index + 1}`;
       const depCpf = removeCPFMask(dep.cpf);
-      if (!depCpf || !validateCPF(depCpf)) return `Informe um CPF válido para ${dep.nome || 'o dependente'}.`;
-      if (seenCpfs.has(depCpf)) return 'Existem CPFs duplicados no cadastro.';
-      seenCpfs.add(depCpf);
-      if (!dep.tipo || !dep.nome.trim() || !dep.dataNascimento || ![0, 1].includes(dep.sexo) || !dep.nomeMae.trim() || !dep.plano) {
-        return 'Preencha todos os campos obrigatórios dos dependentes.';
-      }
-    }
-    return '';
+
+      if (!depCpf || !validateCPF(depCpf)) errors.push(`${label}: informe um CPF válido.`);
+      else if (seenCpfs.has(depCpf)) errors.push(`${label}: este CPF já foi informado na solicitação.`);
+      else seenCpfs.add(depCpf);
+
+      if (!dep.tipo) errors.push(`${label}: selecione o grau de parentesco.`);
+      if (!dep.nome.trim()) errors.push(`${label}: informe o nome completo.`);
+      if (!validDate(dep.dataNascimento)) errors.push(`${label}: informe uma data de nascimento válida.`);
+      if (![0, 1].includes(dep.sexo)) errors.push(`${label}: selecione o sexo.`);
+      if (!dep.nomeMae.trim()) errors.push(`${label}: informe o nome da mãe.`);
+      if (!dep.plano) errors.push(`${label}: selecione o plano.`);
+    });
+
+    return errors;
   };
 
   const goReview = () => {
@@ -593,16 +602,16 @@ export function PublicCadastroLink() {
       setError('');
       return;
     }
-    const message = dependentsValid();
-    if (message) { setValidationErrors([message]); setError(''); return; }
+    const pending = dependentErrors();
+    if (pending.length) { setValidationErrors(pending); setError(''); return; }
     setError('');
     setStage(flowMode === 'existing_member' ? 'existing_contact' : 'review');
   };
 
   const goExistingReview = () => {
     const pending = [
-      normalizePhone(form.telefone).length < 10 && 'Telefone / WhatsApp',
-      !isEmail(form.email) && 'E-mail',
+      normalizePhone(form.telefone).length < 10 && 'Telefone / WhatsApp: informe um número válido com DDD.',
+      !isEmail(form.email) && 'E-mail: informe um endereço válido.',
     ].filter(Boolean) as string[];
     if (pending.length) {
       setValidationErrors(pending);
@@ -614,9 +623,9 @@ export function PublicCadastroLink() {
   };
 
   const submitExistingDependents = async () => {
-    const message = dependentsValid();
-    if (message || dependents.length === 0) {
-      setValidationErrors([message || 'Adicione ao menos um dependente.']);
+    const pending = dependentErrors();
+    if (pending.length || dependents.length === 0) {
+      setValidationErrors(pending.length ? pending : ['Adicione ao menos um dependente.']);
       setError('');
       return;
     }
@@ -634,13 +643,18 @@ export function PublicCadastroLink() {
         headers: publicHeaders(),
         body: JSON.stringify({
           attemptToken,
+          contractToken,
+          acceptedTerms,
+          acceptedData,
+          acceptedCoverage: Boolean(coverageUrl && acceptedCoverage),
           confirmedPhone: normalizePhone(form.telefone),
           confirmedEmail: form.email.trim().toLowerCase(),
           dependents: dependents.map(({ id: _id, ...dep }) => dep),
         }),
       });
       const result = await response.json();
-      if (!response.ok || !result.ok) throw new Error(result.error || 'Não foi possível incluir os dependentes.');
+      if (!response.ok && response.status !== 202) throw new Error(result.error || 'Não foi possível incluir os dependentes.');
+      if (!result.ok && response.status !== 202) throw new Error(result.error || 'Não foi possível incluir os dependentes.');
       setSuccessMessage(result.message || 'Dependente(s) incluído(s) com sucesso!');
       sessionStorage.removeItem('adesart-public-attempt-token');
       setStage('success');
@@ -718,7 +732,13 @@ export function PublicCadastroLink() {
     if (!acceptedTerms || !acceptedData || (coverageUrl && !acceptedCoverage)) {
       setError(coverageUrl
         ? 'Marque os três aceites para concluir. A cobertura está disponível para consulta, caso deseje.'
-        : 'Aceite os termos do contrato e confirme os dados para concluir.');
+        : flowMode === 'existing_member'
+          ? 'Aceite os termos da inclusão e confirme os dados para concluir.'
+          : 'Aceite os termos do contrato e confirme os dados para concluir.');
+      return;
+    }
+    if (flowMode === 'existing_member') {
+      await submitExistingDependents();
       return;
     }
     setBusy(true);
@@ -915,7 +935,7 @@ export function PublicCadastroLink() {
           </div>
           <button type="button" onClick={addDependent} className="vm-public-info mt-4 flex min-h-12 w-full items-center justify-center rounded-2xl border border-dashed border-emerald-500/40 px-4 text-sm font-semibold text-emerald-700 dark:text-emerald-300"><Plus className="mr-2 h-4 w-4" />Adicionar dependente</button>
           <Button onClick={goReview} className="mt-5 min-h-12 w-full text-base">Continuar {flowMode !== 'existing_member' && dependents.length === 0 ? 'sem dependentes' : ''}</Button>
-          {validationErrors.length > 0 && <div role="alert" className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800">Corrija as pendências: {validationErrors.join(', ')}.</div>}
+          {validationErrors.length > 0 && <div role="alert" className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800"><p className="font-semibold">Corrija os seguintes campos:</p><ul className="mt-1 list-disc pl-5">{validationErrors.map((message) => <li key={message}>{message}</li>)}</ul></div>}
         </section>
       )}
 
@@ -929,7 +949,7 @@ export function PublicCadastroLink() {
           <Input label="Telefone / WhatsApp" inputMode="tel" value={formatPhone(form.telefone)} onChange={(event) => setForm((prev) => ({ ...prev, telefone: event.target.value }))} required className="min-h-12" />
           <Input label="E-mail" type="email" value={form.email} onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))} required className="min-h-12" />
           <Button onClick={goExistingReview} className="min-h-12 w-full text-base">Continuar</Button>
-          {validationErrors.length > 0 && <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800">Corrija os campos: {validationErrors.join(', ')}.</div>}
+          {validationErrors.length > 0 && <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-800"><p className="font-semibold">Corrija os seguintes campos:</p><ul className="mt-1 list-disc pl-5">{validationErrors.map((message) => <li key={message}>{message}</li>)}</ul></div>}
         </section>
       )}
 
@@ -943,7 +963,7 @@ export function PublicCadastroLink() {
             <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Dependentes</span><strong className="mt-1 block text-slate-900">{dependents.length}</strong>{dependents.map((dep) => <p key={dep.id} className="mt-2 text-slate-600">{dep.nome} - {plans.find((plan) => plan.Plano === dep.plano)?.nomeExibicao}</p>)}</div>
             <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Contato</span><strong className="mt-1 block text-slate-900">{formatPhone(form.telefone)}</strong><span className="text-slate-600">{form.email}</span></div>
           </div>
-          <Button onClick={submitExistingDependents} disabled={busy} className="mt-5 min-h-12 w-full text-base">{busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}Confirmar inclusão</Button>
+          <Button onClick={() => { setEmailToConfirm(form.email); setEmailModalOpen(true); setError(''); }} disabled={busy} className="mt-5 min-h-12 w-full text-base"><FileCheck2 className="mr-2 h-5 w-5" />Revisar termos da inclusão</Button>
         </section>
       )}
 
@@ -963,14 +983,14 @@ export function PublicCadastroLink() {
 
       {stage === 'contract' && (
         <section className="vm-public-section rounded-3xl p-4 sm:p-5">
-          <button type="button" onClick={() => setStage('review')} className="mb-4 inline-flex items-center text-sm font-medium text-slate-600"><ChevronLeft className="mr-1 h-4 w-4" />Voltar e alterar dados</button>
-          <div className="mb-4 flex items-center gap-3"><FileCheck2 className="h-8 w-8 text-emerald-700" /><div><h2 className="text-xl font-bold text-slate-900">Contrato de adesão</h2><p className="text-xs text-slate-500">Hash: {contractHash.slice(0, 16)}...</p></div></div>
+          <button type="button" onClick={() => setStage(flowMode === 'existing_member' ? 'existing_review' : 'review')} className="mb-4 inline-flex items-center text-sm font-medium text-slate-600"><ChevronLeft className="mr-1 h-4 w-4" />Voltar e alterar dados</button>
+          <div className="mb-4 flex items-center gap-3"><FileCheck2 className="h-8 w-8 text-emerald-700" /><div><h2 className="text-xl font-bold text-slate-900">{flowMode === 'existing_member' ? 'Termos da inclusão de dependentes' : 'Contrato de adesão'}</h2><p className="text-xs text-slate-500">Hash: {contractHash.slice(0, 16)}...</p></div></div>
           <div className="vm-public-info vm-glass-scroll max-h-[50vh] overflow-y-auto rounded-2xl p-4"><pre className="whitespace-pre-wrap break-words font-sans text-sm leading-6 text-slate-700">{contractText}</pre></div>
           <div className="mt-5 space-y-3">
             {coverageUrl && <>
               <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                 <h3 className="font-semibold text-emerald-950">Cobertura do plano {coverageName}</h3>
-                <p className="mt-1 text-sm text-emerald-900">Leia os procedimentos cobertos antes de concluir sua adesão.</p>
+                <p className="mt-1 text-sm text-emerald-900">{flowMode === 'existing_member' ? 'Leia os procedimentos cobertos antes de concluir a inclusão.' : 'Leia os procedimentos cobertos antes de concluir sua adesão.'}</p>
                 <div className="mt-3 flex flex-wrap gap-3">
                   <button type="button" onClick={() => setCoverageOpen(true)} className="rounded-lg bg-emerald-700 px-3 py-2 text-sm font-semibold text-white">Ver cobertura do plano</button>
                   <a href={coverageUrl} target="_blank" rel="noreferrer" download={`Cobertura-${coverageName || coverageCode}.pdf`} className="inline-flex items-center gap-2 rounded-lg border border-emerald-600 px-3 py-2 text-sm font-semibold text-emerald-800"><Download className="h-4 w-4" />Baixar PDF</a>
@@ -978,10 +998,10 @@ export function PublicCadastroLink() {
               </div>
               <label className="vm-public-info flex cursor-pointer items-start gap-3 rounded-2xl p-4"><input type="checkbox" checked={acceptedCoverage} onChange={(event) => setAcceptedCoverage(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Estou ciente da cobertura do plano contratado, disponibilizada para consulta.</strong></span></label>
             </>}
-            <label className="vm-public-info flex cursor-pointer items-start gap-3 rounded-2xl p-4"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Li e aceito os termos e condicoes do contrato apresentado.</strong></span></label>
+            <label className="vm-public-info flex cursor-pointer items-start gap-3 rounded-2xl p-4"><input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>{flowMode === 'existing_member' ? 'Li e aceito os termos apresentados para a inclusão dos dependentes.' : 'Li e aceito os termos e condicoes do contrato apresentado.'}</strong></span></label>
             <label className="vm-public-info flex cursor-pointer items-start gap-3 rounded-2xl p-4"><input type="checkbox" checked={acceptedData} onChange={(event) => setAcceptedData(event.target.checked)} className="mt-1 h-5 w-5" /><span className="text-sm leading-6 text-slate-700"><strong>Confirmo que os dados informados estao corretos.</strong></span></label>
           </div>
-          <Button onClick={finalize} disabled={busy || !acceptedTerms || !acceptedData || Boolean(coverageUrl && !acceptedCoverage)} className="mt-5 min-h-12 w-full text-base">{busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}Aceitar e concluir adesao</Button>
+          <Button onClick={finalize} disabled={busy || !acceptedTerms || !acceptedData || Boolean(coverageUrl && !acceptedCoverage)} className="mt-5 min-h-12 w-full text-base">{busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}{flowMode === 'existing_member' ? 'Aceitar e concluir inclusão' : 'Aceitar e concluir adesao'}</Button>
         </section>
       )}
 
@@ -999,8 +1019,8 @@ export function PublicCadastroLink() {
         <div className="vm-modal-overlay fixed inset-0 z-[100] flex items-end p-0 sm:items-center sm:justify-center sm:p-4">
           <div className="vm-glass-modal w-full rounded-t-3xl p-5 sm:max-w-md sm:rounded-3xl sm:p-6">
             <h3 className="text-xl font-bold text-slate-900">Confirme seu e-mail</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-600">O contrato será enviado para este endereço. Você pode corrigi-lo antes de continuar.</p>
-            <div className="mt-5"><Input label="E-mail do contrato" type="email" value={emailToConfirm} onChange={(event) => setEmailToConfirm(event.target.value)} required className="min-h-12" /></div>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{flowMode === 'existing_member' ? 'O termo aceito será enviado para este endereço e anexado ao ERP. Você pode corrigir o e-mail antes de continuar.' : 'O contrato será enviado para este endereço. Você pode corrigi-lo antes de continuar.'}</p>
+            <div className="mt-5"><Input label={flowMode === 'existing_member' ? 'E-mail para envio do termo' : 'E-mail do contrato'} type="email" value={emailToConfirm} onChange={(event) => setEmailToConfirm(event.target.value)} required className="min-h-12" /></div>
             <div className="mt-5 grid grid-cols-2 gap-3"><Button variant="secondary" onClick={() => setEmailModalOpen(false)} disabled={busy} className="min-h-12">Cancelar</Button><Button onClick={prepareContract} disabled={busy} className="min-h-12">{busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}Confirmar</Button></div>
           </div>
         </div>
