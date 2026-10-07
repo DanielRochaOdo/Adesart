@@ -114,12 +114,12 @@ const extractErpMemberContacts = (associado: any) => {
     associado?.email1,
     associado?.email2,
     associado?.emailPrincipal,
-  ].map((value) => String(value || "").trim().toLowerCase())
-    .find((value) => value.includes("@")) || "";
+  ].map((value: unknown) => String(value || "").trim().toLowerCase())
+    .find((value: string) => value.includes("@")) || "";
 
   const contactEmail = contactValues
-    .map((item) => item.valor.toLowerCase())
-    .find((value) => value.includes("@")) || "";
+    .map((item: { valor: string }) => item.valor.toLowerCase())
+    .find((value: string) => value.includes("@")) || "";
 
   const directPhone = [
     associado?.whatsapp,
@@ -133,12 +133,12 @@ const extractErpMemberContacts = (associado: any) => {
     associado?.telefone2,
     associado?.numeroTelefone,
     associado?.fone,
-  ].map((value) => normalizeErpMemberPhone(value))
-    .find((value) => value.length >= 10) || "";
+  ].map((value: unknown) => normalizeErpMemberPhone(value))
+    .find((value: string) => value.length >= 10) || "";
 
   const contactPhone = contactValues
-    .map((item) => normalizeErpMemberPhone(item.valor))
-    .find((value) => value.length >= 10) || "";
+    .map((item: { valor: string }) => normalizeErpMemberPhone(item.valor))
+    .find((value: string) => value.length >= 10) || "";
 
   return {
     telefone: directPhone || contactPhone,
