@@ -1,6 +1,7 @@
 package br.com.vendamais.shared
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.UIKitInteropInteractionMode
@@ -35,7 +36,7 @@ private fun topViewController(): UIViewController? {
     return controller
 }
 
-private object VendaMaisWebViewUiDelegate : NSObject(), WKUIDelegateProtocol {
+private class VendaMaisWebViewUiDelegate : NSObject(), WKUIDelegateProtocol {
     override fun webView(
         webView: WKWebView,
         runJavaScriptConfirmPanelWithMessage: String,
@@ -499,6 +500,8 @@ private fun iosMobileNavigationScript(appVersion: String, buildNumber: String): 
 @OptIn(ExperimentalForeignApi::class, ExperimentalComposeUiApi::class)
 @Composable
 actual fun PlatformWebView(url: String, modifier: Modifier) {
+    val uiDelegate = remember { VendaMaisWebViewUiDelegate() }
+
     UIKitView(
         modifier = modifier,
         properties = UIKitInteropProperties(
@@ -526,7 +529,7 @@ actual fun PlatformWebView(url: String, modifier: Modifier) {
                 frame = CGRectMake(0.0, 0.0, 0.0, 0.0),
                 configuration = configuration,
             ).apply {
-                UIDelegate = VendaMaisWebViewUiDelegate
+                UIDelegate = uiDelegate
                 allowsBackForwardNavigationGestures = true
                 val nsUrl = NSURL(string = url)
                 if (nsUrl != null) {
