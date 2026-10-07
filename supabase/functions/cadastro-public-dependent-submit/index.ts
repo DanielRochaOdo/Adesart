@@ -104,6 +104,42 @@ const erpDate = (value: string) => {
   return year && month && day ? `${day}/${month}/${year}` : "";
 };
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const fetchWithTimeout = async (url: string, init: RequestInit, timeoutMs: number) => {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+};
+
+const memberHasDependentCpf = (record: any, cpf: string) => {
+  const target = normalizeDigits(cpf);
+  const dependents = Array.isArray(record?.dependentes) ? record.dependentes : [];
+  return dependents.some((dep: any) => normalizeDigits(dep?.numeroCpfDependente) === target);
+};
+
+const reconcileDependentsInErp = async (memberCode: number, cpfs: string[]) => {
+  const delays = [0, 1200, 2500];
+  for (const delay of delays) {
+    if (delay > 0) await sleep(delay);
+    try {
+      const records = await fetchAssociados({ codigoAssociado: String(memberCode) });
+      const holder = records.find((item: any) => Number(item?.codigo) === memberCode);
+      if (!holder) continue;
+      if (cpfs.every((cpf) => memberHasDependentCpf(holder, cpf))) {
+        return { reconciled: true, holder };
+      }
+    } catch (error) {
+      console.warn("[cadastro-public-dependent-submit] reconcile", error);
+    }
+  }
+  return { reconciled: false, holder: null };
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Metodo nao permitido" }, 405);
@@ -190,6 +226,12 @@ Deno.serve(async (req: Request) => {
     for (const dep of normalized) {
       if (!planMap.has(dep.plano)) {
         return jsonResponse({ error: "Um dos planos selecionados nao esta mais disponivel.", code: "PLAN_NOT_AVAILABLE" }, 409);
+      }
+      if (memberHasDependentCpf(holder, dep.cpf)) {
+        return jsonResponse({
+          error: `${dep.nome} ja consta vinculado a este associado no ERP.`,
+          code: "DEPENDENT_ALREADY_LINKED",
+        }, 409);
       }
       if (await anyActive(dep.cpf)) {
         return jsonResponse({ error: `${dep.nome} ja possui plano ativo e nao pode ser incluido novamente.`, code: "DEPENDENT_ACTIVE_IN_ERP" }, 409);
@@ -284,21 +326,53 @@ Deno.serve(async (req: Request) => {
     };
 
     const erpUrl = Deno.env.get("ERP_URL_NOVO_DEPENDENTE") || "https://odontoart.s4e.com.br/api/vendedor/NovoDependente";
-    const erpResponse = await fetch(erpUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: erpToken(), dados: erpPayload }),
-    });
-    const erpResult = await erpResponse.json().catch(() => ({}));
-    if (!erpResponse.ok || !erpResult?.dados) {
-      const errorMessage = String(erpResult?.message || erpResult?.mensagem || "Erro ao incluir dependente no ERP");
+    let erpStatus = 502;
+    let erpResult: any = {};
+    let erpOk = false;
+    let transportError: unknown = null;
+
+    try {
+      const erpResponse = await fetchWithTimeout(erpUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: erpToken(), dados: erpPayload }),
+      }, 20_000);
+      erpStatus = erpResponse.status;
+      erpResult = await erpResponse.json().catch(() => ({}));
+      erpOk = erpResponse.ok && Boolean(erpResult?.dados);
+    } catch (error) {
+      transportError = error;
+    }
+
+    if (!erpOk) {
+      const reconciliation = await reconcileDependentsInErp(
+        memberCode,
+        normalized.map((dep) => dep.cpf),
+      );
+      if (reconciliation.reconciled) {
+        erpOk = true;
+        erpResult = {
+          reconciled: true,
+          message: "Inclusao confirmada por reconciliacao no ERP.",
+          original_response: erpResult,
+        };
+      }
+    }
+
+    if (!erpOk) {
+      const errorMessage = transportError
+        ? "Nao foi possivel confirmar o resultado do envio ao ERP. Tente novamente em alguns instantes."
+        : String(erpResult?.message || erpResult?.mensagem || "Erro ao incluir dependente no ERP");
       await supabase.from("public_dependent_submissions").update({
         status: "failed",
         erp_response: erpResult,
         last_error: errorMessage,
         updated_at: new Date().toISOString(),
       }).eq("id", submissionId);
-      return jsonResponse({ error: errorMessage, code: "ERP_DEPENDENT_FAILED" }, Math.max(erpResponse.status, 400));
+      return jsonResponse({
+        error: errorMessage,
+        code: transportError ? "ERP_DEPENDENT_RESULT_UNCERTAIN" : "ERP_DEPENDENT_FAILED",
+      }, transportError ? 503 : Math.max(erpStatus, 400));
     }
 
     const historyPayload = {
