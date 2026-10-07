@@ -184,6 +184,7 @@ const checkErpEligibility = async (cpf: string) => {
         nomeSituacao: dep?.nomeSituacao ?? null,
         nomeAssociado: String(associado?.nome || "").trim(),
         empresaNome: String(associado?.nomeFantasiaDaEmpresa || associado?.razaoSocialDaEmpresa || "").trim(),
+        dataNascimento: normalizeDate(dep?.dataNascimento),
         telefone: memberContacts.telefone,
         email: memberContacts.email,
         isResponsible,
@@ -398,6 +399,70 @@ Deno.serve(async (req: Request) => {
         cachedAttempt.id,
         attemptToken,
         cachedAttempt.profile_snapshot,
+        erpEligibility,
+      );
+    }
+
+    const erpBirthDate = normalizeDate(erpEligibility.activeRecord?.dataNascimento);
+    if (erpEligibility.activeRecord && erpBirthDate) {
+      const attemptToken = randomToken();
+      const erpContacts = [
+        erpEligibility.activeRecord.telefone
+          ? { tipo: "whatsapp", valor: erpEligibility.activeRecord.telefone, principal: true }
+          : null,
+        erpEligibility.activeRecord.email
+          ? { tipo: "email", valor: erpEligibility.activeRecord.email, principal: true }
+          : null,
+      ].filter(Boolean);
+      const erpPerson = {
+        cpf,
+        nome: erpEligibility.activeRecord.nomeAssociado || "",
+        dataNascimento: erpBirthDate,
+        sexoCodigo: -1,
+        nomeMae: "",
+        contatos: erpContacts,
+        endereco: {
+          cep: "",
+          tipoLogradouro: "",
+          logradouro: "",
+          numero: "",
+          complemento: "",
+          bairro: "",
+          cidade: "",
+          uf: "",
+        },
+      };
+
+      const matchesBirthDate = erpBirthDate === birthDate;
+      const { data: erpAttempt, error: erpAttemptError } = await supabase
+        .from("public_adesao_attempts")
+        .insert({
+          link_id: link.id,
+          cpf_hash: cpfHash,
+          attempt_token_hash: await sha256(attemptToken),
+          ip_hash: ipHash,
+          profile_snapshot: erpPerson,
+          failed_birth_attempts: matchesBirthDate ? 0 : 1,
+          status: "created",
+        })
+        .select("id")
+        .single();
+      if (erpAttemptError || !erpAttempt) {
+        throw erpAttemptError || new Error("ATTEMPT_CREATE_FAILED");
+      }
+
+      if (!matchesBirthDate) {
+        return jsonResponse({
+          error: "CPF ou data de nascimento nao conferem",
+          code: "IDENTIFICATION_MISMATCH",
+        }, 401);
+      }
+
+      return finishAuthentication(
+        supabase,
+        erpAttempt.id,
+        attemptToken,
+        erpPerson,
         erpEligibility,
       );
     }
