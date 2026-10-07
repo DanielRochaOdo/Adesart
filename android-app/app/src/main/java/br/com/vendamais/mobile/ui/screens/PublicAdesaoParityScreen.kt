@@ -474,16 +474,20 @@ fun PublicAdesaoParityScreen(
                                                                         valorDependente = plan.valorDependente,
                                                                     )
                                                                 }
-                                                                existingPhone = person.contatos.firstOrNull {
-                                                                    it.tipo in setOf("whatsapp", "celular") && it.principal
-                                                                }?.valor ?: person.contatos.firstOrNull {
-                                                                    it.tipo in setOf("whatsapp", "celular", "fixo")
-                                                                }?.valor.orEmpty()
-                                                                existingEmail = person.contatos.firstOrNull {
-                                                                    it.tipo == "email" && it.principal
-                                                                }?.valor ?: person.contatos.firstOrNull {
-                                                                    it.tipo == "email"
-                                                                }?.valor.orEmpty()
+                                                                existingPhone = response.member?.telefone.orEmpty().ifBlank {
+                                                                    person.contatos.firstOrNull {
+                                                                        it.tipo in setOf("whatsapp", "celular") && it.principal
+                                                                    }?.valor ?: person.contatos.firstOrNull {
+                                                                        it.tipo in setOf("whatsapp", "celular", "fixo")
+                                                                    }?.valor.orEmpty()
+                                                                }
+                                                                existingEmail = response.member?.email.orEmpty().ifBlank {
+                                                                    person.contatos.firstOrNull {
+                                                                        it.tipo == "email" && it.principal
+                                                                    }?.valor ?: person.contatos.firstOrNull {
+                                                                        it.tipo == "email"
+                                                                    }?.valor.orEmpty()
+                                                                }
                                                                 dependentes.clear()
                                                                 setStage(PublicStage.EXISTING_MEMBER)
                                                             } else {
