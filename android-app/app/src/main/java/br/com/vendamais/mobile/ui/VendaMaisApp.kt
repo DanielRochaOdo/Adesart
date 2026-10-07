@@ -151,6 +151,7 @@ fun VendaMaisApp(
 
             runCatching { context.startActivity(marketIntent) }
                 .onFailure { context.startActivity(webIntent) }
+            Unit
         }
     }
 
