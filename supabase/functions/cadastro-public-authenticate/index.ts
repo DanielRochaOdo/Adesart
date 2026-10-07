@@ -108,37 +108,166 @@ const checkErpEligibility = async (cpf: string) => {
   if (!response.ok) throw new Error("ERP_VALIDATION_UNAVAILABLE");
   const result = await response.json();
   const records = Array.isArray(result?.dados) ? result.dados : [];
+  const activeRecords: any[] = [];
 
   for (const associado of records) {
     const dependentes = Array.isArray(associado?.dependentes) ? associado.dependentes : [];
+    const isResponsible = normalizeDigits(associado?.cpf) === cpf;
     const exactMatches = dependentes.filter(
       (dep: any) => normalizeDigits(dep?.numeroCpfDependente) === cpf,
     );
-
-    let candidates = exactMatches;
-
-    if (candidates.length === 0 && normalizeDigits(associado?.cpf) === cpf && dependentes.length > 0) {
-      candidates = [dependentes[0]];
-    }
+    const candidates = exactMatches.length > 0
+      ? exactMatches
+      : isResponsible && dependentes.length > 0
+        ? [dependentes[0]]
+        : [];
 
     for (const dep of candidates) {
-      if (isActiveErpStatus(dep)) {
-        return {
-          eligible: false,
-          activeRecord: {
-            codigoAssociado: associado?.codigo ?? null,
-            codigoEmpresa: associado?.codigoDaEmpresa ?? null,
-            codigoDependente: dep?.codigoDependente ?? null,
-            codigoPlano: dep?.codigoPlano ?? null,
-            codigoSituacao: dep?.codigoSituacao ?? null,
-            nomeSituacao: dep?.nomeSituacao ?? null,
-          },
-        };
-      }
+      if (!isActiveErpStatus(dep)) continue;
+      activeRecords.push({
+        codigoAssociado: associado?.codigo ?? null,
+        codigoEmpresa: associado?.codigoDaEmpresa ?? null,
+        codigoDependente: dep?.codigoDependente ?? null,
+        codigoPlano: dep?.codigoPlano ?? null,
+        codigoSituacao: dep?.codigoSituacao ?? null,
+        nomeSituacao: dep?.nomeSituacao ?? null,
+        nomeAssociado: String(associado?.nome || "").trim(),
+        empresaNome: String(associado?.nomeFantasiaDaEmpresa || associado?.razaoSocialDaEmpresa || "").trim(),
+        isResponsible,
+      });
     }
   }
 
-  return { eligible: true, activeRecord: null };
+  activeRecords.sort((a, b) => Number(Boolean(b.isResponsible)) - Number(Boolean(a.isResponsible)));
+  return activeRecords.length > 0
+    ? { eligible: false, activeRecord: activeRecords[0] }
+    : { eligible: true, activeRecord: null };
+};
+
+const fetchExistingMemberPlans = async (supabase: any, companyCode: number) => {
+  const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
+  let ERP_BASE_URL = Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
+  if (!ERP_TOKEN) throw new Error("ERP_TOKEN not configured");
+  if (!/^https?:\/\//i.test(ERP_BASE_URL)) ERP_BASE_URL = `https://${ERP_BASE_URL}`;
+  ERP_BASE_URL = ERP_BASE_URL.replace(/\/+$/, "");
+
+  const response = await fetch(
+    `${ERP_BASE_URL}/api/empresa/BuscaEmpresas?token=${encodeURIComponent(ERP_TOKEN)}&empresaId=${encodeURIComponent(String(companyCode))}`,
+    { headers: { Accept: "application/json" } },
+  );
+  if (!response.ok) throw new Error("ERP_VALIDATION_UNAVAILABLE");
+  const result = await response.json();
+  const empresa = Array.isArray(result?.dados) ? result.dados[0] : null;
+  const rawPlans = Array.isArray(empresa?.PrecoPlano)
+    ? empresa.PrecoPlano
+    : Array.isArray(empresa?.precoPlano)
+      ? empresa.precoPlano
+      : [];
+
+  const plans = rawPlans
+    .map((plan: any) => ({
+      Plano: Number(plan?.Plano ?? plan?.plano ?? plan?.Id ?? 0),
+      nomeExibicao: String(plan?.nomeExibicao ?? plan?.NomeANS ?? plan?.PlanoNome ?? plan?.Nome ?? `Plano ${plan?.Plano ?? plan?.plano ?? ""}`),
+      ValorTitular: Number(plan?.ValorTitular ?? plan?.valorTitular ?? 0),
+      ValorDependente: Number(plan?.ValorDependente ?? plan?.valorDependente ?? 0),
+      ValorAgregado: Number(plan?.ValorAgregado ?? plan?.valorAgregado ?? 0),
+    }))
+    .filter((item: any) =>
+      item.Plano > 0 &&
+      item.ValorTitular > 0 &&
+      item.ValorDependente > 0
+    );
+
+  const planIds = [...new Set(plans.map((item: any) => Number(item.Plano)))];
+  if (planIds.length === 0) return plans;
+
+  const { data: rows } = await supabase
+    .from("cadastro_planos_map")
+    .select("plano_id,nome_exibicao,ativo")
+    .in("plano_id", planIds);
+
+  const names = new Map(
+    (rows || [])
+      .filter((item: any) => item.ativo !== false && String(item.nome_exibicao || "").trim())
+      .map((item: any) => [Number(item.plano_id), String(item.nome_exibicao).trim()]),
+  );
+
+  return plans.map((plan: any) => ({
+    ...plan,
+    nomeExibicao: names.get(Number(plan.Plano)) || plan.nomeExibicao,
+  }));
+};
+
+const finishAuthentication = async (
+  supabase: any,
+  attemptId: string,
+  attemptToken: string,
+  person: any,
+  erpEligibility: Awaited<ReturnType<typeof checkErpEligibility>>,
+) => {
+  const now = new Date().toISOString();
+  const activeRecord = erpEligibility.activeRecord;
+
+  if (activeRecord && !activeRecord.isResponsible) {
+    await supabase.from("public_adesao_attempts").update({
+      profile_snapshot: person,
+      flow_mode: "existing_dependent",
+      erp_member_snapshot: activeRecord,
+      status: "created",
+      updated_at: now,
+    }).eq("id", attemptId);
+
+    return jsonResponse({ ok: true, state: "not_eligible", reason: "ACTIVE_DEPENDENT_IN_ERP" });
+  }
+
+  if (activeRecord?.isResponsible) {
+    const companyCode = Number(activeRecord.codigoEmpresa);
+    const plans = await fetchExistingMemberPlans(supabase, companyCode);
+    if (!Number.isInteger(companyCode) || companyCode <= 0 || plans.length === 0) {
+      return jsonResponse({
+        error: "Nao foi possivel localizar os planos disponiveis para seu vinculo atual.",
+        code: "ERP_MEMBER_PLANS_UNAVAILABLE",
+      }, 503);
+    }
+
+    await supabase.from("public_adesao_attempts").update({
+      attempt_token_hash: await sha256(attemptToken),
+      profile_snapshot: person,
+      flow_mode: "existing_member",
+      erp_member_snapshot: activeRecord,
+      status: "authenticated",
+      failed_birth_attempts: 0,
+      authenticated_at: now,
+      expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+      updated_at: now,
+    }).eq("id", attemptId);
+
+    return jsonResponse({
+      ok: true,
+      state: "existing_member",
+      attemptToken,
+      person,
+      member: {
+        nome: activeRecord.nomeAssociado || person?.nome || "",
+        empresa: activeRecord.empresaNome || "",
+      },
+      plans,
+    });
+  }
+
+  await supabase.from("public_adesao_attempts").update({
+    attempt_token_hash: await sha256(attemptToken),
+    profile_snapshot: person,
+    flow_mode: "new_member",
+    erp_member_snapshot: null,
+    status: "authenticated",
+    failed_birth_attempts: 0,
+    authenticated_at: now,
+    expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    updated_at: now,
+  }).eq("id", attemptId);
+
+  return jsonResponse({ ok: true, state: "authenticated", attemptToken, person });
 };
 
 Deno.serve(async (req: Request) => {
@@ -177,18 +306,15 @@ Deno.serve(async (req: Request) => {
     if ((ipAttempts || 0) >= 25) return jsonResponse({ error: "Muitas tentativas neste dispositivo/rede. Tente novamente mais tarde.", code: "RATE_LIMITED" }, 429);
 
     const erpEligibility = await checkErpEligibility(cpf);
-    if (!erpEligibility.eligible) {
-      await safeInsertLog(supabase, {
-        endpoint: "cadastro-public-authenticate:erp-eligibility",
-        method: "POST",
-        request_body: { cpf_hash: cpfHash, link_id: link.id },
-        response_body: { eligible: false, activeRecord: erpEligibility.activeRecord },
-        status_code: 200,
-        success: true,
-        duration_ms: 0,
-      });
-      return jsonResponse({ ok: true, state: "not_eligible", reason: "ACTIVE_IN_ERP" });
-    }
+    await safeInsertLog(supabase, {
+      endpoint: "cadastro-public-authenticate:erp-eligibility",
+      method: "POST",
+      request_body: { cpf_hash: cpfHash, link_id: link.id },
+      response_body: { eligible: erpEligibility.eligible, activeRecord: erpEligibility.activeRecord },
+      status_code: 200,
+      success: true,
+      duration_ms: 0,
+    });
 
     const { data: cachedAttempt } = await supabase.from("public_adesao_attempts")
       .select("*").eq("link_id", link.id).eq("cpf_hash", cpfHash).not("profile_snapshot", "is", null)
@@ -206,11 +332,13 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "CPF ou data de nascimento nao conferem", code: "IDENTIFICATION_MISMATCH" }, 401);
       }
       const attemptToken = randomToken();
-      await supabase.from("public_adesao_attempts").update({
-        attempt_token_hash: await sha256(attemptToken), status: "authenticated", authenticated_at: new Date().toISOString(),
-        expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(), updated_at: new Date().toISOString(),
-      }).eq("id", cachedAttempt.id);
-      return jsonResponse({ ok: true, state: "authenticated", attemptToken, person: cachedAttempt.profile_snapshot });
+      return finishAuthentication(
+        supabase,
+        cachedAttempt.id,
+        attemptToken,
+        cachedAttempt.profile_snapshot,
+        erpEligibility,
+      );
     }
 
     const now = new Date();
@@ -255,13 +383,18 @@ Deno.serve(async (req: Request) => {
     const person = { cpf, ...mapLemmitPessoa(lemmitData.pessoa) };
     const matchesBirthDate = person.dataNascimento === birthDate;
     await supabase.from("public_adesao_attempts").update({
-      profile_snapshot: person, lemmit_checked_at: new Date().toISOString(), failed_birth_attempts: matchesBirthDate ? 0 : 1,
-      status: matchesBirthDate ? "authenticated" : "created", authenticated_at: matchesBirthDate ? new Date().toISOString() : null,
+      profile_snapshot: person,
+      lemmit_checked_at: new Date().toISOString(),
+      failed_birth_attempts: matchesBirthDate ? 0 : 1,
+      status: "created",
+      authenticated_at: null,
       updated_at: new Date().toISOString(),
     }).eq("id", attempt.id);
 
-    if (!matchesBirthDate) return jsonResponse({ error: "CPF ou data de nascimento nao conferem", code: "IDENTIFICATION_MISMATCH" }, 401);
-    return jsonResponse({ ok: true, state: "authenticated", attemptToken, person });
+    if (!matchesBirthDate) {
+      return jsonResponse({ error: "CPF ou data de nascimento nao conferem", code: "IDENTIFICATION_MISMATCH" }, 401);
+    }
+    return finishAuthentication(supabase, attempt.id, attemptToken, person, erpEligibility);
   } catch (error) {
     console.error("[cadastro-public-authenticate]", error);
     const message = error instanceof Error ? error.message : "Erro inesperado";
