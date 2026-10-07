@@ -321,6 +321,12 @@ Deno.serve(async (req: Request) => {
       .gt("expires_at", new Date().toISOString()).order("created_at", { ascending: false }).limit(1).maybeSingle();
 
     if (cachedAttempt) {
+      if (cachedAttempt.status === "completed") {
+        return jsonResponse({
+          ok: true,
+          state: cachedAttempt.flow_mode === "existing_member" ? "existing_member_completed" : "completed",
+        });
+      }
       if (Number(cachedAttempt.failed_birth_attempts || 0) >= 3 || cachedAttempt.status === "locked") {
         return jsonResponse({ error: "Tentativas de identificacao bloqueadas temporariamente", code: "IDENTIFICATION_LOCKED" }, 429);
       }
