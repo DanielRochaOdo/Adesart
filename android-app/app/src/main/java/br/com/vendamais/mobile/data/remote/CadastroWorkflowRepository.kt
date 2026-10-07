@@ -369,17 +369,16 @@ class CadastroWorkflowRepository(
         val payload = buildJsonObject {
             put("is_active", false)
             put("deleted_at", java.time.OffsetDateTime.now().toString())
+            put("deleted_by", session.userId)
         }
 
-        client.safePost<List<CadastroLinkItem>>(
+        client.safePatch<List<CadastroLinkItem>>(
             url = "${AppConfig.supabaseUrl}/rest/v1/cadastro_links?id=eq.$linkId",
             json = json,
             body = payload,
         ) {
             applyAuthHeaders(session)
             header("Prefer", "return=representation")
-            method = io.ktor.http.HttpMethod.Patch
-            contentType(ContentType.Application.Json)
         }
     }
 
