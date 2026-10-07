@@ -122,6 +122,23 @@ const memberHasDependentCpf = (record: any, cpf: string) => {
   return dependents.some((dep: any) => normalizeDigits(dep?.numeroCpfDependente) === target);
 };
 
+const resolveSellerCode = async (supabase: any, link: any) => {
+  const direct = Number.parseInt(String(link?.vendedor_codigo || ""), 10);
+  if (direct > 0) return direct;
+
+  for (const id of [link?.vendedor_id, link?.created_by].filter(Boolean)) {
+    const { data } = await supabase
+      .from("profiles")
+      .select("external_id")
+      .eq("id", id)
+      .maybeSingle();
+    const code = Number.parseInt(String(data?.external_id || ""), 10);
+    if (code > 0) return code;
+  }
+
+  return 0;
+};
+
 const reconcileDependentsInErp = async (memberCode: number, cpfs: string[]) => {
   const delays = [0, 1200, 2500];
   for (const delay of delays) {
@@ -288,7 +305,7 @@ Deno.serve(async (req: Request) => {
       .eq("id", attempt.link_id).eq("is_active", true).maybeSingle();
     if (!link) throw new Error("LINK_UNAVAILABLE");
 
-    const sellerCode = Number(link.vendedor_codigo);
+    const sellerCode = await resolveSellerCode(supabase, link);
     if (!Number.isInteger(sellerCode) || sellerCode <= 0) throw new Error("SELLER_CODE_INVALID");
     const adesionistaCode = Number(link.adesionista_codigo || 0) || 0;
     const monthYear = new Date().toISOString().slice(0, 7);
