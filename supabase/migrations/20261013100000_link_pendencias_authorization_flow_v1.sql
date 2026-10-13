@@ -91,6 +91,8 @@ CREATE TABLE IF NOT EXISTS public.link_pendencia_files (
   arquivo_nome text NOT NULL,
   mime_type text,
   file_size_bytes bigint,
+  target_dependente_cpf text,
+  target_dependente_nome text,
   uploaded_by uuid REFERENCES public.profiles(id) ON DELETE SET NULL,
   sent_to_erp_at timestamptz,
   erp_queue_id uuid REFERENCES public.erp_upload_queue(id) ON DELETE SET NULL,
