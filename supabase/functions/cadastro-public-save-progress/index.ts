@@ -66,6 +66,10 @@ Deno.serve(async (req: Request) => {
       ok: true,
       pendingId: row?.id || null,
       stage,
+      // A confirmacao publica usa esta resposta como fonte autoritativa.
+      // O cliente nao deve decidir entre "Finalizar" e "Revisar contrato"
+      // apenas com estado local/cacheado.
+      requiresAuthorization: link.requires_authorization === true,
     });
   } catch (error) {
     console.error("[cadastro-public-save-progress]", error);
