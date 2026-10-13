@@ -560,6 +560,20 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Esta sessao nao permite concluir uma nova adesao.", code: "INVALID_FLOW_MODE" }, 409);
     }
 
+    const { data: currentLink, error: currentLinkError } = await supabase
+      .from("cadastro_links")
+      .select("id,requires_authorization")
+      .eq("id", attempt.link_id)
+      .maybeSingle();
+    if (currentLinkError) throw currentLinkError;
+    if (!currentLink) return jsonResponse({ error: "Link indisponivel", code: "LINK_UNAVAILABLE" }, 410);
+    if (currentLink.requires_authorization === true) {
+      return jsonResponse({
+        error: "Esta solicitacao deve ser finalizada para analise interna, sem contrato publico.",
+        code: "AUTHORIZATION_REVIEW_REQUIRED",
+      }, 409);
+    }
+
     stage = "load_contract_session";
     const tokenHash = await sha256(body.contractToken.trim());
     const { data: initialSession, error: sessionError } = await supabase
