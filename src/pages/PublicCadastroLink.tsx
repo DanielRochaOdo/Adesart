@@ -370,6 +370,15 @@ export function PublicCadastroLink() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Não foi possível validar seus dados.');
 
+      // A autenticação consulta novamente o link no servidor e é a fonte
+      // autoritativa para a regra de autorização. Isso evita que um resolve
+      // antigo/cacheado leve o cliente ao contrato por engano.
+      if (typeof result.requiresAuthorization === 'boolean') {
+        setLinkData((current) => current
+          ? { ...current, requiresAuthorization: result.requiresAuthorization }
+          : current);
+      }
+
       if (result.state === 'pending_review_completed') {
         setSuccessMessage('Seus dados foram enviados para análise. Em caso de dúvidas você pode entrar em contato com seu consultor.');
         setStage('success');
@@ -738,8 +747,8 @@ export function PublicCadastroLink() {
     }
   };
 
-  const finalizePendingReview = async () => {
-    if (!linkData?.requiresAuthorization) return;
+  const finalizePendingReview = async (forceAuthorization = false) => {
+    if (!forceAuthorization && !linkData?.requiresAuthorization) return;
 
     const pending = flowMode === 'existing_member'
       ? [
@@ -809,6 +818,14 @@ export function PublicCadastroLink() {
       });
       const result = await response.json();
       if (!response.ok || !result.ok) {
+        if (result.code === 'AUTHORIZATION_REVIEW_REQUIRED') {
+          setLinkData((current) => current
+            ? { ...current, requiresAuthorization: true }
+            : current);
+          setEmailModalOpen(false);
+          await finalizePendingReview(true);
+          return;
+        }
         if (result.code === 'CONTRACT_NOT_CONFIGURED' && Array.isArray(result.missingPlans)) {
           throw new Error(`Contrato ainda não configurado para o(s) plano(s): ${result.missingPlans.join(', ')}.`);
         }
