@@ -94,6 +94,57 @@ const localDateKey = (value: string | null) => {
   return `${year}-${month}-${day}`;
 };
 
+const formatPhone = (value: string) => {
+  const digits = value.replace(/\D/g, '');
+  if (digits.length === 11) {
+    return digits.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3');
+  }
+  if (digits.length === 10) {
+    return digits.replace(/(\d{2})(\d{4})(\d{4})/, '($1) $2-$3');
+  }
+  return value || 'Não informado';
+};
+
+const contactInfo = (item: LinkPending) => {
+  const snapshot = (item.latest_snapshot || {}) as any;
+  const cadastro = (snapshot?.cadastro && typeof snapshot.cadastro === 'object')
+    ? snapshot.cadastro
+    : snapshot;
+  const member = (snapshot?.member && typeof snapshot.member === 'object')
+    ? snapshot.member
+    : {};
+
+  const contatos = Array.isArray(cadastro?.contatos)
+    ? cadastro.contatos
+    : Array.isArray(snapshot?.contatos)
+      ? snapshot.contatos
+      : [];
+
+  const emailFromContacts = contatos
+    .map((contact: any) => String(contact?.valor || '').trim().toLowerCase())
+    .find((value: string) => value.includes('@')) || '';
+
+  const phoneFromContacts = contatos
+    .map((contact: any) => String(contact?.valor || '').replace(/\D/g, ''))
+    .find((value: string) => value.length >= 10) || '';
+
+  const telefone = String(
+    cadastro?.telefone ||
+    member?.telefone ||
+    phoneFromContacts ||
+    '',
+  ).trim();
+
+  const email = String(
+    cadastro?.email ||
+    member?.email ||
+    emailFromContacts ||
+    '',
+  ).trim().toLowerCase();
+
+  return { telefone, email };
+};
+
 export function LinkPendenciasList({
   reloadKey = 0,
   onSelectCadastro,
@@ -109,6 +160,7 @@ export function LinkPendenciasList({
   const [statusFilter, setStatusFilter] = useState('');
   const [empresaFilter, setEmpresaFilter] = useState('');
   const [vendedorFilter, setVendedorFilter] = useState('');
+  const [nextActionFilter, setNextActionFilter] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
 
@@ -208,6 +260,7 @@ export function LinkPendenciasList({
     const digits = term.replace(/\D/g, '');
 
     return items.filter((item) => {
+      const contacts = contactInfo(item);
       const haystack = [
         item.nome,
         item.cpf,
@@ -215,6 +268,9 @@ export function LinkPendenciasList({
         item.empresa_codigo,
         item.operation_type === 'existing_member' ? 'inclusão dependente' : 'nova adesão',
         statusLabel[item.status],
+        contacts.telefone,
+        contacts.email,
+        item.requires_authorization ? 'equipe precisa continuar' : 'cliente precisa concluir',
         item.vendedor_id ? sellerNameById.get(item.vendedor_id) : '',
       ].join(' ').toLocaleLowerCase('pt-BR');
 
@@ -224,6 +280,10 @@ export function LinkPendenciasList({
       const matchStatus = !statusFilter || item.status === statusFilter;
       const matchEmpresa = !empresaFilter || String(item.empresa_codigo) === empresaFilter;
       const matchVendedor = !canFilterVendedor || !vendedorFilter || item.vendedor_id === vendedorFilter;
+      const matchNextAction =
+        !nextActionFilter ||
+        (nextActionFilter === 'cliente' && !item.requires_authorization) ||
+        (nextActionFilter === 'equipe' && item.requires_authorization);
 
       const firstAttemptDate = localDateKey(item.first_attempt_at);
       const matchDataInicio = !dataInicio || (firstAttemptDate && firstAttemptDate >= dataInicio);
@@ -233,6 +293,7 @@ export function LinkPendenciasList({
         matchStatus &&
         matchEmpresa &&
         matchVendedor &&
+        matchNextAction &&
         matchDataInicio &&
         matchDataFim;
     });
@@ -242,6 +303,7 @@ export function LinkPendenciasList({
     statusFilter,
     empresaFilter,
     vendedorFilter,
+    nextActionFilter,
     dataInicio,
     dataFim,
     canFilterVendedor,
@@ -254,6 +316,7 @@ export function LinkPendenciasList({
     statusFilter ||
     empresaFilter ||
     (canFilterVendedor && vendedorFilter) ||
+    nextActionFilter ||
     dataInicio ||
     dataFim
   );
@@ -263,6 +326,7 @@ export function LinkPendenciasList({
     setStatusFilter('');
     setEmpresaFilter('');
     setVendedorFilter('');
+    setNextActionFilter('');
     setDataInicio('');
     setDataFim('');
   };
@@ -271,14 +335,19 @@ export function LinkPendenciasList({
     if (filtered.length === 0) return;
 
     const XLSX = await import('xlsx');
-    const rows = filtered.map((item) => ({
+    const rows = filtered.map((item) => {
+      const contacts = contactInfo(item);
+      return {
       Nome: item.nome || '',
       CPF: item.cpf ? formatCPF(item.cpf) : '',
+      Telefone: contacts.telefone ? formatPhone(contacts.telefone) : '',
+      'E-mail': contacts.email,
       'Código da empresa': item.empresa_codigo,
       Empresa: item.empresa_nome,
       Operação: item.operation_type === 'existing_member' ? 'Inclusão de dependente' : 'Nova adesão',
       Autorização: item.requires_authorization ? 'Sim' : 'Não',
       Status: statusLabel[item.status],
+      'Próxima ação': item.requires_authorization ? 'Equipe precisa continuar' : 'Cliente precisa concluir pelo link',
       Vendedor: item.vendedor_id ? sellerNameById.get(item.vendedor_id) || '' : '',
       'Primeira tentativa': dateTime(item.first_attempt_at),
       'Última atividade': dateTime(item.last_activity_at),
@@ -286,17 +355,21 @@ export function LinkPendenciasList({
       'Enviado em': dateTime(item.sent_at),
       Tentativas: item.source_attempt_ids?.length || 0,
       'Motivo / erro': item.last_error || item.resolution_reason || '',
-    }));
+      };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(rows);
     worksheet['!cols'] = [
       { wch: 30 },
       { wch: 16 },
       { wch: 18 },
+      { wch: 32 },
+      { wch: 18 },
       { wch: 35 },
       { wch: 24 },
       { wch: 14 },
       { wch: 22 },
+      { wch: 32 },
       { wch: 28 },
       { wch: 22 },
       { wch: 22 },
@@ -384,7 +457,7 @@ export function LinkPendenciasList({
         </div>
 
         <div className={`mt-4 grid gap-3 sm:grid-cols-2 ${
-          canFilterVendedor ? 'xl:grid-cols-5' : 'xl:grid-cols-4'
+          canFilterVendedor ? 'xl:grid-cols-6' : 'xl:grid-cols-5'
         }`}>
           <Select
             label="Status"
@@ -406,6 +479,16 @@ export function LinkPendenciasList({
             {empresas.map(([codigo, nome]) => (
               <option key={codigo} value={codigo}>{nome}</option>
             ))}
+          </Select>
+
+          <Select
+            label="Próxima ação"
+            value={nextActionFilter}
+            onChange={(event) => setNextActionFilter(event.target.value)}
+          >
+            <option value="">Todas</option>
+            <option value="cliente">Cliente precisa concluir</option>
+            <option value="equipe">Equipe precisa continuar</option>
           </Select>
 
           {canFilterVendedor && (
@@ -480,6 +563,7 @@ export function LinkPendenciasList({
           {filtered.map((item) => {
             const canRepairErpError = ['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(profile?.role ?? '');
             const sellerName = item.vendedor_id ? sellerNameById.get(item.vendedor_id) : null;
+            const contacts = contactInfo(item);
             const canTreat = item.requires_authorization &&
               item.status !== 'enviando' &&
               (item.status !== 'erro_envio' || canRepairErpError);
@@ -512,6 +596,10 @@ export function LinkPendenciasList({
                         <p className="vm-muted-text mt-0.5 text-sm">
                           {item.cpf ? formatCPF(item.cpf) : 'CPF protegido'} · {item.empresa_codigo} - {item.empresa_nome}
                         </p>
+                        <div className="vm-muted-text mt-1 flex flex-col gap-0.5 text-xs sm:flex-row sm:flex-wrap sm:gap-x-4">
+                          <span>Telefone: {contacts.telefone ? formatPhone(contacts.telefone) : 'Não informado'}</span>
+                          <span>E-mail: {contacts.email || 'Não informado'}</span>
+                        </div>
                         {sellerName && (
                           <p className="vm-muted-text mt-1 text-xs">
                             Vendedor: {sellerName}
@@ -526,10 +614,15 @@ export function LinkPendenciasList({
                           </p>
                         )}
                         {!item.requires_authorization && !['enviado', 'encerrado'].includes(item.status) && (
-                          <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300">
-                            <Clock3 className="h-3.5 w-3.5" />
-                            Aguardando o próprio cliente retomar e concluir pelo link.
-                          </p>
+                          <div className="mt-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
+                            <p className="flex items-center gap-1.5 font-semibold">
+                              <Clock3 className="h-3.5 w-3.5" />
+                              Próxima ação: cliente
+                            </p>
+                            <p className="mt-1">
+                              O cliente precisa voltar ao link e finalizar. A equipe não precisa analisar esta solicitação agora.
+                            </p>
+                          </div>
                         )}
                         {item.status === 'erro_envio' && !canRepairErpError && (
                           <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300">
