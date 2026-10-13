@@ -291,7 +291,7 @@ SELECT
   l.link_id,
   g.attempt_ids[1],
   g.cpf_hash,
-  regexp_replace(coalesce(l.profile_snapshot ->> 'cpf', ''), '\\D', '', 'g'),
+  regexp_replace(coalesce(l.profile_snapshot ->> 'cpf', ''), '[^0-9]', '', 'g'),
   nullif(btrim(coalesce(l.profile_snapshot ->> 'nome', '')), ''),
   g.empresa_codigo,
   l.empresa_nome,
