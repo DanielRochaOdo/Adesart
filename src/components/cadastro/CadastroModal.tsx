@@ -170,7 +170,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
       }
     }
 
-    return {
+    const editableData = {
       nome: formData.nome || null,
       data_nascimento: dataNascimento,
       sexo_codigo: formData.sexo !== '' && formData.sexo !== null && formData.sexo !== undefined ? formData.sexo : null,
@@ -180,6 +180,17 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
       endereco: formData.endereco,
       dependentes,
       arquivo_path: arquivo ? arquivo.path : null,
+      arquivo_nome: arquivo?.nome || cadastroAtual.arquivo_nome || null,
+      arquivo_mime_type: arquivo?.mime || cadastroAtual.arquivo_mime_type || null,
+      arquivo_tamanho: arquivo?.size || cadastroAtual.arquivo_tamanho || null,
+    };
+
+    if (isLinkPending) {
+      return editableData;
+    }
+
+    return {
+      ...editableData,
       empresa_id: selectedEmpresa?.id || cadastroAtual.empresa_id || null,
       empresa_codigo: selectedEmpresa?.id || cadastroAtual.empresa_codigo || null,
       empresa_nome: selectedEmpresa?.nomeFantasia || selectedEmpresa?.razaoSocial || cadastroAtual.empresa_nome || null,
@@ -191,7 +202,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
         Array.isArray(selectedEmpresa?.precoPlano) && selectedEmpresa.precoPlano.length > 0
           ? selectedEmpresa.precoPlano
           : cadastroAtual.planos_raw || null,
-      // Completa apenas a atribuição do próprio vendedor, sem substituir terceiros.
+      // Fluxos normais podem completar a atribuição do próprio vendedor.
       ...(profile?.role === 'VENDEDOR' && profile.id && profile.external_id &&
         (!cadastroAtual.vendedor_id || cadastroAtual.vendedor_id === profile.id) &&
         (!cadastroAtual.vendedor_codigo || cadastroAtual.vendedor_codigo === profile.external_id)
