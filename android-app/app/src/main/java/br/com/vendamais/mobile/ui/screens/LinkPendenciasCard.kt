@@ -26,6 +26,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 fun LinkPendenciasCard(
     workspace: LinkWorkspaceState,
+    profileRole: String,
     onOpenPending: (String) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -87,6 +88,7 @@ fun LinkPendenciasCard(
             else -> workspace.linkPendencias.forEach { item ->
                 LinkPendenciaRow(
                     item = item,
+                    profileRole = profileRole,
                     onOpenPending = onOpenPending,
                 )
             }
@@ -97,10 +99,13 @@ fun LinkPendenciasCard(
 @Composable
 private fun LinkPendenciaRow(
     item: LinkPendenciaItem,
+    profileRole: String,
     onOpenPending: (String) -> Unit,
 ) {
+    val canRepairErpError = profileRole.uppercase() in setOf("ADMINISTRADOR", "CADASTRO", "GERENTE")
     val canTreat = item.requiresAuthorization &&
-        item.status !in setOf("enviado", "encerrado", "enviando")
+        item.status != "enviando" &&
+        (item.status != "erro_envio" || canRepairErpError)
 
     WebCard {
         Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -179,6 +184,14 @@ private fun LinkPendenciaRow(
                     text = "Aguardando o proprio cliente retomar e concluir pelo link.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            if (item.status == "erro_envio" && !canRepairErpError) {
+                Text(
+                    text = "Tratativa de erro ERP restrita a Administrador, Cadastro e Gerente.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
                 )
             }
 
