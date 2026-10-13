@@ -99,6 +99,197 @@ export const resolveAttempt = async (supabase: any, attemptToken: string) => {
   return data;
 };
 
+export const upsertLinkPendingJourney = async (params: {
+  supabase: any;
+  attempt: any;
+  link: any;
+  snapshot?: any;
+  stage?: string | null;
+  status?: "aguardando_analise" | "pronto_erp" | "enviando" | "enviado" | "erro_envio" | "encerrado";
+  publicCompletedAt?: string | null;
+  cadastroId?: string | null;
+  sentBy?: string | null;
+  resolutionReason?: string | null;
+  lastError?: string | null;
+  erpResponse?: any;
+}) => {
+  const {
+    supabase,
+    attempt,
+    link,
+    snapshot,
+    stage,
+    status = "aguardando_analise",
+    publicCompletedAt = null,
+    cadastroId = null,
+    sentBy = null,
+    resolutionReason = null,
+    lastError = null,
+    erpResponse = null,
+  } = params;
+
+  const flowMode = String(attempt?.flow_mode || "new_member");
+  if (!["new_member", "existing_member"].includes(flowMode)) return null;
+
+  const operationType = flowMode === "existing_member" ? "existing_member" : "new_member";
+  const effectiveSnapshot = snapshot ?? attempt?.draft_snapshot ?? attempt?.profile_snapshot ?? {};
+  const cadastroSnapshot = effectiveSnapshot?.cadastro ?? effectiveSnapshot;
+  const cpf = normalizeDigits(
+    cadastroSnapshot?.cpf ??
+      effectiveSnapshot?.cpf ??
+      attempt?.profile_snapshot?.cpf ??
+      attempt?.erp_member_snapshot?.cpf ??
+      "",
+  );
+  const cpfHash = String(attempt?.cpf_hash || "").trim();
+  const empresaCodigo = Number(link?.empresa_codigo || 0);
+  if (!cpfHash || !Number.isInteger(empresaCodigo) || empresaCodigo <= 0) return null;
+
+  const now = new Date().toISOString();
+  const openStatuses = ["aguardando_analise", "pronto_erp", "enviando", "erro_envio"];
+  const { data: existing, error: existingError } = await supabase
+    .from("link_pendencias")
+    .select("*")
+    .eq("cpf_hash", cpfHash)
+    .eq("empresa_codigo", empresaCodigo)
+    .eq("operation_type", operationType)
+    .in("status", openStatuses)
+    .order("first_attempt_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+
+  const attemptId = String(attempt?.id || "").trim();
+  const linkId = String(link?.id || attempt?.link_id || "").trim();
+  const sourceAttemptIds = Array.from(new Set([
+    ...(Array.isArray(existing?.source_attempt_ids) ? existing.source_attempt_ids : []),
+    ...(attemptId ? [attemptId] : []),
+  ]));
+  const sourceLinkIds = Array.from(new Set([
+    ...(Array.isArray(existing?.source_link_ids) ? existing.source_link_ids : []),
+    ...(linkId ? [linkId] : []),
+  ]));
+
+  const resolvedAt = ["enviado", "encerrado"].includes(status) ? now : null;
+  const payload = {
+    link_id: linkId,
+    primary_attempt_id: existing?.primary_attempt_id || attemptId || null,
+    cpf_hash: cpfHash,
+    cpf: cpf || existing?.cpf || null,
+    nome: String(
+      cadastroSnapshot?.nome ??
+        effectiveSnapshot?.nome ??
+        attempt?.profile_snapshot?.nome ??
+        existing?.nome ??
+        "",
+    ).trim() || null,
+    empresa_codigo: empresaCodigo,
+    empresa_nome: String(link?.empresa_nome || existing?.empresa_nome || "").trim() || `Empresa ${empresaCodigo}`,
+    operation_type: operationType,
+    requires_authorization: Boolean(link?.requires_authorization),
+    status,
+    flow_stage: stage || attempt?.last_stage || existing?.flow_stage || null,
+    latest_snapshot: effectiveSnapshot && typeof effectiveSnapshot === "object"
+      ? effectiveSnapshot
+      : existing?.latest_snapshot || {},
+    erp_member_snapshot: attempt?.erp_member_snapshot ?? existing?.erp_member_snapshot ?? null,
+    source_attempt_ids: sourceAttemptIds,
+    source_link_ids: sourceLinkIds,
+    created_by: link?.created_by || existing?.created_by || null,
+    vendedor_id: link?.vendedor_id || existing?.vendedor_id || null,
+    team_id: link?.team_id || existing?.team_id || null,
+    cadastro_id: cadastroId || existing?.cadastro_id || null,
+    first_attempt_at: existing?.first_attempt_at || attempt?.created_at || now,
+    last_activity_at: now,
+    public_completed_at: publicCompletedAt || existing?.public_completed_at || null,
+    sent_at: status === "enviado" ? now : existing?.sent_at || null,
+    sent_by: status === "enviado" ? sentBy || existing?.sent_by || null : existing?.sent_by || null,
+    resolved_at: resolvedAt,
+    resolution_reason: resolutionReason ?? existing?.resolution_reason ?? null,
+    last_error: lastError,
+    erp_response: erpResponse ?? existing?.erp_response ?? null,
+    updated_at: now,
+  };
+
+  let row: any = null;
+  if (existing?.id) {
+    const { data, error } = await supabase
+      .from("link_pendencias")
+      .update(payload)
+      .eq("id", existing.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    row = data;
+  } else {
+    const { data, error } = await supabase
+      .from("link_pendencias")
+      .insert(payload)
+      .select("*")
+      .single();
+    if (error) {
+      // Corrida entre duas tentativas do mesmo CPF: reler a jornada aberta e atualizar.
+      if (String(error?.code || "") === "23505") {
+        const { data: concurrent, error: concurrentError } = await supabase
+          .from("link_pendencias")
+          .select("*")
+          .eq("cpf_hash", cpfHash)
+          .eq("empresa_codigo", empresaCodigo)
+          .eq("operation_type", operationType)
+          .in("status", openStatuses)
+          .order("first_attempt_at", { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (concurrentError || !concurrent) throw concurrentError || error;
+        const mergedConcurrentAttempts = Array.from(new Set([
+          ...(Array.isArray(concurrent.source_attempt_ids) ? concurrent.source_attempt_ids : []),
+          ...(attemptId ? [attemptId] : []),
+        ]));
+        const mergedConcurrentLinks = Array.from(new Set([
+          ...(Array.isArray(concurrent.source_link_ids) ? concurrent.source_link_ids : []),
+          ...(linkId ? [linkId] : []),
+        ]));
+        const { data: updated, error: updateError } = await supabase
+          .from("link_pendencias")
+          .update({
+            ...payload,
+            primary_attempt_id: concurrent.primary_attempt_id || attemptId || null,
+            source_attempt_ids: mergedConcurrentAttempts,
+            source_link_ids: mergedConcurrentLinks,
+            first_attempt_at: concurrent.first_attempt_at || attempt?.created_at || now,
+          })
+          .eq("id", concurrent.id)
+          .select("*")
+          .single();
+        if (updateError) throw updateError;
+        row = updated;
+      } else {
+        throw error;
+      }
+    } else {
+      row = data;
+    }
+  }
+
+  if (row?.id && attemptId) {
+    const { error: attemptUpdateError } = await supabase
+      .from("public_adesao_attempts")
+      .update({
+        link_pendencia_id: row.id,
+        last_stage: stage || attempt?.last_stage || null,
+        draft_snapshot: effectiveSnapshot && typeof effectiveSnapshot === "object"
+          ? effectiveSnapshot
+          : attempt?.draft_snapshot ?? null,
+        updated_at: now,
+      })
+      .eq("id", attemptId);
+    if (attemptUpdateError) throw attemptUpdateError;
+  }
+
+  return row;
+};
+
 export const requireInternalUser = async (req: Request, supabase: any) => {
   const authHeader = req.headers.get("Authorization") || "";
   const token = authHeader.replace(/^Bearer\s+/i, "").trim();
