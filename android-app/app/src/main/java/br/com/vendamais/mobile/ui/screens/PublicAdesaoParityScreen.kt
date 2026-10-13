@@ -216,9 +216,8 @@ fun PublicAdesaoParityScreen(
     }
 
     val currentLink = link
-    val requiresAuthorization = authoritativeRequiresAuthorization
-        ?: currentLink?.requiresAuthorization
-        ?: false
+    val requiresAuthorization =
+        authoritativeRequiresAuthorization == true || currentLink?.requiresAuthorization == true
     val plans = remember(flowMode, existingPlans, currentLink?.id, currentLink?.planos, currentLink?.planosRaw) {
         if (flowMode == "existing_member") {
             existingPlans
@@ -558,8 +557,13 @@ fun PublicAdesaoParityScreen(
                                                     birthDate = birthDate,
                                                 )
                                             }.onSuccess { response ->
-                                                response.requiresAuthorization?.let {
-                                                    authoritativeRequiresAuthorization = it
+                                                response.requiresAuthorization?.let { value ->
+                                                    // Um link confirmado como "Sim" nao pode regredir para
+                                                    // "Nao" durante a jornada e exibir "Revisar contrato".
+                                                    authoritativeRequiresAuthorization =
+                                                        authoritativeRequiresAuthorization == true ||
+                                                        currentLink?.requiresAuthorization == true ||
+                                                        value
                                                 }
                                                 when (response.state) {
                                                     "pending_review_completed" -> {
