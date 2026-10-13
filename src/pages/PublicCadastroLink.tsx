@@ -621,7 +621,7 @@ export function PublicCadastroLink() {
     return errors;
   };
 
-  const goReview = () => {
+  const goReview = async () => {
     if (flowMode === 'existing_member' && dependents.length === 0) {
       setValidationErrors(['Adicione ao menos um dependente.']);
       setError('');
@@ -629,12 +629,22 @@ export function PublicCadastroLink() {
     }
     const pending = dependentErrors();
     if (pending.length) { setValidationErrors(pending); setError(''); return; }
+
+    setBusy(true);
     setError('');
-    void savePendingProgress('dependents');
-    setStage(flowMode === 'existing_member' ? 'existing_contact' : 'review');
+    try {
+      const serverAuthorization = await savePendingProgress('dependents');
+      if (serverAuthorization === null) {
+        setError('Não foi possível confirmar a regra de autorização deste link. Tente novamente.');
+        return;
+      }
+      setStage(flowMode === 'existing_member' ? 'existing_contact' : 'review');
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const goExistingReview = () => {
+  const goExistingReview = async () => {
     const pending = [
       normalizePhone(form.telefone).length < 10 && 'Telefone / WhatsApp: informe um número válido com DDD.',
       !isEmail(form.email) && 'E-mail: informe um endereço válido.',
@@ -644,9 +654,19 @@ export function PublicCadastroLink() {
       setError('');
       return;
     }
+
+    setBusy(true);
     setError('');
-    void savePendingProgress('existing_contact');
-    setStage('existing_review');
+    try {
+      const serverAuthorization = await savePendingProgress('existing_contact');
+      if (serverAuthorization === null) {
+        setError('Não foi possível confirmar a regra de autorização deste link. Tente novamente.');
+        return;
+      }
+      setStage('existing_review');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const submitExistingDependents = async () => {
@@ -739,10 +759,12 @@ export function PublicCadastroLink() {
     };
   };
 
-  const savePendingProgress = async (progressStage: 'details' | 'dependents' | 'existing_contact' | 'review' | 'existing_review') => {
-    if (!attemptToken) return;
+  const savePendingProgress = async (
+    progressStage: 'details' | 'dependents' | 'existing_contact' | 'review' | 'existing_review',
+  ): Promise<boolean | null> => {
+    if (!attemptToken) return null;
     try {
-      await fetch(apiUrl('cadastro-public-save-progress'), {
+      const response = await fetch(apiUrl('cadastro-public-save-progress'), {
         method: 'POST',
         headers: publicHeaders(),
         body: JSON.stringify({
@@ -751,8 +773,21 @@ export function PublicCadastroLink() {
           snapshot: currentPendingSnapshot(),
         }),
       });
+      const result = await response.json();
+      if (!response.ok || !result.ok || typeof result.requiresAuthorization !== 'boolean') {
+        throw new Error(result.error || 'Regra de autorização não retornada pelo servidor.');
+      }
+
+      const serverRequiresAuthorization = result.requiresAuthorization === true;
+      setRequiresAuthorization((current) => current || serverRequiresAuthorization);
+      setLinkData((current) => current
+        ? { ...current, requiresAuthorization: current.requiresAuthorization || serverRequiresAuthorization }
+        : current);
+
+      return serverRequiresAuthorization;
     } catch (progressError) {
       console.warn('[PublicCadastroLink] Não foi possível persistir o progresso da solicitação:', progressError);
+      return null;
     }
   };
 
