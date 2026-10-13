@@ -1633,22 +1633,24 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
                           <p className="text-xs text-emerald-700 font-medium">
                             {arquivo.nome}
                           </p>
-                          <button
-                            onClick={async () => {
-                              try {
-                                await supabase.storage
-                                  .from('cadastros-temp-files')
-                                  .remove([arquivo.path]);
-                              } catch (err) {
-                                console.error('Erro ao remover arquivo:', err);
-                              }
-                              setArquivo(null);
-                            }}
-                            className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors"
-                            title="Remover arquivo"
-                          >
-                            <Trash className="w-4 h-4" />
-                          </button>
+                          {!cadastroAtual.link_pendencia_id && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await supabase.storage
+                                    .from('cadastros-temp-files')
+                                    .remove([arquivo.path]);
+                                } catch (err) {
+                                  console.error('Erro ao remover arquivo:', err);
+                                }
+                                setArquivo(null);
+                              }}
+                              className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors"
+                              title="Remover arquivo"
+                            >
+                              <Trash className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1691,7 +1693,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
           )}
 
           <div className="flex flex-col sm:flex-row gap-3 pt-4">
-            {canDelete && (profile?.role !== 'CADASTRO' || ['incompleto', 'adesoes_pendentes'].includes(cadastroAtual.status)) && (
+            {canDelete && !cadastroAtual.link_pendencia_id && (profile?.role !== 'CADASTRO' || ['incompleto', 'adesoes_pendentes'].includes(cadastroAtual.status)) && (
               <Button
                 variant="secondary"
                 onClick={handleDelete}
