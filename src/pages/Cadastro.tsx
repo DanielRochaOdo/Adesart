@@ -31,6 +31,7 @@ export function Cadastro() {
   const [showInclusaoDependente, setShowInclusaoDependente] = useState(false);
   const [linkListReloadKey, setLinkListReloadKey] = useState(0);
   const [linkPendenciasReloadKey, setLinkPendenciasReloadKey] = useState(0);
+  const [linkPendenciasCount, setLinkPendenciasCount] = useState(0);
   const [selectedCadastroReturnTab, setSelectedCadastroReturnTab] = useState<'incompletos' | 'link_pendencias'>('incompletos');
 
   console.log('[Cadastro] 📊 Stats:', stats);
@@ -101,6 +102,34 @@ export function Cadastro() {
       void loadCadastros(listStatus);
     }
   }, [activeTab, loadCadastros]);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    let cancelled = false;
+
+    const loadLinkPendenciasCount = async () => {
+      const { count, error: countError } = await supabase
+        .from('link_pendencias')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ['aguardando_analise', 'pronto_erp', 'enviando', 'erro_envio']);
+
+      if (countError) {
+        console.error('[Cadastro] Erro ao carregar contador de Link Pendências:', countError);
+        return;
+      }
+
+      if (!cancelled) {
+        setLinkPendenciasCount(count || 0);
+      }
+    };
+
+    void loadLinkPendenciasCount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.id, linkPendenciasReloadKey]);
 
   const handleNewCadastroSuccess = async (cadastro: CadastroType, isBlocked: boolean = false) => {
     await refresh();
@@ -251,6 +280,11 @@ export function Cadastro() {
           >
             <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2 sm:mr-2" />
             <span>Link Pendências</span>
+            {linkPendenciasCount > 0 && (
+              <span className="vm-tab-badge-warning ml-2 rounded-full px-2 py-0.5 text-xs font-extrabold">
+                {linkPendenciasCount}
+              </span>
+            )}
           </button>
         </div>
 
@@ -317,6 +351,7 @@ export function Cadastro() {
               <LinkPendenciasList
                 reloadKey={linkPendenciasReloadKey}
                 onSelectCadastro={handleSelectLinkPendingCadastro}
+                onCountChange={setLinkPendenciasCount}
               />
             )}
           </div>
