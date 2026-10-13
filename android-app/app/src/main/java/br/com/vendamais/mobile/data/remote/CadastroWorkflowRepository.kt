@@ -330,6 +330,23 @@ class CadastroWorkflowRepository(
         )
     }
 
+    suspend fun refreshLinkPendenciaReadiness(
+        session: SavedSession,
+        pendingId: String,
+        cadastroId: String,
+    ): JsonElement {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-link-pending-readiness",
+            json = json,
+            body = buildJsonObject {
+                put("pendingId", pendingId)
+                put("cadastroId", cadastroId)
+            },
+        ) {
+            applyAuthHeaders(session)
+        }
+    }
+
     suspend fun updateLinkPendenciaStatus(
         session: SavedSession,
         pendingId: String,
