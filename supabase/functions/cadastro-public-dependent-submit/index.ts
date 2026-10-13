@@ -12,6 +12,7 @@ import {
   sanitizePlan,
   sha256,
   stableStringify,
+  upsertLinkPendingJourney,
 } from "../_shared/public-flow.ts";
 
 type DepInput = {
@@ -682,15 +683,55 @@ Deno.serve(async (req: Request) => {
       ? "Inclusao concluida no ERP, mas o historico gerencial nao foi gravado."
       : null;
 
+    const completedAt = new Date().toISOString();
     await supabase.from("public_dependent_submissions").update({
       status: "succeeded",
       erp_response: erpResult,
       cadastro_id: cadastroId,
       last_error: warning,
-      completed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      completed_at: completedAt,
+      updated_at: completedAt,
     }).eq("id", submissionId);
     erpCommitted = true;
+
+    const pendingSnapshot = {
+      cadastro: {
+        cpf: holderCpf,
+        nome: String(holder?.nome || attempt.profile_snapshot?.nome || ""),
+        telefone: phone,
+        email,
+        dependentes: normalized,
+      },
+      member: attempt.erp_member_snapshot || null,
+    };
+
+    await supabase.from("public_adesao_attempts").update({
+      status: "completed",
+      completion_kind: "dependent_completed",
+      completed_at: completedAt,
+      draft_snapshot: pendingSnapshot,
+      last_stage: "completed",
+      updated_at: completedAt,
+    }).eq("id", attempt.id);
+
+    await upsertLinkPendingJourney({
+      supabase,
+      attempt: {
+        ...attempt,
+        status: "completed",
+        completion_kind: "dependent_completed",
+        completed_at: completedAt,
+        draft_snapshot: pendingSnapshot,
+        last_stage: "completed",
+      },
+      link,
+      snapshot: pendingSnapshot,
+      stage: "completed",
+      status: "enviado",
+      publicCompletedAt: completedAt,
+      cadastroId,
+      erpResponse: erpResult,
+    });
 
     if (!contractSessionId) throw new Error("CONTRACT_SESSION_MISSING_AFTER_ERP");
 
@@ -733,7 +774,9 @@ Deno.serve(async (req: Request) => {
       }).eq("id", acceptedSession.id);
       await supabase.from("public_adesao_attempts").update({
         status: "completed",
+        completion_kind: "dependent_completed",
         completed_at: new Date().toISOString(),
+        last_stage: "completed",
         updated_at: new Date().toISOString(),
       }).eq("id", attempt.id);
       return jsonResponse({
@@ -805,7 +848,9 @@ Deno.serve(async (req: Request) => {
 
     await supabase.from("public_adesao_attempts").update({
       status: "completed",
+      completion_kind: "dependent_completed",
       completed_at: new Date().toISOString(),
+      last_stage: "completed",
       updated_at: new Date().toISOString(),
     }).eq("id", attempt.id);
 
