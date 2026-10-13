@@ -9,6 +9,7 @@ import {
   normalizeDigits,
   resolveAttempt,
   sha256,
+  upsertLinkPendingJourney,
 } from "../_shared/public-flow.ts";
 
 const ERP_REQUEST_TIMEOUT_MS = 20_000;
@@ -946,12 +947,43 @@ Deno.serve(async (req: Request) => {
     if (jobsError) throw jobsError;
 
     stage = "complete_attempt";
+    const completedAt = new Date().toISOString();
     const { error: attemptUpdateError } = await supabase.from("public_adesao_attempts").update({
       status: "completed",
-      completed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      completion_kind: "adhesion_completed",
+      completed_at: completedAt,
+      draft_snapshot: snapshot,
+      last_stage: "completed",
+      updated_at: completedAt,
     }).eq("id", attempt.id);
     if (attemptUpdateError) throw attemptUpdateError;
+
+    await upsertLinkPendingJourney({
+      supabase,
+      attempt: {
+        ...attempt,
+        status: "completed",
+        completion_kind: "adhesion_completed",
+        completed_at: completedAt,
+        draft_snapshot: snapshot,
+        last_stage: "completed",
+      },
+      link: {
+        id: l.id,
+        empresa_codigo: l.empresaCodigo,
+        empresa_nome: l.empresaNome,
+        created_by: l.createdBy,
+        vendedor_id: l.vendedorId,
+        team_id: l.teamId,
+        requires_authorization: false,
+      },
+      snapshot,
+      stage: "completed",
+      status: "enviado",
+      publicCompletedAt: completedAt,
+      cadastroId,
+      erpResponse: erpResult,
+    });
 
     stage = "deliver_contract";
     const deliveryResult = await triggerDeliveryWorker(claimed.id);
