@@ -1435,9 +1435,18 @@ private fun LinkHistoryRowCard(row: CadastroLinkHistoryRow) {
 
 @Composable
 private fun historyStatusColor(status: String) = when (status) {
-    "Concluiu a adesão" -> EmeraldSoft
-    "Chegou ao contrato e não concluiu" -> MaterialTheme.colorScheme.tertiaryContainer
-    "Validou CPF/data e abandonou depois" -> MaterialTheme.colorScheme.secondaryContainer
+    "Concluiu a adesão",
+    "Concluiu adesão após nova tentativa",
+    "Incluiu dependente",
+    "Concluiu inclusão de dependente após nova tentativa",
+    -> EmeraldSoft
+    "Finalizou solicitação — aguardando análise",
+    "Finalizou solicitação após nova tentativa",
+    "Chegou ao contrato e não concluiu",
+    -> MaterialTheme.colorScheme.tertiaryContainer
+    "Validou CPF/data e abandonou depois",
+    "Validou associado e abandonou inclusão de dependente",
+    -> MaterialTheme.colorScheme.secondaryContainer
     else -> MaterialTheme.colorScheme.surface
 }
 
