@@ -18,6 +18,7 @@ import { supabase } from '../../lib/supabase';
 import { ERP_MAX_FILE_SIZE, uploadToStorage, UploadedFile, validateFile } from '../../utils/uploadFile';
 import { compressFileForErp } from '../../utils/compressErpFile';
 import { clearDraft, loadDraft, saveBeforeFilePicker, saveDraft } from '../../utils/draftStorage';
+import { refreshLinkPendingReadiness } from '../../lib/linkPending';
 
 interface CadastroModalProps {
   cadastro: Cadastro;
@@ -218,6 +219,15 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
   const persistCadastroProgress = async (logContext?: 'save' | 'close') => {
     const updated = await updateCadastro(cadastroAtual.id, buildCadastroProgressData(logContext));
     setCadastroFresh(updated as Cadastro);
+
+    if (cadastroAtual.link_pendencia_id) {
+      try {
+        await refreshLinkPendingReadiness(cadastroAtual.link_pendencia_id, cadastroAtual.id);
+      } catch (readinessError) {
+        console.warn('[CadastroModal] Não foi possível recalcular a prontidão da pendência:', readinessError);
+      }
+    }
+
     return updated;
   };
 
@@ -712,6 +722,14 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
         arquivo_mime_type: uploadedFile.mime || file.type || 'application/octet-stream',
         arquivo_tamanho: uploadedFile.size || file.size || null,
       });
+
+      if (cadastroAtual.link_pendencia_id) {
+        try {
+          await refreshLinkPendingReadiness(cadastroAtual.link_pendencia_id, cadastroAtual.id);
+        } catch (readinessError) {
+          console.warn('[CadastroModal] Anexo salvo, mas a prontidão da pendência não pôde ser recalculada:', readinessError);
+        }
+      }
 
       setSuccess(
         cadastroAtual.link_pendencia_id
