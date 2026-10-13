@@ -403,6 +403,8 @@ data class PublicCadastroLinkInfo(
     val empresaRaw: JsonElement? = null,
     @SerialName("empresaExigeMatricula")
     val empresaExigeMatricula: Int? = null,
+    @SerialName("requiresAuthorization")
+    val requiresAuthorization: Boolean = false,
     val planos: List<PublicPlanoInfo> = emptyList(),
     @SerialName("planosRaw")
     val planosRaw: JsonElement? = null,
