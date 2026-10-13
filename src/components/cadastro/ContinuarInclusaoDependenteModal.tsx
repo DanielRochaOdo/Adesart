@@ -696,6 +696,31 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
         throw new Error('Sessão não encontrada');
       }
 
+      if (cadastro.link_pendencia_id) {
+        const now = new Date().toISOString();
+        const { error: readyError } = await supabase
+          .from('link_pendencias')
+          .update({
+            status: 'pronto_erp',
+            last_error: null,
+            last_activity_at: now,
+            updated_at: now,
+          })
+          .eq('id', cadastro.link_pendencia_id);
+        if (readyError) throw readyError;
+
+        const { error: sendingError } = await supabase
+          .from('link_pendencias')
+          .update({
+            status: 'enviando',
+            last_activity_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', cadastro.link_pendencia_id)
+          .eq('status', 'pronto_erp');
+        if (sendingError) throw sendingError;
+      }
+
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lemit-consulta-pessoa`,
         {
@@ -812,7 +837,8 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
 
     try {
       const dependente = dependentesRef.current[index];
-      if (dependente.arquivo?.path) {
+      const isLinkPending = Boolean(cadastro.link_pendencia_id);
+      if (dependente.arquivo?.path && !isLinkPending) {
         try {
           await supabase.storage
             .from('cadastros-temp-files')
@@ -833,6 +859,24 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
         prefix
       );
 
+      if (cadastro.link_pendencia_id) {
+        const { error: versionError } = await supabase
+          .from('link_pendencia_files')
+          .insert({
+            link_pendencia_id: cadastro.link_pendencia_id,
+            cadastro_id: cadastro.id,
+            bucket: 'cadastros-temp-files',
+            arquivo_path: uploadedFile.path,
+            arquivo_nome: uploadedFile.nome,
+            mime_type: uploadedFile.mime || file.type || 'application/octet-stream',
+            file_size_bytes: uploadedFile.size || file.size || null,
+            target_dependente_cpf: cpfLimpo || null,
+            target_dependente_nome: dependente.nome || null,
+            uploaded_by: profile.id,
+          });
+        if (versionError) throw versionError;
+      }
+
       const novosDependentes = dependentesRef.current.map((dep, idx) =>
         idx === index ? { ...dep, arquivo: uploadedFile, uploadingFile: false } : dep
       );
@@ -845,7 +889,9 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
         console.warn('Erro ao limpar arquivo pendente apos upload:', err);
       }
 
-      setSuccess('Arquivo carregado com sucesso!');
+      setSuccess(cadastro.link_pendencia_id
+        ? 'Arquivo anexado e preservado no histórico da solicitação!'
+        : 'Arquivo carregado com sucesso!');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error('Erro ao fazer upload:', err);
@@ -1218,6 +1264,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
             'Content-Type': 'application/json',
+            'X-Cadastro-Id': cadastro.id,
           },
           body: JSON.stringify(payload),
         }
@@ -1236,7 +1283,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
 
       erpInclusaoConcluida = true;
 
-      if (result?.data?.dados?.dependentes && result.data.dados.dependentes.length > 0) {
+      if (!cadastro.link_pendencia_id && result?.data?.dados?.dependentes && result.data.dados.dependentes.length > 0) {
         for (let i = 0; i < dependentesAtuais.length; i++) {
           const dep = dependentesAtuais[i];
           if (dep.arquivo && result.data.dados.dependentes[i]) {
@@ -1350,6 +1397,71 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
         }
       }
 
+      if (cadastro.link_pendencia_id) {
+        const erpDependentes = Array.isArray(result?.data?.dados?.dependentes)
+          ? result.data.dados.dependentes
+          : [];
+        const { data: pendingFiles, error: pendingFilesError } = await supabase
+          .from('link_pendencia_files')
+          .select('id,bucket,arquivo_path,arquivo_nome,target_dependente_cpf,target_dependente_nome')
+          .eq('link_pendencia_id', cadastro.link_pendencia_id)
+          .order('created_at', { ascending: true });
+
+        if (pendingFilesError) throw pendingFilesError;
+        if (!pendingFiles || pendingFiles.length === 0) {
+          throw new Error('Anexe ao menos um arquivo antes de enviar esta pendência ao ERP.');
+        }
+
+        for (const file of pendingFiles) {
+          const targetCpf = removeCPFMask(String(file.target_dependente_cpf || ''));
+          const targetName = String(file.target_dependente_nome || '').trim().toLocaleLowerCase('pt-BR');
+          let targetIndex = dependentesAtuais.findIndex((dep) => {
+            const depCpf = removeCPFMask(dep.cpf || '');
+            if (targetCpf && depCpf) return depCpf === targetCpf;
+            return targetName && dep.nome.trim().toLocaleLowerCase('pt-BR') === targetName;
+          });
+          if (targetIndex < 0 && dependentesAtuais.length === 1) targetIndex = 0;
+
+          const erpDep = targetIndex >= 0 ? erpDependentes[targetIndex] : null;
+          const idDependente = Number(erpDep?.codigo || erpDep?.codigoDependente || 0);
+          if (!Number.isInteger(idDependente) || idDependente <= 0) {
+            throw new Error(`Não foi possível identificar no ERP o destino do arquivo ${file.arquivo_nome}.`);
+          }
+
+          const enqueueResponse = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/erp-enqueue-upload`,
+            {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${session.access_token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                cadastroId: cadastro.id,
+                idFuncionario: funcionarioCadastroId,
+                idDependente,
+                targetCpf: targetCpf || removeCPFMask(dependentesAtuais[targetIndex]?.cpf || ''),
+                arquivoPath: file.arquivo_path,
+                arquivoNome: file.arquivo_nome,
+                tipo: 'dependente',
+                bucket: file.bucket || 'cadastros-temp-files',
+              }),
+            }
+          );
+          const enqueueResult = await enqueueResponse.json().catch(() => ({}));
+          if (!enqueueResponse.ok || (enqueueResult.queued !== true && enqueueResult.already_processed !== true)) {
+            throw new Error(enqueueResult.error || `Não foi possível enfileirar o arquivo ${file.arquivo_nome}.`);
+          }
+
+          if (enqueueResult.queue_id) {
+            await supabase
+              .from('link_pendencia_files')
+              .update({ erp_queue_id: enqueueResult.queue_id })
+              .eq('id', file.id);
+          }
+        }
+      }
+
       const { error: updateError, count: updateCount } = await supabase
         .from('cadastros')
         .update({
@@ -1371,6 +1483,28 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
         );
       }
 
+      if (cadastro.link_pendencia_id) {
+        const now = new Date().toISOString();
+        const { error: pendingSuccessError } = await supabase
+          .from('link_pendencias')
+          .update({
+            status: 'enviado',
+            cadastro_id: cadastro.id,
+            sent_at: now,
+            sent_by: profile?.id || null,
+            resolved_at: now,
+            resolution_reason: 'sent_to_erp',
+            last_error: null,
+            erp_response: result,
+            last_activity_at: now,
+            updated_at: now,
+          })
+          .eq('id', cadastro.link_pendencia_id);
+        if (pendingSuccessError) {
+          console.warn('Inclusão concluída, mas Link Pendências não sincronizou:', pendingSuccessError);
+        }
+      }
+
       setSuccess('Dependentes incluídos com sucesso!');
       setTimeout(() => {
         clearContinuarDraft();
@@ -1387,6 +1521,19 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
             ? String((err as { message?: unknown }).message || 'Erro ao incluir dependentes')
             : 'Erro ao incluir dependentes';
       setError(errorMessage);
+
+      if (cadastro.link_pendencia_id) {
+        const now = new Date().toISOString();
+        await supabase
+          .from('link_pendencias')
+          .update({
+            status: 'erro_envio',
+            last_error: errorMessage,
+            last_activity_at: now,
+            updated_at: now,
+          })
+          .eq('id', cadastro.link_pendencia_id);
+      }
 
       if (!erpInclusaoConcluida) {
         const { error: rollbackError } = await supabase
