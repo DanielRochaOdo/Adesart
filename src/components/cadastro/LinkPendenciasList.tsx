@@ -4,6 +4,7 @@ import { Button } from '../Button';
 import { Input } from '../Input';
 import { supabase } from '../../lib/supabase';
 import { Cadastro } from '../../hooks/useCadastros';
+import { useAuth } from '../../contexts/AuthContext';
 import { formatCPF } from '../../lib/cpf';
 
 type PendingStatus =
@@ -69,6 +70,7 @@ const dateTime = (value: string | null) => {
 };
 
 export function LinkPendenciasList({ reloadKey = 0, onSelectCadastro }: LinkPendenciasListProps) {
+  const { profile } = useAuth();
   const [items, setItems] = useState<LinkPending[]>([]);
   const [loading, setLoading] = useState(true);
   const [openingId, setOpeningId] = useState<string | null>(null);
@@ -82,6 +84,7 @@ export function LinkPendenciasList({ reloadKey = 0, onSelectCadastro }: LinkPend
       const { data, error: queryError } = await supabase
         .from('link_pendencias')
         .select('id,link_id,cpf,nome,empresa_codigo,empresa_nome,operation_type,requires_authorization,status,flow_stage,latest_snapshot,source_attempt_ids,source_link_ids,cadastro_id,first_attempt_at,last_activity_at,public_completed_at,sent_at,resolution_reason,last_error')
+        .in('status', ['aguardando_analise', 'pronto_erp', 'enviando', 'erro_envio'])
         .order('last_activity_at', { ascending: false })
         .limit(1000);
 
@@ -208,7 +211,10 @@ export function LinkPendenciasList({ reloadKey = 0, onSelectCadastro }: LinkPend
       ) : (
         <div className="grid gap-3">
           {filtered.map((item) => {
-            const canTreat = item.requires_authorization && !['enviado', 'encerrado', 'enviando'].includes(item.status);
+            const canRepairErpError = ['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(profile?.role ?? '');
+            const canTreat = item.requires_authorization &&
+              item.status !== 'enviando' &&
+              (item.status !== 'erro_envio' || canRepairErpError);
             return (
               <div key={item.id} className="vm-cadastro-card rounded-2xl p-4 sm:p-5">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -250,6 +256,12 @@ export function LinkPendenciasList({ reloadKey = 0, onSelectCadastro }: LinkPend
                           <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300">
                             <Clock3 className="h-3.5 w-3.5" />
                             Aguardando o próprio cliente retomar e concluir pelo link.
+                          </p>
+                        )}
+                        {item.status === 'erro_envio' && !canRepairErpError && (
+                          <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300">
+                            <AlertCircle className="h-3.5 w-3.5" />
+                            Tratativa de erro ERP restrita a Administrador, Cadastro e Gerente.
                           </p>
                         )}
                         {item.last_error && (
