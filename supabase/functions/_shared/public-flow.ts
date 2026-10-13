@@ -149,6 +149,10 @@ export const upsertLinkPendingJourney = async (params: {
   if (!cpfHash || !Number.isInteger(empresaCodigo) || empresaCodigo <= 0) return null;
 
   const now = new Date().toISOString();
+  const attemptId = String(attempt?.id || "").trim();
+  const linkId = String(link?.id || attempt?.link_id || "").trim();
+  if (!linkId) return null;
+
   const openStatuses = ["aguardando_analise", "pronto_erp", "enviando", "erro_envio"];
   const { data: existing, error: existingError } = await supabase
     .from("link_pendencias")
@@ -163,9 +167,6 @@ export const upsertLinkPendingJourney = async (params: {
     .maybeSingle();
 
   if (existingError) throw existingError;
-
-  const attemptId = String(attempt?.id || "").trim();
-  const linkId = String(link?.id || attempt?.link_id || "").trim();
   const sourceAttemptIds = Array.from(new Set([
     ...(Array.isArray(existing?.source_attempt_ids) ? existing.source_attempt_ids : []),
     ...(attemptId ? [attemptId] : []),
