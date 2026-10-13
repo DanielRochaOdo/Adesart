@@ -604,6 +604,8 @@ Deno.serve(async (req: Request) => {
   const auth = await requireInternalUser(req, supabase);
   if (!auth) return jsonResponse({ error: "Autenticacao obrigatoria" }, 401);
 
+  let pendingIdForError: string | null = null;
+
   try {
     const requestBody = await req.json();
     const responsavel = requestBody?.dados?.responsavelFinanceiro;
@@ -635,6 +637,7 @@ Deno.serve(async (req: Request) => {
         .eq("id", cadastroId)
         .maybeSingle();
       existing = data || null;
+      pendingIdForError = existing?.link_pendencia_id || null;
 
       if (existing?.status === "enviado" && existing?.erp_response) {
         return jsonResponse({
@@ -728,6 +731,16 @@ Deno.serve(async (req: Request) => {
           code: "CPF_ACTIVE_IN_ERP",
         }, 409);
       }
+    }
+
+    if (existing?.link_pendencia_id) {
+      const now = new Date().toISOString();
+      await supabase.from("link_pendencias").update({
+        status: "enviando",
+        last_error: null,
+        last_activity_at: now,
+        updated_at: now,
+      }).eq("id", existing.link_pendencia_id);
     }
 
     const startedAt = Date.now();
@@ -954,6 +967,32 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    if (existing?.link_pendencia_id) {
+      const now = new Date().toISOString();
+      if (ok) {
+        await supabase.from("link_pendencias").update({
+          status: "enviado",
+          cadastro_id: cadastroId || null,
+          sent_at: now,
+          sent_by: auth.profile.id,
+          resolved_at: now,
+          resolution_reason: "sent_to_erp",
+          last_error: null,
+          erp_response: responseBody,
+          last_activity_at: now,
+          updated_at: now,
+        }).eq("id", existing.link_pendencia_id);
+      } else {
+        await supabase.from("link_pendencias").update({
+          status: "erro_envio",
+          last_error: String(responseBody?.error || "Erro ao enviar ao S4E"),
+          erp_response: responseBody,
+          last_activity_at: now,
+          updated_at: now,
+        }).eq("id", existing.link_pendencia_id);
+      }
+    }
+
     const { error: logError } = await supabase.from("api_logs").insert({
       user_id: auth.user.id,
       user_email: auth.user.email,
@@ -995,6 +1034,26 @@ Deno.serve(async (req: Request) => {
   } catch (error) {
     console.error("[erp-novo-usuario2]", error);
     const message = error instanceof Error ? error.message : String(error);
+
+    if (pendingIdForError && message !== "LINK_PENDING_ATTACHMENT_REQUIRED") {
+      const now = new Date().toISOString();
+      await supabase.from("link_pendencias").update({
+        status: "erro_envio",
+        last_error: message.slice(0, 500),
+        last_activity_at: now,
+        updated_at: now,
+      }).eq("id", pendingIdForError);
+    }
+
+    if (pendingIdForError && message === "LINK_PENDING_ATTACHMENT_REQUIRED") {
+      const now = new Date().toISOString();
+      await supabase.from("link_pendencias").update({
+        status: "aguardando_analise",
+        last_error: "Anexo obrigatorio ausente.",
+        last_activity_at: now,
+        updated_at: now,
+      }).eq("id", pendingIdForError);
+    }
     if (message === "LINK_PENDING_ATTACHMENT_REQUIRED") {
       return jsonResponse({
         error: "Anexe ao menos um arquivo antes de enviar esta pendencia ao ERP.",
