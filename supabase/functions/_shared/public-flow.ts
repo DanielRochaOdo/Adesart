@@ -153,6 +153,7 @@ export const upsertLinkPendingJourney = async (params: {
   const { data: existing, error: existingError } = await supabase
     .from("link_pendencias")
     .select("*")
+    .eq("link_id", linkId)
     .eq("cpf_hash", cpfHash)
     .eq("empresa_codigo", empresaCodigo)
     .eq("operation_type", operationType)
@@ -241,6 +242,7 @@ export const upsertLinkPendingJourney = async (params: {
         const { data: concurrent, error: concurrentError } = await supabase
           .from("link_pendencias")
           .select("*")
+          .eq("link_id", linkId)
           .eq("cpf_hash", cpfHash)
           .eq("empresa_codigo", empresaCodigo)
           .eq("operation_type", operationType)
