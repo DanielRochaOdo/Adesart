@@ -1189,6 +1189,12 @@ private fun LinkHistoryDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
+                            text = "Tipo do link: ${if (link.requiresAuthorization) "Requer autorizacao" else "Fluxo normal"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
                             text = "Vendedor: ${link.vendedorNome ?: "-"} (Código ${link.vendedorCodigo ?: "-"})",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
