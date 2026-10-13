@@ -9,8 +9,14 @@ import {
 type HistoryStatus =
   | "Informou CPF e chegou à consulta dos dados"
   | "Validou CPF/data e abandonou depois"
+  | "Validou associado e abandonou inclusão de dependente"
   | "Chegou ao contrato e não concluiu"
   | "Concluiu a adesão"
+  | "Concluiu adesão após nova tentativa"
+  | "Incluiu dependente"
+  | "Concluiu inclusão de dependente após nova tentativa"
+  | "Finalizou solicitação — aguardando análise"
+  | "Finalizou solicitação após nova tentativa"
   | "Apenas abriu o link";
 
 type AccessEvent = {
@@ -23,8 +29,14 @@ type AccessEvent = {
 type AttemptRow = {
   id: string;
   ip_hash: string | null;
+  cpf_hash: string;
   status: string;
+  flow_mode: string;
+  completion_kind: string | null;
   profile_snapshot: any;
+  draft_snapshot: any;
+  last_stage: string | null;
+  link_pendencia_id: string | null;
   lemmit_checked_at: string | null;
   authenticated_at: string | null;
   completed_at: string | null;
@@ -84,17 +96,23 @@ const latestSessionsByAttempt = (sessions: SessionRow[]) => {
 };
 
 const classifyAttempt = (attempt: AttemptRow, session?: SessionRow): HistoryStatus => {
+  if (attempt.completion_kind === "pending_review") {
+    return "Finalizou solicitação — aguardando análise";
+  }
+
   if (
     attempt.status === "completed" ||
     Boolean(attempt.completed_at) ||
     (session && COMPLETED_SESSION_STATUSES.has(String(session.status || "")))
   ) {
-    return "Concluiu a adesão";
+    return attempt.flow_mode === "existing_member" ? "Incluiu dependente" : "Concluiu a adesão";
   }
 
   if (session) return "Chegou ao contrato e não concluiu";
   if (attempt.authenticated_at || attempt.status === "authenticated") {
-    return "Validou CPF/data e abandonou depois";
+    return attempt.flow_mode === "existing_member"
+      ? "Validou associado e abandonou inclusão de dependente"
+      : "Validou CPF/data e abandonou depois";
   }
 
   return "Informou CPF e chegou à consulta dos dados";
@@ -159,7 +177,7 @@ Deno.serve(async (req: Request) => {
     for (let offset = 0; offset < 50_000; offset += 1000) {
       const { data: attemptsData, error: attemptsError } = await supabase
         .from("public_adesao_attempts")
-        .select("id, ip_hash, status, profile_snapshot, lemmit_checked_at, authenticated_at, completed_at, created_at, updated_at")
+        .select("id, ip_hash, cpf_hash, status, flow_mode, completion_kind, profile_snapshot, draft_snapshot, last_stage, link_pendencia_id, lemmit_checked_at, authenticated_at, completed_at, created_at, updated_at")
         .eq("link_id", linkId)
         .order("created_at", { ascending: false })
         .range(offset, offset + 999);
@@ -180,6 +198,21 @@ Deno.serve(async (req: Request) => {
         .order("created_at", { ascending: false });
       if (sessionsError) throw sessionsError;
       sessions = (sessionsData || []) as SessionRow[];
+    }
+
+    let pendingJourneys: any[] = [];
+    try {
+      const { data: pendingData, error: pendingError } = await supabase
+        .from("link_pendencias")
+        .select("id,cpf_hash,operation_type,requires_authorization,status,source_attempt_ids,source_link_ids,public_completed_at,resolution_reason,first_attempt_at,last_activity_at")
+        .contains("source_link_ids", [linkId])
+        .order("first_attempt_at", { ascending: true });
+      if (pendingError) throw pendingError;
+      pendingJourneys = pendingData || [];
+    } catch (pendingError) {
+      // Compatibilidade durante deploy: o histórico antigo continua funcional
+      // até a migration de Link Pendências estar aplicada.
+      console.warn("[cadastro-link-history] consolidacao de pendencias indisponivel", pendingError);
     }
 
     const accessEvents: AccessEvent[] = [];
@@ -218,7 +251,7 @@ Deno.serve(async (req: Request) => {
       .map((event) => {
         const attempt = attemptByEventId.get(event.id);
         const session = attempt ? sessionByAttempt.get(attempt.id) : undefined;
-        const cadastro = session?.snapshot?.cadastro || {};
+        const cadastro = session?.snapshot?.cadastro || attempt?.draft_snapshot?.cadastro || attempt?.draft_snapshot || {};
         const profile = attempt?.profile_snapshot || {};
         const dependentes = Array.isArray(cadastro?.dependentes)
           ? cadastro.dependentes
@@ -233,7 +266,9 @@ Deno.serve(async (req: Request) => {
             ? String(cadastro?.nome || profile?.nome || "").trim() || null
             : null,
           dependentes,
-          telefone: attempt ? pickPhone(cadastro?.contatos, profile?.contatos) : null,
+          telefone: attempt
+            ? pickPhone(cadastro?.contatos, profile?.contatos) || normalizePhone(cadastro?.telefone) || null
+            : null,
           status: attempt
             ? classifyAttempt(attempt, session)
             : "Apenas abriu o link" as HistoryStatus,
@@ -241,12 +276,71 @@ Deno.serve(async (req: Request) => {
           vendedorCodigo: String(link.vendedor_codigo || ""),
           empresaNome: String(link.empresa_nome || ""),
           empresaCodigo: Number(link.empresa_codigo || 0),
+          _attemptId: attempt?.id || null,
         };
       })
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
     const identifiedRows = rows.filter((row) => row.status !== "Apenas abriu o link");
     const anonymousRows = rows.filter((row) => row.status === "Apenas abriu o link");
+
+    const hiddenAttemptIds = new Set<string>();
+    const statusOverrideByAttempt = new Map<string, HistoryStatus>();
+
+    for (const journey of pendingJourneys) {
+      const attemptIds = (Array.isArray(journey?.source_attempt_ids) ? journey.source_attempt_ids : [])
+        .map((value: unknown) => String(value || ""))
+        .filter(Boolean);
+      const visibleAttemptRows = identifiedRows
+        .filter((row: any) => row._attemptId && attemptIds.includes(String(row._attemptId)))
+        .sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+      if (visibleAttemptRows.length === 0) continue;
+
+      const firstRow: any = visibleAttemptRows[0];
+      const totalAttempts = attemptIds.length;
+      const operationType = String(journey?.operation_type || "new_member");
+      const wasRetried = totalAttempts > 1;
+
+      let finalStatus: HistoryStatus | null = null;
+      if (String(journey?.status) === "enviado") {
+        if (operationType === "existing_member") {
+          finalStatus = wasRetried
+            ? "Concluiu inclusão de dependente após nova tentativa"
+            : "Incluiu dependente";
+        } else {
+          finalStatus = wasRetried
+            ? "Concluiu adesão após nova tentativa"
+            : "Concluiu a adesão";
+        }
+      } else if (journey?.public_completed_at && journey?.requires_authorization === true) {
+        finalStatus = wasRetried
+          ? "Finalizou solicitação após nova tentativa"
+          : "Finalizou solicitação — aguardando análise";
+      } else if (operationType === "existing_member") {
+        finalStatus = "Validou associado e abandonou inclusão de dependente";
+      }
+
+      if (firstRow._attemptId && finalStatus) {
+        statusOverrideByAttempt.set(String(firstRow._attemptId), finalStatus);
+      }
+
+      for (const duplicateRow of visibleAttemptRows.slice(1)) {
+        if (duplicateRow._attemptId) hiddenAttemptIds.add(String(duplicateRow._attemptId));
+      }
+    }
+
+    const consolidatedRows = rows
+      .filter((row: any) => !row._attemptId || !hiddenAttemptIds.has(String(row._attemptId)))
+      .map((row: any) => {
+        const override = row._attemptId ? statusOverrideByAttempt.get(String(row._attemptId)) : null;
+        const { _attemptId, ...publicRow } = row;
+        return override ? { ...publicRow, status: override } : publicRow;
+      })
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    const consolidatedIdentifiedRows = consolidatedRows.filter((row) => row.status !== "Apenas abriu o link");
+    const consolidatedAnonymousRows = consolidatedRows.filter((row) => row.status === "Apenas abriu o link");
 
     return jsonResponse({
       ok: true,
@@ -261,12 +355,13 @@ Deno.serve(async (req: Request) => {
         clickCount: accessEvents.length,
         legacyClickCount: Number(link.click_count || 0),
         visitsStartedAt: link.unique_visits_started_at || null,
-        identifiedAttempts: attempts.length,
-        anonymousDetailed: anonymousRows.length,
+        identifiedAttempts: consolidatedIdentifiedRows.length,
+        rawAttemptCount: attempts.length,
+        anonymousDetailed: consolidatedAnonymousRows.length,
         detailedAccessEvents: accessEvents.length,
-        lastClickedAt: rows[0]?.timestamp || link.last_unique_visit_at || null,
+        lastClickedAt: consolidatedRows[0]?.timestamp || link.last_unique_visit_at || null,
       },
-      rows,
+      rows: consolidatedRows,
     });
   } catch (error) {
     console.error("[cadastro-link-history]", error);
