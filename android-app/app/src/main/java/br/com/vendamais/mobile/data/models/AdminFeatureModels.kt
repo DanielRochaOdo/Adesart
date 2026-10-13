@@ -477,6 +477,8 @@ data class PublicCadastroAuthenticateResponse(
     val person: PublicCadastroPrefill? = null,
     val member: PublicExistingMemberInfo? = null,
     val plans: List<PublicPlanoInfo> = emptyList(),
+    @SerialName("requiresAuthorization")
+    val requiresAuthorization: Boolean? = null,
     val reason: String? = null,
     val error: String? = null,
     val code: String? = null,
