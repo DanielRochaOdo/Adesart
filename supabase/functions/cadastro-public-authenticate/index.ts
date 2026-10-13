@@ -274,7 +274,12 @@ const finishAuthentication = async (
       updated_at: now,
     }).eq("id", attemptId);
 
-    return jsonResponse({ ok: true, state: "not_eligible", reason: "ACTIVE_DEPENDENT_IN_ERP" });
+    return jsonResponse({
+      ok: true,
+      state: "not_eligible",
+      reason: "ACTIVE_DEPENDENT_IN_ERP",
+      requiresAuthorization: link.requires_authorization === true,
+    });
   }
 
   if (activeRecord?.isResponsible) {
@@ -337,6 +342,7 @@ const finishAuthentication = async (
         email: activeRecord.email || "",
       },
       plans,
+      requiresAuthorization: link.requires_authorization === true,
     });
   }
 
@@ -369,7 +375,13 @@ const finishAuthentication = async (
     status: "aguardando_analise",
   });
 
-  return jsonResponse({ ok: true, state: "authenticated", attemptToken, person });
+  return jsonResponse({
+    ok: true,
+    state: "authenticated",
+    attemptToken,
+    person,
+    requiresAuthorization: link.requires_authorization === true,
+  });
 };
 
 Deno.serve(async (req: Request) => {
@@ -441,6 +453,7 @@ Deno.serve(async (req: Request) => {
             : cachedAttempt.flow_mode === "existing_member"
               ? "existing_member_completed"
               : "completed",
+          requiresAuthorization: link.requires_authorization === true,
         });
       }
       const attemptToken = randomToken();
