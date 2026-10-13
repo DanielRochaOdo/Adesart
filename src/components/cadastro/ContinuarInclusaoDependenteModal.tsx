@@ -2012,7 +2012,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
                       <span className="text-sm text-emerald-700 flex-1">
                         {dep.arquivo ? dep.arquivo.nome : 'Arquivo já enviado'}
                       </span>
-                      {dep.arquivo && (
+                      {dep.arquivo && !cadastro.link_pendencia_id && (
                         <button
                           onClick={async () => {
                             try {
