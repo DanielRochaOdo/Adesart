@@ -262,22 +262,22 @@ fun InclusaoDependenteDialog(
     suspend fun persistInclusaoDraftNow() {
         val cadastroAtual = cadastro ?: return
         val responsavelAtual = responsavelSelecionado ?: return
-        val vendedorAtual = if (profile?.role == "VENDEDOR") {
-            TeamMemberOption(profile.id, profile.name, profile.email, profile.externalId)
+        val vendedorAtual = resolveVendedor() ?: return
+        val adesionistaAtual = resolveAdesionista()
+        val empresaCodigoAtual = if (isLinkPending) {
+            cadastroAtual.empresaCodigo ?: cadastroAtual.empresaId ?: 0
         } else {
-            state.vendedores.firstOrNull { it.id == selectedVendedorId } ?: return
+            when {
+                empresaCodigo > 0 -> empresaCodigo
+                responsavelAtual.codigoEmpresa != null && responsavelAtual.codigoEmpresa > 0 -> responsavelAtual.codigoEmpresa
+                else -> 0
+            }
         }
-        val adesionistaAtual = if (profile?.role == "ADESIONISTA") {
-            TeamMemberOption(profile.id, profile.name, profile.email, profile.externalId)
+        val empresaNomeAtual = if (isLinkPending) {
+            cadastroAtual.empresaNome.orEmpty()
         } else {
-            state.adesionistas.firstOrNull { it.id == selectedAdesionistaId }
+            empresaNome.takeIf { it.isNotBlank() } ?: responsavelAtual.empresa.orEmpty()
         }
-        val empresaCodigoAtual = when {
-            empresaCodigo > 0 -> empresaCodigo
-            responsavelAtual.codigoEmpresa != null && responsavelAtual.codigoEmpresa > 0 -> responsavelAtual.codigoEmpresa
-            else -> 0
-        }
-        val empresaNomeAtual = empresaNome.takeIf { it.isNotBlank() } ?: responsavelAtual.empresa.orEmpty()
         val payload = buildCadastroPayload(
             profileId = if (isLinkPending) cadastro?.createdBy.orEmpty() else profile?.id.orEmpty(),
             teamId = if (isLinkPending) cadastro?.teamId else profile?.teamId,
@@ -326,6 +326,11 @@ fun InclusaoDependenteDialog(
         }
         updateDependente(dependentes, index) { it.copy(arquivo = uploaded, uploading = false, saved = false) }
         runCatching { persistInclusaoDraftNow() }
+        if (!linkPendingId.isNullOrBlank() && cadastro != null) {
+            runCatching {
+                viewModel.refreshLinkPendenciaReadiness(linkPendingId, cadastro.id)
+            }
+        }
         localNotice = if (linkPendingId.isNullOrBlank()) {
             "Arquivo carregado com sucesso."
         } else {
@@ -718,6 +723,11 @@ fun InclusaoDependenteDialog(
 
         if (cadastro != null) {
             viewModel.updateCadastroRecord(cadastro.id, payload)
+            if (isLinkPending && !cadastro.linkPendenciaId.isNullOrBlank()) {
+                runCatching {
+                    viewModel.refreshLinkPendenciaReadiness(cadastro.linkPendenciaId, cadastro.id)
+                }
+            }
             localNotice = "Rascunho salvo com sucesso."
             onSuccess()
         } else {
@@ -969,7 +979,27 @@ fun InclusaoDependenteDialog(
                         VendaWizardProgress(currentStep = inclusaoStep, labels = listOf("Dependentes", "Documento"))
                     }
 
-                if (!isLinkPending && profile?.role != "VENDEDOR") {
+                if (isLinkPending) {
+                    OutlinedTextField(
+                        value = listOfNotNull(
+                            cadastro?.vendedorNome?.takeIf { it.isNotBlank() },
+                            cadastro?.vendedorCodigo?.takeIf { it.isNotBlank() }?.let { "Codigo $it" },
+                        ).joinToString(" - ").ifBlank { "Vendedor de origem nao informado" },
+                        onValueChange = {},
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                        label = { Text("Vendedor de origem") },
+                        enabled = false,
+                    )
+                    if (!cadastro?.adesionistaNome.isNullOrBlank()) {
+                        OutlinedTextField(
+                            value = cadastro?.adesionistaNome.orEmpty(),
+                            onValueChange = {},
+                            modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                            label = { Text("Adesionista de origem") },
+                            enabled = false,
+                        )
+                    }
+                } else if (profile?.role != "VENDEDOR") {
                     SelectionField(
                         label = "Vendedor",
                         value = state.vendedores
