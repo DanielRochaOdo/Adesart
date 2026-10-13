@@ -122,22 +122,14 @@ LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public
-AS $$
+AS $
   SELECT EXISTS (
     SELECT 1
     FROM public.profiles p
     WHERE p.id = auth.uid()
       AND p.is_active = true
-      AND (
-        p.role IN ('ADMINISTRADOR', 'GERENTE', 'CADASTRO', 'ADESIONISTA')
-        OR (p.role = 'SUPERVISOR' AND p.team_id IS NOT DISTINCT FROM p_team_id)
-        OR (
-          p.role = 'VENDEDOR'
-          AND (p.id = p_created_by OR p.id = p_vendedor_id)
-        )
-      )
   );
-$$;
+$;
 
 REVOKE ALL ON FUNCTION public.can_access_link_pendencia_v1(uuid, uuid, uuid)
 FROM PUBLIC, anon;
@@ -219,125 +211,24 @@ WITH CHECK (
 );
 
 -- Backfill: somente tentativas com identidade/dados aproveitaveis entram.
--- Uma jornada concluida no fluxo antigo aparece como enviada; abandonos ficam
--- aguardando analise e podem ser resolvidos por uma tentativa posterior.
+-- Links legados ficam com requires_authorization = false, pois a resposta
+-- "A empresa requer autorizacao?" ainda nao era persistida no banco.
 WITH meaningful AS (
   SELECT
     a.*,
     CASE
       WHEN a.flow_mode = 'existing_member'
-       AND coalesce(a.erp_member_snapshot ->> 'codigoEmpresa', '') ~ '^[0-9]+
-    l.created_by,
-    l.vendedor_id,
-    l.team_id,
-    CASE
-      WHEN a.flow_mode = 'existing_member' THEN 'existing_member'
-      ELSE 'new_member'
-    END AS operation_type
-  FROM public.public_adesao_attempts a
-  JOIN public.cadastro_links l ON l.id = a.link_id
-  WHERE a.flow_mode IN ('new_member', 'existing_member')
-    AND a.profile_snapshot IS NOT NULL
-    AND (
-      a.authenticated_at IS NOT NULL
-      OR a.lemmit_checked_at IS NOT NULL
-      OR a.erp_member_snapshot IS NOT NULL
-      OR a.status = 'completed'
-    )
-),
-groups AS (
-  SELECT
-    cpf_hash,
-    empresa_codigo,
-    operation_type,
-    min(created_at) AS first_attempt_at,
-    max(updated_at) AS last_activity_at,
-    bool_or(status = 'completed' OR completed_at IS NOT NULL) AS has_completed,
-    array_agg(id ORDER BY created_at) AS attempt_ids,
-    array_agg(DISTINCT link_id) AS link_ids
-  FROM meaningful
-  GROUP BY cpf_hash, empresa_codigo, operation_type
-),
-latest AS (
-  SELECT DISTINCT ON (m.cpf_hash, m.empresa_codigo, m.operation_type)
-    m.*
-  FROM meaningful m
-  ORDER BY m.cpf_hash, m.empresa_codigo, m.operation_type, m.updated_at DESC, m.created_at DESC
-)
-INSERT INTO public.link_pendencias (
-  link_id,
-  primary_attempt_id,
-  cpf_hash,
-  cpf,
-  nome,
-  empresa_codigo,
-  empresa_nome,
-  operation_type,
-  requires_authorization,
-  status,
-  flow_stage,
-  latest_snapshot,
-  erp_member_snapshot,
-  source_attempt_ids,
-  source_link_ids,
-  created_by,
-  vendedor_id,
-  team_id,
-  first_attempt_at,
-  last_activity_at,
-  public_completed_at,
-  resolved_at,
-  resolution_reason
-)
-SELECT
-  l.link_id,
-  g.attempt_ids[1],
-  g.cpf_hash,
-  regexp_replace(coalesce(l.profile_snapshot ->> 'cpf', ''), '[^0-9]', '', 'g'),
-  nullif(btrim(coalesce(l.profile_snapshot ->> 'nome', '')), ''),
-  g.empresa_codigo,
-  l.empresa_nome,
-  g.operation_type,
-  l.requires_authorization,
-  CASE WHEN g.has_completed THEN 'enviado' ELSE 'aguardando_analise' END,
-  coalesce(l.last_stage, CASE WHEN g.has_completed THEN 'completed' ELSE 'identified' END),
-  coalesce(l.draft_snapshot, l.profile_snapshot, '{}'::jsonb),
-  l.erp_member_snapshot,
-  g.attempt_ids,
-  g.link_ids,
-  l.created_by,
-  l.vendedor_id,
-  l.team_id,
-  g.first_attempt_at,
-  g.last_activity_at,
-  CASE WHEN g.has_completed THEN g.last_activity_at ELSE NULL END,
-  CASE WHEN g.has_completed THEN g.last_activity_at ELSE NULL END,
-  CASE WHEN g.has_completed THEN 'completed_before_link_pendencias' ELSE NULL END
-FROM groups g
-JOIN latest l
-  ON l.cpf_hash = g.cpf_hash
- AND l.empresa_codigo = g.empresa_codigo
- AND l.operation_type = g.operation_type
-ON CONFLICT DO NOTHING;
-
-COMMENT ON COLUMN public.cadastro_links.requires_authorization IS
-  'Quando true, o fluxo publico termina em Link Pendencias e somente a operacao interna autorizada pode enviar ao ERP.';
-COMMENT ON TABLE public.link_pendencias IS
-  'Jornada consolidada do fluxo Link por CPF, empresa e tipo de operacao. Tentativas tecnicas permanecem auditaveis em public_adesao_attempts.';
-COMMENT ON TABLE public.link_pendencia_files IS
-  'Arquivos acumulativos da analise interna. Novos anexos nao substituem nem removem versoes anteriores.';
-COMMENT ON COLUMN public.public_adesao_attempts.completion_kind IS
-  'Resultado da tentativa: pending_review, adhesion_completed ou dependent_completed.';
-
-COMMIT;
-
+       AND coalesce(a.erp_member_snapshot ->> 'codigoEmpresa', '') ~ '^[0-9]+$'
        AND (a.erp_member_snapshot ->> 'codigoEmpresa')::integer > 0
         THEN (a.erp_member_snapshot ->> 'codigoEmpresa')::integer
       ELSE l.empresa_codigo
     END AS empresa_codigo,
     CASE
       WHEN a.flow_mode = 'existing_member'
-        THEN coalesce(nullif(btrim(a.erp_member_snapshot ->> 'empresaNome'), ''), l.empresa_nome)
+        THEN coalesce(
+          nullif(btrim(a.erp_member_snapshot ->> 'empresaNome'), ''),
+          l.empresa_nome
+        )
       ELSE l.empresa_nome
     END AS empresa_nome,
     l.requires_authorization,
@@ -376,7 +267,12 @@ latest AS (
   SELECT DISTINCT ON (m.cpf_hash, m.empresa_codigo, m.operation_type)
     m.*
   FROM meaningful m
-  ORDER BY m.cpf_hash, m.empresa_codigo, m.operation_type, m.updated_at DESC, m.created_at DESC
+  ORDER BY
+    m.cpf_hash,
+    m.empresa_codigo,
+    m.operation_type,
+    m.updated_at DESC,
+    m.created_at DESC
 )
 INSERT INTO public.link_pendencias (
   link_id,
@@ -407,14 +303,40 @@ SELECT
   l.link_id,
   g.attempt_ids[1],
   g.cpf_hash,
-  regexp_replace(coalesce(l.profile_snapshot ->> 'cpf', ''), '[^0-9]', '', 'g'),
-  nullif(btrim(coalesce(l.profile_snapshot ->> 'nome', '')), ''),
+  regexp_replace(
+    coalesce(
+      l.draft_snapshot -> 'cadastro' ->> 'cpf',
+      l.draft_snapshot ->> 'cpf',
+      l.profile_snapshot ->> 'cpf',
+      ''
+    ),
+    '[^0-9]',
+    '',
+    'g'
+  ),
+  nullif(
+    btrim(
+      coalesce(
+        l.draft_snapshot -> 'cadastro' ->> 'nome',
+        l.draft_snapshot ->> 'nome',
+        l.profile_snapshot ->> 'nome',
+        ''
+      )
+    ),
+    ''
+  ),
   g.empresa_codigo,
   l.empresa_nome,
   g.operation_type,
   l.requires_authorization,
-  CASE WHEN g.has_completed THEN 'enviado' ELSE 'aguardando_analise' END,
-  coalesce(l.last_stage, CASE WHEN g.has_completed THEN 'completed' ELSE 'identified' END),
+  CASE
+    WHEN g.has_completed THEN 'enviado'
+    ELSE 'aguardando_analise'
+  END,
+  coalesce(
+    l.last_stage,
+    CASE WHEN g.has_completed THEN 'completed' ELSE 'identified' END
+  ),
   coalesce(l.draft_snapshot, l.profile_snapshot, '{}'::jsonb),
   l.erp_member_snapshot,
   g.attempt_ids,
@@ -432,7 +354,23 @@ JOIN latest l
   ON l.cpf_hash = g.cpf_hash
  AND l.empresa_codigo = g.empresa_codigo
  AND l.operation_type = g.operation_type
-ON CONFLICT DO NOTHING;
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM public.link_pendencias p
+  WHERE p.cpf_hash = g.cpf_hash
+    AND p.empresa_codigo = g.empresa_codigo
+    AND p.operation_type = g.operation_type
+    AND p.source_attempt_ids && g.attempt_ids
+);
+
+-- Liga as tentativas historicas ao registro operacional criado no backfill.
+UPDATE public.public_adesao_attempts a
+SET
+  link_pendencia_id = p.id,
+  updated_at = greatest(a.updated_at, p.last_activity_at)
+FROM public.link_pendencias p
+WHERE a.id = ANY(p.source_attempt_ids)
+  AND a.link_pendencia_id IS NULL;
 
 COMMENT ON COLUMN public.cadastro_links.requires_authorization IS
   'Quando true, o fluxo publico termina em Link Pendencias e somente a operacao interna autorizada pode enviar ao ERP.';
