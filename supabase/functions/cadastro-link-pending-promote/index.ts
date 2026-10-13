@@ -8,18 +8,12 @@ import {
   sanitizePlan,
 } from "../_shared/public-flow.ts";
 
+const ERP_ERROR_ROLES = new Set(["ADMINISTRADOR", "CADASTRO", "GERENTE"]);
+
 const canOperate = (profile: any, pending: any) => {
-  const role = String(profile?.role || "").toUpperCase();
-  if (["ADMINISTRADOR", "GERENTE", "GESTOR", "CADASTRO", "ADESIONISTA"].includes(role)) return true;
-  if (role === "SUPERVISOR") {
-    return String(profile?.team_id || "") === String(pending?.team_id || "");
-  }
-  if (role === "VENDEDOR") {
-    return [pending?.created_by, pending?.vendedor_id]
-      .filter(Boolean)
-      .some((id) => String(id) === String(profile?.id || ""));
-  }
-  return false;
+  if (!profile?.id || profile?.is_active === false) return false;
+  if (String(pending?.status || "") !== "erro_envio") return true;
+  return ERP_ERROR_ROLES.has(String(profile?.role || "").toUpperCase());
 };
 
 const planName = (plans: any[], code: number) =>
@@ -54,6 +48,12 @@ Deno.serve(async (req: Request) => {
     }
     if (pending.status === "enviado") {
       return jsonResponse({ error: "Esta solicitacao ja foi enviada ao ERP.", code: "PENDING_ALREADY_SENT" }, 409);
+    }
+    if (pending.status === "encerrado") {
+      return jsonResponse({ error: "Esta solicitacao ja foi encerrada.", code: "PENDING_CLOSED" }, 409);
+    }
+    if (pending.status === "enviando") {
+      return jsonResponse({ error: "Esta solicitacao ja esta em processamento.", code: "PENDING_PROCESSING" }, 409);
     }
 
     if (pending.cadastro_id) {
