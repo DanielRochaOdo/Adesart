@@ -1730,6 +1730,7 @@ class AppViewModel(
                     ?.trim()
                     ?.takeIf { it.isNotBlank() }
                     ?: "application/octet-stream"
+                var uploadedPendingFile: UploadedTempFile? = null
                 val arquivoPathFinalForSend = when {
                     arquivoPathForSend.isNullOrBlank() -> null
                     File(arquivoPathForSend).exists() -> {
@@ -1740,9 +1741,19 @@ class AppViewModel(
                             bytes = bytes,
                             prefix = "cadastros/${cadastro.id}",
                         )
+                        uploadedPendingFile = uploaded
                         uploaded.path
                     }
                     else -> arquivoPathForSend
+                }
+
+                if (!cadastro.linkPendenciaId.isNullOrBlank() && uploadedPendingFile != null) {
+                    workflowRepository.registerLinkPendenciaFile(
+                        session = activeSession,
+                        pendingId = cadastro.linkPendenciaId,
+                        cadastroId = cadastro.id,
+                        file = uploadedPendingFile!!,
+                    )
                 }
                 val numeroMatriculaFromSnapshot = cadastro.numeroMatricula
                     ?.trim()
@@ -2038,7 +2049,11 @@ class AppViewModel(
                         noticeMessage = noticeMessage,
                         cadastroOverlay = null,
                         activeTab = MainTab.CADASTROS,
-                        cadastroTab = CadastroAreaTab.COMPLETOS,
+                        cadastroTab = if (cadastro.linkPendenciaId.isNullOrBlank()) {
+                            CadastroAreaTab.COMPLETOS
+                        } else {
+                            CadastroAreaTab.LINK_PENDENCIAS
+                        },
                         cadastroFiltro = CadastroFiltro.ENVIADOS,
                     )
                 }
@@ -2061,6 +2076,9 @@ class AppViewModel(
                                 current.cadastroStats
                             },
                         )
+                    }
+                    if (!cadastro.linkPendenciaId.isNullOrBlank()) {
+                        loadLinkPendencias()
                     }
                 }
             }.onFailure { throwable ->
