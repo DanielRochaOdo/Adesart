@@ -142,7 +142,10 @@ export const upsertLinkPendingJourney = async (params: {
       "",
   );
   const cpfHash = String(attempt?.cpf_hash || "").trim();
-  const empresaCodigo = Number(link?.empresa_codigo || 0);
+  const memberCompanyCode = Number(attempt?.erp_member_snapshot?.codigoEmpresa || 0);
+  const empresaCodigo = flowMode === "existing_member" && Number.isInteger(memberCompanyCode) && memberCompanyCode > 0
+    ? memberCompanyCode
+    : Number(link?.empresa_codigo || 0);
   if (!cpfHash || !Number.isInteger(empresaCodigo) || empresaCodigo <= 0) return null;
 
   const now = new Date().toISOString();
@@ -185,7 +188,11 @@ export const upsertLinkPendingJourney = async (params: {
         "",
     ).trim() || null,
     empresa_codigo: empresaCodigo,
-    empresa_nome: String(link?.empresa_nome || existing?.empresa_nome || "").trim() || `Empresa ${empresaCodigo}`,
+    empresa_nome: String(
+      flowMode === "existing_member"
+        ? attempt?.erp_member_snapshot?.empresaNome || link?.empresa_nome || existing?.empresa_nome || ""
+        : link?.empresa_nome || existing?.empresa_nome || "",
+    ).trim() || `Empresa ${empresaCodigo}`,
     operation_type: operationType,
     requires_authorization: Boolean(link?.requires_authorization),
     status,
