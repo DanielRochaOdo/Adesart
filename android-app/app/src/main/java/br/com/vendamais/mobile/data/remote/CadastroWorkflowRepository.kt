@@ -936,7 +936,9 @@ class CadastroWorkflowRepository(
                 id = cadastroAtual.id,
                 payload = buildJsonObject {
                     put("arquivo_path", arquivoAtual)
-                    put("created_by", session.userId)
+                    if (cadastroAtual.linkPendenciaId.isNullOrBlank()) {
+                        put("created_by", session.userId)
+                    }
                 },
             )
         }.onFailure { throwable ->
@@ -1127,7 +1129,7 @@ class CadastroWorkflowRepository(
                 parameter("id", "eq.$id")
                 parameter(
                     "select",
-                    "id,status,tipo_cadastro,nome,cpf,data_nascimento,sexo_codigo,nome_mae,contatos,endereco,dependentes,empresa_id,empresa_codigo,empresa_nome,empresa_cnpj,empresa_exige_matricula,empresa_raw,planos_raw,numero_matricula,status_adesao_id,vendedor_id,vendedor_nome,vendedor_codigo,adesionista_id,adesionista_nome,adesionista_codigo,responsavel_financeiro_codigo,responsavel_financeiro_nome,responsavel_financeiro_cpf,contatos_responsavel_financeiro,motivo_bloqueio,erp_dados_associado,erp_response,arquivo_path,arquivo_nome,arquivo_mime_type,arquivo_tamanho,plano_codigo,plano_nome,created_at,updated_at"
+                    "id,status,created_by,team_id,tipo_cadastro,nome,cpf,data_nascimento,sexo_codigo,nome_mae,contatos,endereco,dependentes,empresa_id,empresa_codigo,empresa_nome,empresa_cnpj,empresa_exige_matricula,empresa_raw,planos_raw,numero_matricula,status_adesao_id,vendedor_id,vendedor_nome,vendedor_codigo,adesionista_id,adesionista_nome,adesionista_codigo,responsavel_financeiro_codigo,responsavel_financeiro_nome,responsavel_financeiro_cpf,contatos_responsavel_financeiro,motivo_bloqueio,erp_dados_associado,erp_response,arquivo_path,arquivo_nome,arquivo_mime_type,arquivo_tamanho,link_pendencia_id,plano_codigo,plano_nome,created_at,updated_at"
                 )
                 parameter("limit", 1)
             },
@@ -1173,7 +1175,9 @@ class CadastroWorkflowRepository(
 
         val payloadComAuditoria = buildJsonObject {
             payload.forEach { (key, value) -> put(key, value) }
-            put("created_by", session.userId)
+            if (cadastro.linkPendenciaId.isNullOrBlank()) {
+                put("created_by", session.userId)
+            }
         }
         return runCatching {
             patchCadastroById(session, cadastro.id, payloadComAuditoria)
@@ -1189,13 +1193,19 @@ class CadastroWorkflowRepository(
         payload: JsonObject,
         resolveDraftConflict: Boolean = true,
     ): CadastroDetalhe {
+        val currentOrigin = runCatching { fetchCadastroDetalhe(session, id) }.getOrNull()
+        val isLinkPending = !currentOrigin?.linkPendenciaId.isNullOrBlank()
         val payloadComCreatedBy = buildJsonObject {
-            payload.forEach { (key, value) -> put(key, value) }
+            payload.forEach { (key, value) ->
+                if (!(isLinkPending && key in setOf("created_by", "team_id"))) {
+                    put(key, value)
+                }
+            }
             val createdByPayload = payload["created_by"]
                 ?.jsonPrimitive
                 ?.contentOrNull
                 ?.trim()
-            if (createdByPayload.isNullOrBlank()) {
+            if (!isLinkPending && createdByPayload.isNullOrBlank()) {
                 put("created_by", session.userId)
             }
         }
@@ -1775,7 +1785,9 @@ class CadastroWorkflowRepository(
                 put("motivo_bloqueio", JsonNull)
             }
             cpfForSync?.let { put("cpf", it) }
-            put("created_by", session.userId)
+            if (cadastro.linkPendenciaId.isNullOrBlank()) {
+                put("created_by", session.userId)
+            }
         }
 
         Log.i(
