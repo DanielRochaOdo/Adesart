@@ -17,6 +17,7 @@ import { EmpresaNaoIdentificadaModal } from './EmpresaNaoIdentificadaModal';
 import { ERP_MAX_FILE_SIZE, uploadToStorage, UploadedFile, validateFile } from '../../utils/uploadFile';
 import { compressFileForErp } from '../../utils/compressErpFile';
 import { clearDraft, loadDraft, saveBeforeFilePicker, saveDraft } from '../../utils/draftStorage';
+import { refreshLinkPendingReadiness } from '../../lib/linkPending';
 import { clearPendingFile, loadPendingFile, savePendingFile } from '../../utils/pendingFileStore';
 
 interface ContinuarInclusaoDependenteModalProps {
@@ -347,6 +348,14 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
 
     if (profile?.id && draftHydratedRef.current) {
       saveDraft('continuar-inclusao-dependente-modal', buildDraftPayload(), profile.id, cadastro.id);
+    }
+
+    if (cadastro.link_pendencia_id) {
+      try {
+        await refreshLinkPendingReadiness(cadastro.link_pendencia_id, cadastro.id);
+      } catch (readinessError) {
+        console.warn('[ContinuarInclusaoDependenteModal] Não foi possível recalcular a prontidão:', readinessError);
+      }
     }
   };
 
@@ -870,6 +879,14 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
       );
       setDependentesState(novosDependentes);
       persistContinuarDraftSnapshot(novosDependentes);
+
+      if (cadastro.link_pendencia_id) {
+        try {
+          await refreshLinkPendingReadiness(cadastro.link_pendencia_id, cadastro.id);
+        } catch (readinessError) {
+          console.warn('[ContinuarInclusaoDependenteModal] Anexo salvo, mas a prontidão não pôde ser recalculada:', readinessError);
+        }
+      }
 
       try {
         await clearPendingFile(profile.id, 'continuar-inclusao-dependente-modal', getPendingFileSlotKey(index));
