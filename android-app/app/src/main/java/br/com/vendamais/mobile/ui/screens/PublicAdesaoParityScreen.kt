@@ -63,8 +63,11 @@ import br.com.vendamais.mobile.ui.components.bringIntoViewOnFocus
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 import java.time.LocalDate
 import java.util.Locale
 import java.util.UUID
@@ -242,6 +245,137 @@ fun PublicAdesaoParityScreen(
             .map { it.resolvedId to it.label }
     }
 
+    fun currentPendingSnapshot(): JsonElement {
+        val cadastroJson = buildJsonObject {
+            put("cpf", cpf.filter(Char::isDigit))
+            put("nome", if (flowMode == "existing_member") existingMemberName.ifBlank { nome } else nome)
+            if (flowMode == "existing_member") {
+                put("telefone", existingPhone.filter(Char::isDigit))
+                put("email", existingEmail.trim().lowercase(Locale.ROOT))
+            } else {
+                put("dataNascimento", dataNascimento)
+                put("sexoCodigo", sexo)
+                put("nomeMae", nomeMae)
+                put("numeroMatricula", numeroMatricula)
+                put(
+                    "telefone",
+                    contatos.firstOrNull {
+                        it.tipo in setOf("whatsapp", "celular", "fixo") && it.principal
+                    }?.valor?.filter(Char::isDigit)
+                        ?: contatos.firstOrNull { it.tipo in setOf("whatsapp", "celular", "fixo") }
+                            ?.valor?.filter(Char::isDigit).orEmpty(),
+                )
+                put(
+                    "email",
+                    contatos.firstOrNull { it.tipo == "email" && it.principal }?.valor
+                        ?: contatos.firstOrNull { it.tipo == "email" }?.valor.orEmpty(),
+                )
+                put("titularPlano", titularPlano)
+                put("contatos", buildJsonArray {
+                    contatos.forEach { contact ->
+                        add(buildJsonObject {
+                            put("tipo", contact.tipo)
+                            put("valor", contact.valor)
+                            put("principal", contact.principal)
+                        })
+                    }
+                })
+                put("endereco", buildJsonObject {
+                    put("cep", cep.filter(Char::isDigit))
+                    put("tipoLogradouro", tipoLogradouro)
+                    put("logradouro", logradouro)
+                    put("numero", numero)
+                    put("complemento", complemento)
+                    put("bairro", bairro)
+                    put("cidade", cidade)
+                    put("uf", uf)
+                    idTipoLogradouro?.let { put("idTipoLogradouro", it) }
+                    idBairro?.let { put("idBairro", it) }
+                    idMunicipio?.let { put("idMunicipio", it) }
+                    idUf?.let { put("idUf", it) }
+                })
+            }
+            put("dependentes", buildJsonArray {
+                dependentes.forEach { dep ->
+                    add(buildJsonObject {
+                        put("tipo", dep.tipo)
+                        put("nome", dep.nome.trim())
+                        put("dataNascimento", dep.dataNascimento)
+                        put("cpf", dep.cpf.filter(Char::isDigit))
+                        put("sexo", dep.sexo)
+                        put("plano", dep.plano)
+                        put("planoValor", dep.planoValor)
+                        put("nomeMae", dep.nomeMae.trim())
+                    })
+                }
+            })
+        }
+
+        return buildJsonObject {
+            put("cadastro", cadastroJson)
+            if (flowMode == "existing_member") {
+                put("member", buildJsonObject {
+                    put("nome", existingMemberName)
+                    put("empresa", existingMemberCompany)
+                })
+                put("plans", buildJsonArray {
+                    plans.forEach { plan ->
+                        add(buildJsonObject {
+                            put("Plano", plan.codigo)
+                            put("nomeExibicao", plan.nome)
+                            put("ValorTitular", plan.valorTitular)
+                            put("ValorDependente", plan.valorDependente)
+                        })
+                    }
+                })
+            }
+        }
+    }
+
+    fun persistPendingProgress(progressStage: String) {
+        if (attemptToken.isBlank()) return
+        val snapshot = currentPendingSnapshot()
+        scope.launch {
+            runCatching {
+                viewModel.savePublicLinkProgress(
+                    attemptToken = attemptToken,
+                    stage = progressStage,
+                    snapshot = snapshot,
+                )
+            }
+        }
+    }
+
+    fun finalizeAuthorizedRequest() {
+        if (!currentLink.requiresAuthorization || attemptToken.isBlank() || busy) return
+        busy = true
+        error = null
+        validationErrors = emptyList()
+        val snapshot = currentPendingSnapshot()
+        scope.launch {
+            runCatching {
+                viewModel.finalizePublicPending(
+                    attemptToken = attemptToken,
+                    snapshot = snapshot,
+                )
+            }.onSuccess { response ->
+                if (!response.ok) {
+                    error = response.error ?: "Nao foi possivel finalizar a solicitacao."
+                } else {
+                    successMessage =
+                        "Seus dados foram enviados para análise. Em caso de dúvidas você pode entrar em contato com seu consultor."
+                    setStage(PublicStage.SUCCESS)
+                }
+            }.onFailure {
+                error = CadastroApiErrorMapper.mapUserMessage(
+                    it.message,
+                    "Nao foi possivel finalizar a solicitacao.",
+                )
+            }
+            busy = false
+        }
+    }
+
     if (loading) {
         PublicLoadingScreen()
         return
@@ -278,11 +412,24 @@ fun PublicAdesaoParityScreen(
 
     if (stage == PublicStage.SUCCESS) {
         PublicFinalStateScreen(
-            title = if (flowMode == "existing_member") "Dependente(s) incluído(s)" else "Adesão recebida",
-            message = successMessage,
+            title = if (currentLink.requiresAuthorization) {
+                "Solicitação recebida com sucesso"
+            } else if (flowMode == "existing_member") {
+                "Dependente(s) incluído(s)"
+            } else {
+                "Adesão recebida"
+            },
+            message = if (currentLink.requiresAuthorization) {
+                successMessage.ifBlank {
+                    "Seus dados foram enviados para análise. Em caso de dúvidas você pode entrar em contato com seu consultor."
+                }
+            } else {
+                successMessage
+            },
             consultantName = currentLink.vendedorNome,
             consultantPhone = currentLink.vendedorTelefone,
             onInstallApp = { openAssociadoApp(context) },
+            showInstallApp = !currentLink.requiresAuthorization,
             onClose = onClose,
         )
         return
@@ -408,6 +555,11 @@ fun PublicAdesaoParityScreen(
                                                 )
                                             }.onSuccess { response ->
                                                 when (response.state) {
+                                                    "pending_review_completed" -> {
+                                                        successMessage =
+                                                            "Seus dados foram enviados para análise. Em caso de dúvidas você pode entrar em contato com seu consultor."
+                                                        setStage(PublicStage.SUCCESS)
+                                                    }
                                                     "completed" -> setStage(PublicStage.COMPLETED)
                                                     "existing_member_completed" -> {
                                                         flowMode = "existing_member"
@@ -813,6 +965,7 @@ fun PublicAdesaoParityScreen(
                                             validationErrors = pending
                                             error = null
                                         } else {
+                                            persistPendingProgress("existing_contact")
                                             setStage(PublicStage.EXISTING_REVIEW)
                                         }
                                     },
@@ -844,13 +997,19 @@ fun PublicAdesaoParityScreen(
                                 ReviewLine("Telefone", formatPhone(existingPhone))
                                 ReviewLine("E-mail", existingEmail)
                                 VendaButton(
-                                    label = "Revisar termos da inclusão",
+                                    label = if (currentLink.requiresAuthorization) "Finalizar" else "Revisar termos da inclusão",
                                     onClick = {
-                                        emailToConfirm = existingEmail
-                                        emailDialogOpen = true
-                                        error = null
+                                        if (currentLink.requiresAuthorization) {
+                                            persistPendingProgress("existing_review")
+                                            finalizeAuthorizedRequest()
+                                        } else {
+                                            emailToConfirm = existingEmail
+                                            emailDialogOpen = true
+                                            error = null
+                                        }
                                     },
                                     modifier = Modifier.fillMaxWidth(),
+                                    loading = busy,
                                     enabled = !busy,
                                 )
                             }
@@ -891,13 +1050,19 @@ fun PublicAdesaoParityScreen(
                         }
 
                         VendaButton(
-                            label = "Revisar contrato",
+                            label = if (currentLink.requiresAuthorization) "Finalizar" else "Revisar contrato",
                             onClick = {
-                                emailToConfirm = email?.valor.orEmpty()
-                                emailDialogOpen = true
-                                error = null
+                                if (currentLink.requiresAuthorization) {
+                                    persistPendingProgress("review")
+                                    finalizeAuthorizedRequest()
+                                } else {
+                                    emailToConfirm = email?.valor.orEmpty()
+                                    emailDialogOpen = true
+                                    error = null
+                                }
                             },
                             modifier = Modifier.fillMaxWidth(),
+                            loading = busy,
                             enabled = !busy,
                         )
                     }
@@ -1076,7 +1241,10 @@ fun PublicAdesaoParityScreen(
                                         if (uf.length != 2) "UF" else null,
                                     )
                                     error = null
-                                } else setStage(PublicStage.DEPENDENTS)
+                                } else {
+                                    persistPendingProgress("details")
+                                    setStage(PublicStage.DEPENDENTS)
+                                }
                             },
                             size = VendaButtonSize.MEDIUM,
                             modifier = Modifier.weight(1.2f),
@@ -1119,6 +1287,7 @@ fun PublicAdesaoParityScreen(
                                         validationErrors = listOf(validation)
                                         error = null
                                     } else {
+                                        persistPendingProgress("dependents")
                                         setStage(
                                             if (flowMode == "existing_member") PublicStage.EXISTING_CONTACT
                                             else PublicStage.REVIEW,
@@ -1426,6 +1595,7 @@ private fun PublicFinalStateScreen(
     consultantName: String?,
     consultantPhone: String?,
     onInstallApp: () -> Unit,
+    showInstallApp: Boolean = true,
     onClose: () -> Unit,
 ) {
     ScreenBackground {
@@ -1444,11 +1614,13 @@ private fun PublicFinalStateScreen(
                 }
             }
             ConsultantContactCard(consultantName, consultantPhone)
-            VendaButton(
-                label = "Instalar aplicativo",
-                onClick = onInstallApp,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (showInstallApp) {
+                VendaButton(
+                    label = "Instalar aplicativo",
+                    onClick = onInstallApp,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             VendaButton(
                 label = "Fechar",
                 onClick = onClose,
