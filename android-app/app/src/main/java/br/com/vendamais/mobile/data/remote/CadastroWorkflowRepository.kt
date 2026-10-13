@@ -798,7 +798,16 @@ class CadastroWorkflowRepository(
             validateCadastroReady(cadastro, config)
             val targetCadastroId = cadastro.id.ifBlank { cadastroId }
 
-            val funcionarioCadastroId = profile.externalId?.toIntOrNull()
+            val isLinkPending = !cadastro.linkPendenciaId.isNullOrBlank()
+            val funcionarioCadastroId = if (isLinkPending) {
+                cadastro.vendedorCodigo?.toIntOrNull()
+            } else {
+                profile.externalId?.toIntOrNull()
+            }
+            if (isLinkPending && funcionarioCadastroId == null) {
+                throw IllegalStateException("O vendedor de origem do link nao possui codigo externo valido.")
+            }
+
             val baseData = CadastroPayloadBuilder.detailToBaseData(json, cadastro)
             val dependentes = CadastroPayloadBuilder.detailDependentes(json, cadastro, funcionarioCadastroId ?: 0)
             val payload = CadastroPayloadBuilder.buildErpPayload(
@@ -808,8 +817,8 @@ class CadastroWorkflowRepository(
                 ?: throw IllegalStateException("Empresa nao vinculada ao cadastro."),
                 vendedorCodigo = cadastro.vendedorCodigo,
                 funcionarioCadastroId = funcionarioCadastroId,
-                userRole = profile.role,
-                userExternalId = profile.externalId,
+                userRole = if (isLinkPending) null else profile.role,
+                userExternalId = if (isLinkPending) null else profile.externalId,
                 adesionistaCodigo = cadastro.adesionistaCodigo,
                 arquivoPath = cadastro.arquivoPath,
             )
