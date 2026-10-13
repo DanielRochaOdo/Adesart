@@ -271,6 +271,7 @@ export function PublicCadastroLink() {
   const { parentescos } = useConfigCadastro();
   const [linkToken] = useState(() => routeToken || sessionStorage.getItem('adesart-public-link-token') || '');
   const [linkData, setLinkData] = useState<LinkData | null>(null);
+  const [requiresAuthorization, setRequiresAuthorization] = useState(false);
   const [knownConsultant, setKnownConsultant] = useState<Pick<LinkData, 'vendedorNome' | 'vendedorTelefone'> | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [acceptedCoverage, setAcceptedCoverage] = useState(false);
@@ -340,7 +341,9 @@ export function PublicCadastroLink() {
           });
           throw new Error(result.error || 'Link indisponível');
         }
-        setLinkData(result.link as LinkData);
+        const resolvedLink = result.link as LinkData;
+        setLinkData(resolvedLink);
+        setRequiresAuthorization(resolvedLink.requiresAuthorization === true);
         if (routeToken) window.history.replaceState({}, '', '/adesao');
       } catch (resolveError) {
         setError(resolveError instanceof Error ? resolveError.message : 'Não foi possível carregar este link.');
@@ -374,6 +377,7 @@ export function PublicCadastroLink() {
       // autoritativa para a regra de autorização. Isso evita que um resolve
       // antigo/cacheado leve o cliente ao contrato por engano.
       if (typeof result.requiresAuthorization === 'boolean') {
+        setRequiresAuthorization(result.requiresAuthorization);
         setLinkData((current) => current
           ? { ...current, requiresAuthorization: result.requiresAuthorization }
           : current);
@@ -748,7 +752,7 @@ export function PublicCadastroLink() {
   };
 
   const finalizePendingReview = async (forceAuthorization = false) => {
-    if (!forceAuthorization && !linkData?.requiresAuthorization) return;
+    if (!forceAuthorization && !requiresAuthorization) return;
 
     const pending = flowMode === 'existing_member'
       ? [
@@ -819,6 +823,7 @@ export function PublicCadastroLink() {
       const result = await response.json();
       if (!response.ok || !result.ok) {
         if (result.code === 'AUTHORIZATION_REVIEW_REQUIRED') {
+          setRequiresAuthorization(true);
           setLinkData((current) => current
             ? { ...current, requiresAuthorization: true }
             : current);
@@ -949,7 +954,7 @@ export function PublicCadastroLink() {
   if (stage === 'success') return shell(
     <div className="py-4 text-center">
       <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600" />
-      {linkData.requiresAuthorization ? (
+      {requiresAuthorization ? (
         <>
           <h2 className="mt-4 text-2xl font-bold text-slate-900">Solicitação recebida com sucesso</h2>
           <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600">
@@ -1095,7 +1100,7 @@ export function PublicCadastroLink() {
             <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Dependentes</span><strong className="mt-1 block text-slate-900">{dependents.length}</strong>{dependents.map((dep) => <p key={dep.id} className="mt-2 text-slate-600">{dep.nome} - {plans.find((plan) => plan.Plano === dep.plano)?.nomeExibicao}</p>)}</div>
             <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Contato</span><strong className="mt-1 block text-slate-900">{formatPhone(form.telefone)}</strong><span className="text-slate-600">{form.email}</span></div>
           </div>
-          {linkData.requiresAuthorization ? (
+          {requiresAuthorization ? (
             <Button onClick={() => void finalizePendingReview()} disabled={busy} className="mt-5 min-h-12 w-full text-base">
               {busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}
               Finalizar
@@ -1116,7 +1121,7 @@ export function PublicCadastroLink() {
             <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Dependentes</span><strong className="mt-1 block text-slate-900">{dependents.length}</strong>{dependents.map((dep) => <p key={dep.id} className="mt-2 text-slate-600">{dep.nome} - {plans.find((plan) => plan.Plano === dep.plano)?.nomeExibicao}</p>)}</div>
             <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Contato</span><strong className="mt-1 block text-slate-900">{formatPhone(form.telefone)}</strong><span className="text-slate-600">{form.email}</span></div>
           </div>
-          {linkData.requiresAuthorization ? (
+          {requiresAuthorization ? (
             <Button onClick={() => void finalizePendingReview()} disabled={busy} className="mt-5 min-h-12 w-full text-base">
               {busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}
               Finalizar
