@@ -436,7 +436,11 @@ Deno.serve(async (req: Request) => {
       if (cachedAttempt.status === "completed") {
         return jsonResponse({
           ok: true,
-          state: cachedAttempt.flow_mode === "existing_member" ? "existing_member_completed" : "completed",
+          state: cachedAttempt.completion_kind === "pending_review"
+            ? "pending_review_completed"
+            : cachedAttempt.flow_mode === "existing_member"
+              ? "existing_member_completed"
+              : "completed",
         });
       }
       const attemptToken = randomToken();
