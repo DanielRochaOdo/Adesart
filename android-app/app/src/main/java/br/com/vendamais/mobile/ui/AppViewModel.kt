@@ -3590,6 +3590,19 @@ class AppViewModel(
         return workflowRepository.uploadTempFile(activeSession, profile.id, fileName, mimeType, bytes, prefix)
     }
 
+    suspend fun refreshLinkPendenciaReadiness(
+        pendingId: String,
+        cadastroId: String,
+    ): JsonElement {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        return workflowRepository.refreshLinkPendenciaReadiness(
+            session = activeSession,
+            pendingId = pendingId,
+            cadastroId = cadastroId,
+        )
+    }
+
     suspend fun updateLinkPendenciaStatus(
         pendingId: String,
         status: String,
