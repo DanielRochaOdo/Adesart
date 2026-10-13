@@ -188,6 +188,7 @@ fun PublicAdesaoParityScreen(
     var existingPhone by rememberSaveable(token) { mutableStateOf("") }
     var existingEmail by rememberSaveable(token) { mutableStateOf("") }
     var existingPlans by remember(token) { mutableStateOf<List<PublicSecurePlan>>(emptyList()) }
+    var authoritativeRequiresAuthorization by rememberSaveable(token) { mutableStateOf<Boolean?>(null) }
     val linkVisitId = rememberSaveable(token) { UUID.randomUUID().toString() }
 
     fun setStage(value: PublicStage) {
@@ -215,6 +216,9 @@ fun PublicAdesaoParityScreen(
     }
 
     val currentLink = link
+    val requiresAuthorization = authoritativeRequiresAuthorization
+        ?: currentLink?.requiresAuthorization
+        ?: false
     val plans = remember(flowMode, existingPlans, currentLink?.id, currentLink?.planos, currentLink?.planosRaw) {
         if (flowMode == "existing_member") {
             existingPlans
@@ -347,7 +351,7 @@ fun PublicAdesaoParityScreen(
     }
 
     fun finalizeAuthorizedRequest() {
-        if (!currentLink.requiresAuthorization || attemptToken.isBlank() || busy) return
+        if (!requiresAuthorization || attemptToken.isBlank() || busy) return
         busy = true
         error = null
         validationErrors = emptyList()
@@ -412,14 +416,14 @@ fun PublicAdesaoParityScreen(
 
     if (stage == PublicStage.SUCCESS) {
         PublicFinalStateScreen(
-            title = if (currentLink.requiresAuthorization) {
+            title = if (requiresAuthorization) {
                 "Solicitação recebida com sucesso"
             } else if (flowMode == "existing_member") {
                 "Dependente(s) incluído(s)"
             } else {
                 "Adesão recebida"
             },
-            message = if (currentLink.requiresAuthorization) {
+            message = if (requiresAuthorization) {
                 successMessage.ifBlank {
                     "Seus dados foram enviados para análise. Em caso de dúvidas você pode entrar em contato com seu consultor."
                 }
@@ -429,7 +433,7 @@ fun PublicAdesaoParityScreen(
             consultantName = currentLink.vendedorNome,
             consultantPhone = currentLink.vendedorTelefone,
             onInstallApp = { openAssociadoApp(context) },
-            showInstallApp = !currentLink.requiresAuthorization,
+            showInstallApp = !requiresAuthorization,
             onClose = onClose,
         )
         return
@@ -554,6 +558,9 @@ fun PublicAdesaoParityScreen(
                                                     birthDate = birthDate,
                                                 )
                                             }.onSuccess { response ->
+                                                response.requiresAuthorization?.let {
+                                                    authoritativeRequiresAuthorization = it
+                                                }
                                                 when (response.state) {
                                                     "pending_review_completed" -> {
                                                         successMessage =
@@ -997,9 +1004,9 @@ fun PublicAdesaoParityScreen(
                                 ReviewLine("Telefone", formatPhone(existingPhone))
                                 ReviewLine("E-mail", existingEmail)
                                 VendaButton(
-                                    label = if (currentLink.requiresAuthorization) "Finalizar" else "Revisar termos da inclusão",
+                                    label = if (requiresAuthorization) "Finalizar" else "Revisar termos da inclusão",
                                     onClick = {
-                                        if (currentLink.requiresAuthorization) {
+                                        if (requiresAuthorization) {
                                             persistPendingProgress("existing_review")
                                             finalizeAuthorizedRequest()
                                         } else {
@@ -1050,9 +1057,9 @@ fun PublicAdesaoParityScreen(
                         }
 
                         VendaButton(
-                            label = if (currentLink.requiresAuthorization) "Finalizar" else "Revisar contrato",
+                            label = if (requiresAuthorization) "Finalizar" else "Revisar contrato",
                             onClick = {
-                                if (currentLink.requiresAuthorization) {
+                                if (requiresAuthorization) {
                                     persistPendingProgress("review")
                                     finalizeAuthorizedRequest()
                                 } else {
