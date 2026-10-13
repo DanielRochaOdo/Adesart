@@ -696,31 +696,6 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
         throw new Error('Sessão não encontrada');
       }
 
-      if (cadastro.link_pendencia_id) {
-        const now = new Date().toISOString();
-        const { error: readyError } = await supabase
-          .from('link_pendencias')
-          .update({
-            status: 'pronto_erp',
-            last_error: null,
-            last_activity_at: now,
-            updated_at: now,
-          })
-          .eq('id', cadastro.link_pendencia_id);
-        if (readyError) throw readyError;
-
-        const { error: sendingError } = await supabase
-          .from('link_pendencias')
-          .update({
-            status: 'enviando',
-            last_activity_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', cadastro.link_pendencia_id)
-          .eq('status', 'pronto_erp');
-        if (sendingError) throw sendingError;
-      }
-
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lemit-consulta-pessoa`,
         {
@@ -1255,6 +1230,31 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         throw new Error('Sessão não encontrada');
+      }
+
+      if (cadastro.link_pendencia_id) {
+        const now = new Date().toISOString();
+        const { error: readyError } = await supabase
+          .from('link_pendencias')
+          .update({
+            status: 'pronto_erp',
+            last_error: null,
+            last_activity_at: now,
+            updated_at: now,
+          })
+          .eq('id', cadastro.link_pendencia_id);
+        if (readyError) throw readyError;
+
+        const { error: sendingError } = await supabase
+          .from('link_pendencias')
+          .update({
+            status: 'enviando',
+            last_activity_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', cadastro.link_pendencia_id)
+          .eq('status', 'pronto_erp');
+        if (sendingError) throw sendingError;
       }
 
       const response = await fetch(
