@@ -69,8 +69,14 @@ interface AssociadoResumo {
 type HistoryStatus =
   | 'Informou CPF e chegou à consulta dos dados'
   | 'Validou CPF/data e abandonou depois'
+  | 'Validou associado e abandonou inclusão de dependente'
   | 'Chegou ao contrato e não concluiu'
   | 'Concluiu a adesão'
+  | 'Concluiu adesão após nova tentativa'
+  | 'Incluiu dependente'
+  | 'Concluiu inclusão de dependente após nova tentativa'
+  | 'Finalizou solicitação — aguardando análise'
+  | 'Finalizou solicitação após nova tentativa'
   | 'Apenas abriu o link';
 
 interface LinkHistoryRow {
@@ -91,6 +97,7 @@ interface LinkHistorySummary {
   legacyClickCount: number;
   visitsStartedAt: string | null;
   identifiedAttempts: number;
+  rawAttemptCount?: number;
   anonymousDetailed: number;
   detailedAccessEvents: number;
   lastClickedAt: string | null;
@@ -173,10 +180,17 @@ const countDependentesCadastrados = (dependentes: unknown) => {
 const historyStatusClass = (status: HistoryStatus) => {
   switch (status) {
     case 'Concluiu a adesão':
+    case 'Concluiu adesão após nova tentativa':
+    case 'Incluiu dependente':
+    case 'Concluiu inclusão de dependente após nova tentativa':
       return 'bg-emerald-500/20 text-emerald-800 border-emerald-500/30 dark:bg-emerald-400/20 dark:text-emerald-100 dark:border-emerald-300/25';
+    case 'Finalizou solicitação — aguardando análise':
+    case 'Finalizou solicitação após nova tentativa':
+      return 'bg-amber-500/20 text-amber-900 border-amber-500/30 dark:bg-amber-400/20 dark:text-amber-100 dark:border-amber-300/25';
     case 'Chegou ao contrato e não concluiu':
       return 'vm-history-status-contract';
     case 'Validou CPF/data e abandonou depois':
+    case 'Validou associado e abandonou inclusão de dependente':
       return 'bg-blue-500/20 text-blue-800 border-blue-500/30 dark:bg-blue-400/20 dark:text-blue-100 dark:border-blue-300/25';
     case 'Informou CPF e chegou à consulta dos dados':
       return 'bg-violet-500/20 text-violet-800 border-violet-500/30 dark:bg-violet-400/20 dark:text-violet-100 dark:border-violet-300/25';
