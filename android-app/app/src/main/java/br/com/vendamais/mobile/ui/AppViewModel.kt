@@ -40,6 +40,7 @@ import br.com.vendamais.mobile.data.models.PlanoMap
 import br.com.vendamais.mobile.data.models.ProcessUploadQueueResponse
 import br.com.vendamais.mobile.data.models.LemmitLimitInfo
 import br.com.vendamais.mobile.data.models.LemmitResponse
+import br.com.vendamais.mobile.data.models.LinkPendenciaItem
 import br.com.vendamais.mobile.data.models.PublicCadastroAuthenticateResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroCepResponse
 import br.com.vendamais.mobile.data.models.PublicCadastroCheckCpfResponse
@@ -124,6 +125,7 @@ enum class CadastroAreaTab {
     DEPENDENTE,
     INCOMPLETOS,
     COMPLETOS,
+    LINK_PENDENCIAS,
 }
 
 enum class CadastroFiltro {
@@ -176,6 +178,9 @@ data class LinkWorkspaceState(
     val historyRows: List<CadastroLinkHistoryRow> = emptyList(),
     val historyLoading: Boolean = false,
     val historyError: String? = null,
+    val linkPendencias: List<LinkPendenciaItem> = emptyList(),
+    val linkPendenciasLoading: Boolean = false,
+    val linkPendenciasError: String? = null,
 )
 
 data class AppUiState(
@@ -596,6 +601,9 @@ class AppViewModel(
         if (tab in setOf(CadastroAreaTab.INCOMPLETOS, CadastroAreaTab.COMPLETOS)) {
             ensureCadastroResourcesLoaded()
         }
+        if (tab == CadastroAreaTab.LINK_PENDENCIAS) {
+            loadLinkPendencias()
+        }
     }
 
     fun refresh() {
@@ -869,7 +877,7 @@ class AppViewModel(
         }
     }
 
-    fun createCadastroLink() {
+    fun createCadastroLink(requiresAuthorization: Boolean = false) {
         val session = currentSession ?: return
         val profile = _uiState.value.profile ?: return
         val empresa = _uiState.value.linkWorkspace.selectedEmpresa
@@ -913,6 +921,7 @@ class AppViewModel(
                     empresa,
                     vendedor = vendedor,
                     adesionista = adesionista,
+                    requiresAuthorization = requiresAuthorization,
                 )
                 loadLinkWorkspaceData(activeSession)
             }.onSuccess { linkData ->
@@ -936,6 +945,79 @@ class AppViewModel(
                     it.copy(
                         linkWorkspace = it.linkWorkspace.copy(operationLoading = false),
                         errorMessage = throwable.message ?: "Falha ao gerar link.",
+                    )
+                }
+            }
+        }
+    }
+
+    fun loadLinkPendencias() {
+        val session = currentSession ?: return
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    linkWorkspace = it.linkWorkspace.copy(
+                        linkPendenciasLoading = true,
+                        linkPendenciasError = null,
+                    ),
+                )
+            }
+            runCatching {
+                val activeSession = ensureFreshSession(session)
+                workflowRepository.fetchLinkPendencias(activeSession)
+            }.onSuccess { pendencias ->
+                _uiState.update {
+                    it.copy(
+                        linkWorkspace = it.linkWorkspace.copy(
+                            linkPendencias = pendencias,
+                            linkPendenciasLoading = false,
+                            linkPendenciasError = null,
+                        ),
+                    )
+                }
+            }.onFailure { throwable ->
+                Log.e(logTag, "Falha ao carregar Link Pendencias", throwable)
+                _uiState.update {
+                    it.copy(
+                        linkWorkspace = it.linkWorkspace.copy(
+                            linkPendenciasLoading = false,
+                            linkPendenciasError = throwable.message ?: "Nao foi possivel carregar Link Pendencias.",
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    fun openLinkPendencia(pendingId: String) {
+        val session = currentSession ?: return
+        if (pendingId.isBlank()) return
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    detailLoading = true,
+                    errorMessage = null,
+                )
+            }
+            runCatching {
+                val activeSession = ensureFreshSession(session)
+                workflowRepository.promoteLinkPendencia(activeSession, pendingId)
+            }.onSuccess { cadastro ->
+                _uiState.update {
+                    it.copy(
+                        detailLoading = false,
+                        selectedCadastro = cadastro,
+                        cadastroTab = CadastroAreaTab.LINK_PENDENCIAS,
+                    )
+                }
+                loadLinkPendencias()
+            }.onFailure { throwable ->
+                Log.e(logTag, "Falha ao abrir Link Pendencia", throwable)
+                _uiState.update {
+                    it.copy(
+                        detailLoading = false,
+                        errorMessage = throwable.message ?: "Nao foi possivel abrir a pendencia.",
                     )
                 }
             }
@@ -2569,6 +2651,21 @@ class AppViewModel(
         )
     }
 
+    suspend fun savePublicLinkProgress(
+        attemptToken: String,
+        stage: String,
+        snapshot: JsonElement,
+    ) {
+        workflowRepository.savePublicLinkProgress(attemptToken, stage, snapshot)
+    }
+
+    suspend fun finalizePublicPending(
+        attemptToken: String,
+        snapshot: JsonElement,
+    ): PublicCadastroSubmitResponse {
+        return workflowRepository.finalizePublicPending(attemptToken, snapshot)
+    }
+
     suspend fun preparePublicContract(
         attemptToken: String,
         confirmedEmail: String,
@@ -3473,6 +3570,25 @@ class AppViewModel(
         val profile = _uiState.value.profile ?: throw IllegalStateException("Usuario nao autenticado.")
         val activeSession = ensureFreshSession(session)
         return workflowRepository.uploadTempFile(activeSession, profile.id, fileName, mimeType, bytes, prefix)
+    }
+
+    suspend fun registerLinkPendenciaFile(
+        pendingId: String,
+        cadastroId: String,
+        file: UploadedTempFile,
+        targetCpf: String? = null,
+        targetNome: String? = null,
+    ) {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        workflowRepository.registerLinkPendenciaFile(
+            session = activeSession,
+            pendingId = pendingId,
+            cadastroId = cadastroId,
+            file = file,
+            targetCpf = targetCpf,
+            targetNome = targetNome,
+        )
     }
 
     suspend fun deleteTempFile(path: String) {
