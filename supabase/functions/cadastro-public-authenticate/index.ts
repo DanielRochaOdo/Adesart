@@ -11,6 +11,7 @@ import {
   resolveLinkByToken,
   sha256,
   verifyTurnstileIfConfigured,
+  upsertLinkPendingJourney,
 } from "../_shared/public-flow.ts";
 
 const LEMMIT_COST = 0.12;
@@ -258,6 +259,8 @@ const finishAuthentication = async (
   attemptToken: string,
   person: any,
   erpEligibility: Awaited<ReturnType<typeof checkErpEligibility>>,
+  link: any,
+  cpfHash: string,
 ) => {
   const now = new Date().toISOString();
   const activeRecord = erpEligibility.activeRecord;
@@ -296,6 +299,32 @@ const finishAuthentication = async (
       updated_at: now,
     }).eq("id", attemptId);
 
+    await upsertLinkPendingJourney({
+      supabase,
+      attempt: {
+        id: attemptId,
+        link_id: link.id,
+        cpf_hash: cpfHash,
+        flow_mode: "existing_member",
+        profile_snapshot: person,
+        erp_member_snapshot: activeRecord,
+        created_at: now,
+      },
+      link,
+      snapshot: {
+        cadastro: {
+          cpf: person?.cpf || "",
+          nome: activeRecord?.nomeAssociado || person?.nome || "",
+          telefone: activeRecord?.telefone || "",
+          email: activeRecord?.email || "",
+          dependentes: [],
+        },
+        member: activeRecord,
+      },
+      stage: "identified",
+      status: "aguardando_analise",
+    });
+
     return jsonResponse({
       ok: true,
       state: "existing_member",
@@ -322,6 +351,23 @@ const finishAuthentication = async (
     expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
     updated_at: now,
   }).eq("id", attemptId);
+
+  await upsertLinkPendingJourney({
+    supabase,
+    attempt: {
+      id: attemptId,
+      link_id: link.id,
+      cpf_hash: cpfHash,
+      flow_mode: "new_member",
+      profile_snapshot: person,
+      erp_member_snapshot: null,
+      created_at: now,
+    },
+    link,
+    snapshot: { cadastro: person },
+    stage: "identified",
+    status: "aguardando_analise",
+  });
 
   return jsonResponse({ ok: true, state: "authenticated", attemptToken, person });
 };
@@ -400,6 +446,8 @@ Deno.serve(async (req: Request) => {
         attemptToken,
         cachedAttempt.profile_snapshot,
         erpEligibility,
+        link,
+        cpfHash,
       );
     }
 
@@ -464,6 +512,8 @@ Deno.serve(async (req: Request) => {
         attemptToken,
         erpPerson,
         erpEligibility,
+        link,
+        cpfHash,
       );
     }
 
