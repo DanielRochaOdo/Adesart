@@ -176,12 +176,19 @@ BEGIN
      OR NEW.empresa_id IS DISTINCT FROM OLD.empresa_id
      OR NEW.empresa_codigo IS DISTINCT FROM OLD.empresa_codigo
      OR NEW.empresa_nome IS DISTINCT FROM OLD.empresa_nome
+     OR NEW.empresa_cnpj IS DISTINCT FROM OLD.empresa_cnpj
+     OR NEW.empresa_exige_matricula IS DISTINCT FROM OLD.empresa_exige_matricula
+     OR NEW.empresa_raw IS DISTINCT FROM OLD.empresa_raw
+     OR NEW.planos_raw IS DISTINCT FROM OLD.planos_raw
      OR NEW.origem_link_id IS DISTINCT FROM OLD.origem_link_id
      OR NEW.created_by IS DISTINCT FROM OLD.created_by
      OR NEW.team_id IS DISTINCT FROM OLD.team_id
      OR NEW.vendedor_id IS DISTINCT FROM OLD.vendedor_id
      OR NEW.vendedor_codigo IS DISTINCT FROM OLD.vendedor_codigo
      OR NEW.vendedor_nome IS DISTINCT FROM OLD.vendedor_nome
+     OR NEW.adesionista_id IS DISTINCT FROM OLD.adesionista_id
+     OR NEW.adesionista_codigo IS DISTINCT FROM OLD.adesionista_codigo
+     OR NEW.adesionista_nome IS DISTINCT FROM OLD.adesionista_nome
   THEN
     RAISE EXCEPTION USING
       ERRCODE = '23514',
