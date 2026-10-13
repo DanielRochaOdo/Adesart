@@ -762,6 +762,37 @@ Deno.serve(async (req: Request) => {
           reused: true,
         });
       }
+
+      if (existing?.link_pendencia_id) {
+        const vendedorCodigoOrigem = positiveInt(existing?.vendedor_codigo);
+        const empresaCodigoOrigem = positiveInt(existing?.empresa_codigo, existing?.empresa_id);
+        if (!vendedorCodigoOrigem || !empresaCodigoOrigem) {
+          return jsonResponse({
+            error: "A origem comercial da solicitacao esta incompleta. Revise o link antes do envio.",
+            code: "LINK_PENDING_ORIGIN_INVALID",
+          }, 409);
+        }
+
+        requestBody.empresa = String(empresaCodigoOrigem);
+        requestBody.dados = requestBody.dados || {};
+        requestBody.dados.parceiro = {
+          ...(requestBody.dados.parceiro || {}),
+          codigo: vendedorCodigoOrigem,
+          ...(positiveInt(existing?.adesionista_codigo)
+            ? { adesionista: positiveInt(existing?.adesionista_codigo) }
+            : {}),
+        };
+        requestBody.dados.responsavelFinanceiro = {
+          ...(requestBody.dados.responsavelFinanceiro || {}),
+          codigoContrato: String(empresaCodigoOrigem),
+        };
+        if (Array.isArray(requestBody.dados.dependente)) {
+          requestBody.dados.dependente = requestBody.dados.dependente.map((dep: any) => ({
+            ...dep,
+            funcionarioCadastro: vendedorCodigoOrigem,
+          }));
+        }
+      }
     }
 
     if (idempotencyKey) {
@@ -964,23 +995,27 @@ Deno.serve(async (req: Request) => {
 
     if (cadastroId) {
       if (ok) {
+        const preserveLinkOrigin = Boolean(existing?.link_pendencia_id);
         const empresaCodigo = existing?.empresa_codigo || existing?.empresa_id || empresaCodigoPayload;
-        const empresaNome = await resolveEmpresaNome(
-          supabase,
-          existing,
-          empresaCodigo,
-          ERP_TOKEN,
-          ERP_BASE_URL,
-        );
+        const empresaNome = preserveLinkOrigin
+          ? textValue(existing?.empresa_nome)
+          : await resolveEmpresaNome(
+              supabase,
+              existing,
+              empresaCodigo,
+              ERP_TOKEN,
+              ERP_BASE_URL,
+            );
 
-        let vendedorCodigo = textValue(
-          existing?.vendedor_codigo,
-          requestBody?.dados?.parceiro?.codigo,
-        );
+        let vendedorCodigo = preserveLinkOrigin
+          ? textValue(existing?.vendedor_codigo)
+          : textValue(existing?.vendedor_codigo, requestBody?.dados?.parceiro?.codigo);
         if (vendedorCodigo === "0") vendedorCodigo = null;
 
-        let vendedorProfile = await resolveProfile(supabase, "VENDEDOR", vendedorCodigo);
-        if (!vendedorProfile && existing?.created_by) {
+        let vendedorProfile = preserveLinkOrigin
+          ? null
+          : await resolveProfile(supabase, "VENDEDOR", vendedorCodigo);
+        if (!preserveLinkOrigin && !vendedorProfile && existing?.created_by) {
           const { data: creator } = await supabase
             .from("profiles")
             .select("id,name,external_id,role")
@@ -992,16 +1027,13 @@ Deno.serve(async (req: Request) => {
           }
         }
 
-        let adesionistaCodigo = textValue(
-          existing?.adesionista_codigo,
-          requestBody?.dados?.parceiro?.adesionista,
-        );
+        let adesionistaCodigo = preserveLinkOrigin
+          ? textValue(existing?.adesionista_codigo)
+          : textValue(existing?.adesionista_codigo, requestBody?.dados?.parceiro?.adesionista);
         if (adesionistaCodigo === "0") adesionistaCodigo = null;
-        const adesionistaProfile = await resolveProfile(
-          supabase,
-          "ADESIONISTA",
-          adesionistaCodigo,
-        );
+        const adesionistaProfile = preserveLinkOrigin
+          ? null
+          : await resolveProfile(supabase, "ADESIONISTA", adesionistaCodigo);
 
         const dependentesPayload = Array.isArray(requestBody?.dados?.dependente)
           ? requestBody.dados.dependente
