@@ -732,7 +732,7 @@ Deno.serve(async (req: Request) => {
           erp_response: responseBody,
         }).eq("id", cadastroId);
 
-        await supabase.from("api_logs").insert({
+        const { error: failureLogError } = await supabase.from("api_logs").insert({
           user_id: auth.user.id,
           user_email: auth.user.email,
           endpoint: "erp-novo-dependente",
@@ -743,7 +743,10 @@ Deno.serve(async (req: Request) => {
           success: false,
           error_message: technicalMessage,
           duration_ms: Date.now() - startedAt,
-        }).catch(() => undefined);
+        });
+        if (failureLogError) {
+          console.warn("[erp-novo-dependente] falha ao registrar erro em api_logs:", failureLogError.message);
+        }
 
         return jsonResponse(responseBody, Math.max(response.status, 400));
       }
@@ -793,7 +796,7 @@ Deno.serve(async (req: Request) => {
           updated_at: now,
         }).eq("id", pendingIdForError);
 
-        await supabase.from("api_logs").insert({
+        const { error: successLogError } = await supabase.from("api_logs").insert({
           user_id: auth.user.id,
           user_email: auth.user.email,
           endpoint: "erp-novo-dependente",
@@ -810,7 +813,10 @@ Deno.serve(async (req: Request) => {
           success: true,
           error_message: null,
           duration_ms: Date.now() - startedAt,
-        }).catch(() => undefined);
+        });
+        if (successLogError) {
+          console.warn("[erp-novo-dependente] falha ao registrar sucesso em api_logs:", successLogError.message);
+        }
 
         return jsonResponse({
           ...responseBody,
@@ -854,7 +860,7 @@ Deno.serve(async (req: Request) => {
       ? { success: true, data: result }
       : { error: userMessage };
 
-    await supabase.from("api_logs").insert({
+    const { error: legacyLogError } = await supabase.from("api_logs").insert({
       user_id: auth.user.id,
       user_email: auth.user.email,
       endpoint: "erp-novo-dependente",
@@ -867,7 +873,10 @@ Deno.serve(async (req: Request) => {
       success: ok,
       error_message: ok ? null : technicalMessage,
       duration_ms: Date.now() - startedAt,
-    }).catch(() => undefined);
+    });
+    if (legacyLogError) {
+      console.warn("[erp-novo-dependente] falha ao registrar api_logs:", legacyLogError.message);
+    }
 
     return jsonResponse(responseBody, ok ? 200 : Math.max(response.status, 400));
   } catch (error) {
