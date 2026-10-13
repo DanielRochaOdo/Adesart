@@ -564,31 +564,6 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
     try {
       await persistCadastroProgress('save');
 
-      if (cadastroAtual.link_pendencia_id) {
-        const now = new Date().toISOString();
-        const { error: readyError } = await supabase
-          .from('link_pendencias')
-          .update({
-            status: 'pronto_erp',
-            last_error: null,
-            last_activity_at: now,
-            updated_at: now,
-          })
-          .eq('id', cadastroAtual.link_pendencia_id);
-        if (readyError) throw readyError;
-
-        const { error: sendingError } = await supabase
-          .from('link_pendencias')
-          .update({
-            status: 'enviando',
-            last_activity_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', cadastroAtual.link_pendencia_id)
-          .eq('status', 'pronto_erp');
-        if (sendingError) throw sendingError;
-      }
-
       setShowSelectStatusModal(true);
     } catch (err: any) {
       console.error('Error saving cadastro:', err);
@@ -950,28 +925,6 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
 
       const result = await enviarParaERP(cadastroAtual.id, payload);
 
-      if (cadastroAtual.link_pendencia_id) {
-        const now = new Date().toISOString();
-        const { error: pendingSuccessError } = await supabase
-          .from('link_pendencias')
-          .update({
-            status: 'enviado',
-            cadastro_id: cadastroAtual.id,
-            sent_at: now,
-            sent_by: profile?.id || null,
-            resolved_at: now,
-            resolution_reason: 'sent_to_erp',
-            last_error: null,
-            erp_response: result,
-            last_activity_at: now,
-            updated_at: now,
-          })
-          .eq('id', cadastroAtual.link_pendencia_id);
-        if (pendingSuccessError) {
-          console.warn('[CadastroModal] ERP concluiu, mas Link Pendencias nao sincronizou:', pendingSuccessError);
-        }
-      }
-
       if (arquivo) {
         const attachmentQueue = result?.attachmentQueue;
         if (attachmentQueue?.queued !== true && attachmentQueue?.already_processed !== true) {
@@ -998,19 +951,6 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
             ? String((err as { message?: unknown }).message || 'Erro ao enviar cadastro para o ERP')
             : 'Erro ao enviar cadastro para o ERP';
 
-      if (cadastroAtual.link_pendencia_id) {
-        const now = new Date().toISOString();
-        await supabase
-          .from('link_pendencias')
-          .update({
-            status: 'erro_envio',
-            last_error: errorMessage,
-            last_activity_at: now,
-            updated_at: now,
-          })
-          .eq('id', cadastroAtual.link_pendencia_id);
-      }
-
       if (err.codigo === 3 && err.dependentesAtivos && err.dependentesAtivos.length > 0) {
         setDependentesAtivos(err.dependentesAtivos);
         setShowDependentesAtivosModal(true);
@@ -1026,6 +966,12 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
 
   const handleRetryWithVendedor = async (vendedorCodigo: string, vendedorNome: string) => {
     setShowParceiroInvalidoModal(false);
+
+    if (cadastroAtual.link_pendencia_id) {
+      setError('O vendedor de origem da solicitação por link não pode ser alterado. Trate o erro do ERP mantendo a atribuição original.');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
