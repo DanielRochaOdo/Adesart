@@ -336,10 +336,10 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
       if (cadastroAtual.arquivo_path) {
         const fileName = cadastroAtual.arquivo_path.split('/').pop() || 'arquivo';
         setArquivo({
-          nome: fileName,
+          nome: cadastroAtual.arquivo_nome || fileName,
           path: cadastroAtual.arquivo_path,
-          mime: 'application/octet-stream',
-          size: 0
+          mime: cadastroAtual.arquivo_mime_type || 'application/octet-stream',
+          size: Number(cadastroAtual.arquivo_tamanho || 0)
         });
       }
       cadastroStateInitializedRef.current = true;
@@ -564,6 +564,31 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
     try {
       await persistCadastroProgress('save');
 
+      if (cadastroAtual.link_pendencia_id) {
+        const now = new Date().toISOString();
+        const { error: readyError } = await supabase
+          .from('link_pendencias')
+          .update({
+            status: 'pronto_erp',
+            last_error: null,
+            last_activity_at: now,
+            updated_at: now,
+          })
+          .eq('id', cadastroAtual.link_pendencia_id);
+        if (readyError) throw readyError;
+
+        const { error: sendingError } = await supabase
+          .from('link_pendencias')
+          .update({
+            status: 'enviando',
+            last_activity_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', cadastroAtual.link_pendencia_id)
+          .eq('status', 'pronto_erp');
+        if (sendingError) throw sendingError;
+      }
+
       setShowSelectStatusModal(true);
     } catch (err: any) {
       console.error('Error saving cadastro:', err);
@@ -642,7 +667,11 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
     setError('');
 
     try {
-      if (arquivo?.path) {
+      const isLinkPending = Boolean(cadastroAtual.link_pendencia_id);
+
+      // No fluxo Link Pendencias nenhum anexo anterior e destruido: todas as
+      // versoes precisam permanecer disponiveis para envio e auditoria no ERP.
+      if (arquivo?.path && !isLinkPending) {
         try {
           await supabase.storage
             .from('cadastros-temp-files')
@@ -663,14 +692,37 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
         `cadastros/${cadastroAtual.id}`
       );
 
+      if (cadastroAtual.link_pendencia_id) {
+        const { error: versionError } = await supabase
+          .from('link_pendencia_files')
+          .insert({
+            link_pendencia_id: cadastroAtual.link_pendencia_id,
+            cadastro_id: cadastroAtual.id,
+            bucket: 'cadastros-temp-files',
+            arquivo_path: uploadedFile.path,
+            arquivo_nome: uploadedFile.nome,
+            mime_type: uploadedFile.mime || file.type || 'application/octet-stream',
+            file_size_bytes: uploadedFile.size || file.size || null,
+            uploaded_by: profile.id,
+          });
+        if (versionError) throw versionError;
+      }
+
       setArquivo(uploadedFile);
       setPendingCompressionFile(null);
 
       await updateCadastro(cadastroAtual.id, {
-        arquivo_path: uploadedFile.path
+        arquivo_path: uploadedFile.path,
+        arquivo_nome: uploadedFile.nome,
+        arquivo_mime_type: uploadedFile.mime || file.type || 'application/octet-stream',
+        arquivo_tamanho: uploadedFile.size || file.size || null,
       });
 
-      setSuccess('Arquivo carregado com sucesso!');
+      setSuccess(
+        cadastroAtual.link_pendencia_id
+          ? 'Arquivo anexado e preservado no histórico da solicitação!'
+          : 'Arquivo carregado com sucesso!'
+      );
       setTimeout(() => setSuccess(''), 3000);
     } finally {
       setUploadingFile(false);
@@ -753,7 +805,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
       return false;
     }
 
-    if (requireArquivo && config?.exigir_arquivo && !arquivo) {
+    if (requireArquivo && (Boolean(cadastroAtual.link_pendencia_id) || config?.exigir_arquivo) && !arquivo) {
       setError('Campo obrigatÃ³rio: Arquivo (documento)');
       return false;
     }
@@ -898,6 +950,28 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
 
       const result = await enviarParaERP(cadastroAtual.id, payload);
 
+      if (cadastroAtual.link_pendencia_id) {
+        const now = new Date().toISOString();
+        const { error: pendingSuccessError } = await supabase
+          .from('link_pendencias')
+          .update({
+            status: 'enviado',
+            cadastro_id: cadastroAtual.id,
+            sent_at: now,
+            sent_by: profile?.id || null,
+            resolved_at: now,
+            resolution_reason: 'sent_to_erp',
+            last_error: null,
+            erp_response: result,
+            last_activity_at: now,
+            updated_at: now,
+          })
+          .eq('id', cadastroAtual.link_pendencia_id);
+        if (pendingSuccessError) {
+          console.warn('[CadastroModal] ERP concluiu, mas Link Pendencias nao sincronizou:', pendingSuccessError);
+        }
+      }
+
       if (arquivo) {
         const attachmentQueue = result?.attachmentQueue;
         if (attachmentQueue?.queued !== true && attachmentQueue?.already_processed !== true) {
@@ -923,6 +997,19 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
           : typeof err === 'object' && err !== null && 'message' in err
             ? String((err as { message?: unknown }).message || 'Erro ao enviar cadastro para o ERP')
             : 'Erro ao enviar cadastro para o ERP';
+
+      if (cadastroAtual.link_pendencia_id) {
+        const now = new Date().toISOString();
+        await supabase
+          .from('link_pendencias')
+          .update({
+            status: 'erro_envio',
+            last_error: errorMessage,
+            last_activity_at: now,
+            updated_at: now,
+          })
+          .eq('id', cadastroAtual.link_pendencia_id);
+      }
 
       if (err.codigo === 3 && err.dependentesAtivos && err.dependentesAtivos.length > 0) {
         setDependentesAtivos(err.dependentesAtivos);
