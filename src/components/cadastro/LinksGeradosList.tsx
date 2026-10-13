@@ -719,9 +719,16 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                               )}
                             </div>
 
-                            <span className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold ${statusClasses}`}>
-                              {status}
-                            </span>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold ${statusClasses}`}>
+                                {status}
+                              </span>
+                              {link.requires_authorization && (
+                                <span className="inline-flex w-fit items-center rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700 dark:bg-red-500/20 dark:text-red-200">
+                                  Restrição
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           <div className="vm-cadastro-subcard break-all rounded-2xl p-4 text-sm text-slate-700 dark:text-slate-200">
