@@ -570,7 +570,15 @@ Deno.serve(async (req: Request) => {
     if (!matchesBirthDate) {
       return jsonResponse({ error: "CPF ou data de nascimento nao conferem", code: "IDENTIFICATION_MISMATCH" }, 401);
     }
-    return finishAuthentication(supabase, attempt.id, attemptToken, person, erpEligibility);
+    return finishAuthentication(
+      supabase,
+      attempt.id,
+      attemptToken,
+      person,
+      erpEligibility,
+      link,
+      cpfHash,
+    );
   } catch (error) {
     console.error("[cadastro-public-authenticate]", error);
     const message = error instanceof Error ? error.message : "Erro inesperado";
