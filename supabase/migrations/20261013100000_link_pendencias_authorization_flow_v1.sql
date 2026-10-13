@@ -122,14 +122,14 @@ LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = public
-AS $
+AS $link_pending_access$
   SELECT EXISTS (
     SELECT 1
     FROM public.profiles p
     WHERE p.id = auth.uid()
       AND p.is_active = true
   );
-$;
+$link_pending_access$;
 
 REVOKE ALL ON FUNCTION public.can_access_link_pendencia_v1(uuid, uuid, uuid)
 FROM PUBLIC, anon;
