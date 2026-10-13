@@ -190,6 +190,8 @@ data class CadastroResumo(
     val fluxoPublico: Boolean? = null,
     @SerialName("origem_link_id")
     val origemLinkId: String? = null,
+    @SerialName("link_pendencia_id")
+    val linkPendenciaId: String? = null,
     val dependentes: JsonElement? = null,
     @SerialName("data_envio")
     val dataEnvio: String? = null,
@@ -272,6 +274,8 @@ data class CadastroDetalhe(
     val arquivoMimeType: String? = null,
     @SerialName("arquivo_tamanho")
     val arquivoTamanho: Long? = null,
+    @SerialName("link_pendencia_id")
+    val linkPendenciaId: String? = null,
     @SerialName("plano_codigo")
     val planoCodigo: Int? = null,
     @SerialName("created_at")
