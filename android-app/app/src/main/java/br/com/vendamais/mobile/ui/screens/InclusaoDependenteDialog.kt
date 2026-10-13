@@ -185,6 +185,7 @@ fun InclusaoDependenteDialog(
     val scope = rememberCoroutineScope()
     val profile = state.profile
     val isContinuacao = cadastro != null
+    val isLinkPending = !cadastro?.linkPendenciaId.isNullOrBlank()
 
     var tipoBusca by rememberSaveable { mutableStateOf(InclusaoBuscaTipo.CODIGO) }
     var valorBusca by rememberSaveable(stateSaver = textFieldValueSaver()) { mutableStateOf(TextFieldValue("")) }
@@ -203,6 +204,7 @@ fun InclusaoDependenteDialog(
     var selectedVendedorId by rememberSaveable {
         mutableStateOf(
             when {
+                isLinkPending -> cadastro?.vendedorId.orEmpty()
                 profile?.role == "VENDEDOR" -> profile.id
                 state.cadastroWorkspace.selectedVendedorId.isNotBlank() -> state.cadastroWorkspace.selectedVendedorId
                 else -> ""
@@ -210,7 +212,13 @@ fun InclusaoDependenteDialog(
         )
     }
     var selectedAdesionistaId by rememberSaveable {
-        mutableStateOf(if (profile?.role == "ADESIONISTA") profile.id else "")
+        mutableStateOf(
+            when {
+                isLinkPending -> cadastro?.adesionistaId.orEmpty()
+                profile?.role == "ADESIONISTA" -> profile.id
+                else -> ""
+            },
+        )
     }
     var selectedStatusId by rememberSaveable { mutableStateOf(cadastro?.statusAdesaoId.orEmpty()) }
     var showSelectStatusDialog by rememberSaveable { mutableStateOf(false) }
@@ -427,6 +435,16 @@ fun InclusaoDependenteDialog(
     }
 
     fun resolveVendedor(): TeamMemberOption? {
+        if (isLinkPending) {
+            val code = cadastro?.vendedorCodigo?.trim().orEmpty()
+            if (code.isBlank()) return null
+            return TeamMemberOption(
+                cadastro?.vendedorId.orEmpty(),
+                cadastro?.vendedorNome.orEmpty(),
+                "",
+                code,
+            )
+        }
         return if (profile?.role == "VENDEDOR") {
             TeamMemberOption(profile.id, profile.name, profile.email, profile.externalId)
         } else {
@@ -435,6 +453,16 @@ fun InclusaoDependenteDialog(
     }
 
     fun resolveAdesionista(): TeamMemberOption? {
+        if (isLinkPending) {
+            val code = cadastro?.adesionistaCodigo?.trim().orEmpty()
+            if (code.isBlank()) return null
+            return TeamMemberOption(
+                cadastro?.adesionistaId.orEmpty(),
+                cadastro?.adesionistaNome.orEmpty(),
+                "",
+                code,
+            )
+        }
         return if (profile?.role == "ADESIONISTA") {
             TeamMemberOption(profile.id, profile.name, profile.email, profile.externalId)
         } else {
@@ -452,7 +480,10 @@ fun InclusaoDependenteDialog(
         profile?.role,
         profile?.id,
     ) {
-        if (profile?.role == "VENDEDOR") {
+        if (isLinkPending) {
+            selectedVendedorId = cadastro?.vendedorId.orEmpty()
+            selectedAdesionistaId = cadastro?.adesionistaId.orEmpty()
+        } else if (profile?.role == "VENDEDOR") {
             selectedVendedorId = profile.id
         } else if (selectedVendedorId.isBlank() && state.cadastroWorkspace.selectedVendedorId.isNotBlank()) {
             selectedVendedorId = state.cadastroWorkspace.selectedVendedorId
@@ -704,16 +735,16 @@ fun InclusaoDependenteDialog(
         }
         if (!ensureEmpresaIdentificada(responsavel)) return
         val vendedor = resolveVendedor()
-        if (profile?.role != "VENDEDOR" && state.vendedores.isEmpty()) {
+        if (!isLinkPending && profile?.role != "VENDEDOR" && state.vendedores.isEmpty()) {
             localError = "Nenhum vendedor disponível. Entre em contato com o administrador."
             return
         }
-        val codigoParceiro = if (profile?.role == "VENDEDOR") {
-            profile.externalId?.toIntOrNull()
-        } else {
-            vendedor?.externalId?.toIntOrNull()
-        } ?: run {
-            localError = "Vendedor sem codigo externo valido."
+        val codigoParceiro = vendedor?.externalId?.toIntOrNull() ?: run {
+            localError = if (isLinkPending) {
+                "O vendedor de origem do link não possui código externo válido."
+            } else {
+                "Vendedor sem codigo externo valido."
+            }
             return
         }
 
@@ -734,10 +765,6 @@ fun InclusaoDependenteDialog(
                 localError = "Anexo obrigatorio: inclua o arquivo do Dependente ${missingAttachment + 1} antes de enviar ao ERP."
                 return
             }
-            viewModel.updateLinkPendenciaStatus(
-                pendingId = cadastro.linkPendenciaId,
-                status = "pronto_erp",
-            )
         }
 
         val adesionista = resolveAdesionista()
@@ -766,7 +793,7 @@ fun InclusaoDependenteDialog(
                 responsavelCodigo = responsavel.codigo,
                 parceiroCodigo = codigoParceiro,
                 adesionistaCodigo = adesionista?.externalId?.toIntOrNull() ?: 0,
-                funcionarioCodigo = profile?.externalId?.toIntOrNull() ?: 0,
+                funcionarioCodigo = if (isLinkPending) codigoParceiro else profile?.externalId?.toIntOrNull() ?: 0,
                 dependentes = base,
             ),
             cadastroId = cadastroId,
@@ -942,7 +969,7 @@ fun InclusaoDependenteDialog(
                         VendaWizardProgress(currentStep = inclusaoStep, labels = listOf("Dependentes", "Documento"))
                     }
 
-                if (profile?.role != "VENDEDOR") {
+                if (!isLinkPending && profile?.role != "VENDEDOR") {
                     SelectionField(
                         label = "Vendedor",
                         value = state.vendedores
