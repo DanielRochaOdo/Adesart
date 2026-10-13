@@ -411,6 +411,7 @@ fun CadastrosScreen(
                 item {
                     LinkPendenciasCard(
                         workspace = state.linkWorkspace,
+                        profileRole = state.profile?.role.orEmpty(),
                         onOpenPending = viewModel::openLinkPendencia,
                     )
                 }
