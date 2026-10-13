@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, Loader2, Send, UserRound } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Download, Loader2, Send, UserRound } from 'lucide-react';
 import { Button } from '../Button';
 import { Input } from '../Input';
+import { Select } from '../Select';
 import { supabase } from '../../lib/supabase';
 import { Cadastro } from '../../hooks/useCadastros';
 import { useAuth } from '../../contexts/AuthContext';
@@ -30,6 +31,7 @@ type LinkPending = {
   source_attempt_ids: string[];
   source_link_ids: string[];
   cadastro_id: string | null;
+  vendedor_id: string | null;
   first_attempt_at: string;
   last_activity_at: string;
   public_completed_at: string | null;
@@ -38,9 +40,15 @@ type LinkPending = {
   last_error: string | null;
 };
 
+type SellerProfile = {
+  id: string;
+  name: string;
+};
+
 interface LinkPendenciasListProps {
   reloadKey?: number;
   onSelectCadastro: (cadastro: Cadastro) => void;
+  onCountChange?: (count: number) => void;
 }
 
 const statusLabel: Record<PendingStatus, string> = {
@@ -61,6 +69,13 @@ const statusTone: Record<PendingStatus, string> = {
   encerrado: 'border-slate-500/25 bg-slate-500/10 text-slate-700 dark:text-slate-200',
 };
 
+const activeStatuses: PendingStatus[] = [
+  'aguardando_analise',
+  'pronto_erp',
+  'enviando',
+  'erro_envio',
+];
+
 const dateTime = (value: string | null) => {
   if (!value) return '—';
   const date = new Date(value);
@@ -69,13 +84,35 @@ const dateTime = (value: string | null) => {
     : date.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'medium' });
 };
 
-export function LinkPendenciasList({ reloadKey = 0, onSelectCadastro }: LinkPendenciasListProps) {
+const localDateKey = (value: string | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+export function LinkPendenciasList({
+  reloadKey = 0,
+  onSelectCadastro,
+  onCountChange,
+}: LinkPendenciasListProps) {
   const { profile } = useAuth();
   const [items, setItems] = useState<LinkPending[]>([]);
+  const [sellerProfiles, setSellerProfiles] = useState<SellerProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [empresaFilter, setEmpresaFilter] = useState('');
+  const [vendedorFilter, setVendedorFilter] = useState('');
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
+
+  const canFilterVendedor = ['ADMINISTRADOR', 'GERENTE', 'CADASTRO'].includes(profile?.role ?? '');
 
   const load = async () => {
     setLoading(true);
@@ -83,13 +120,40 @@ export function LinkPendenciasList({ reloadKey = 0, onSelectCadastro }: LinkPend
     try {
       const { data, error: queryError } = await supabase
         .from('link_pendencias')
-        .select('id,link_id,cpf,nome,empresa_codigo,empresa_nome,operation_type,requires_authorization,status,flow_stage,latest_snapshot,source_attempt_ids,source_link_ids,cadastro_id,first_attempt_at,last_activity_at,public_completed_at,sent_at,resolution_reason,last_error')
-        .in('status', ['aguardando_analise', 'pronto_erp', 'enviando', 'erro_envio'])
+        .select('id,link_id,cpf,nome,empresa_codigo,empresa_nome,operation_type,requires_authorization,status,flow_stage,latest_snapshot,source_attempt_ids,source_link_ids,cadastro_id,vendedor_id,first_attempt_at,last_activity_at,public_completed_at,sent_at,resolution_reason,last_error')
+        .in('status', activeStatuses)
         .order('last_activity_at', { ascending: false })
         .limit(1000);
 
       if (queryError) throw queryError;
-      setItems((data || []) as LinkPending[]);
+
+      const loadedItems = (data || []) as LinkPending[];
+      setItems(loadedItems);
+      onCountChange?.(loadedItems.length);
+
+      if (canFilterVendedor) {
+        const sellerIds = Array.from(new Set(
+          loadedItems
+            .map((item) => item.vendedor_id)
+            .filter((id): id is string => Boolean(id)),
+        ));
+
+        if (sellerIds.length > 0) {
+          const { data: sellerData, error: sellerError } = await supabase
+            .from('profiles')
+            .select('id,name')
+            .in('id', sellerIds)
+            .order('name', { ascending: true });
+
+          if (sellerError) throw sellerError;
+          setSellerProfiles((sellerData || []) as SellerProfile[]);
+        } else {
+          setSellerProfiles([]);
+        }
+      } else {
+        setSellerProfiles([]);
+        setVendedorFilter('');
+      }
     } catch (loadError) {
       console.error('[LinkPendenciasList] erro ao carregar:', loadError);
       setError(loadError instanceof Error ? loadError.message : 'Não foi possível carregar Link Pendências.');
@@ -102,10 +166,35 @@ export function LinkPendenciasList({ reloadKey = 0, onSelectCadastro }: LinkPend
     void load();
   }, [reloadKey]);
 
+  const sellerNameById = useMemo(
+    () => new Map(sellerProfiles.map((seller) => [seller.id, seller.name])),
+    [sellerProfiles],
+  );
+
+  const empresas = useMemo(() => {
+    const unique = new Map<string, string>();
+    items.forEach((item) => {
+      unique.set(String(item.empresa_codigo), `${item.empresa_codigo} - ${item.empresa_nome}`);
+    });
+    return Array.from(unique.entries()).sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'));
+  }, [items]);
+
+  const vendedores = useMemo(() => {
+    const idsInItems = new Set(
+      items
+        .map((item) => item.vendedor_id)
+        .filter((id): id is string => Boolean(id)),
+    );
+
+    return sellerProfiles
+      .filter((seller) => idsInItems.has(seller.id))
+      .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+  }, [items, sellerProfiles]);
+
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('pt-BR');
-    if (!term) return items;
     const digits = term.replace(/\D/g, '');
+
     return items.filter((item) => {
       const haystack = [
         item.nome,
@@ -114,12 +203,102 @@ export function LinkPendenciasList({ reloadKey = 0, onSelectCadastro }: LinkPend
         item.empresa_codigo,
         item.operation_type === 'existing_member' ? 'inclusão dependente' : 'nova adesão',
         statusLabel[item.status],
+        item.vendedor_id ? sellerNameById.get(item.vendedor_id) : '',
       ].join(' ').toLocaleLowerCase('pt-BR');
-      return haystack.includes(term) || (digits && String(item.cpf || '').replace(/\D/g, '').includes(digits));
-    });
-  }, [items, search]);
 
-  const activeCount = items.filter((item) => !['enviado', 'encerrado'].includes(item.status)).length;
+      const matchSearch = !term ||
+        haystack.includes(term) ||
+        Boolean(digits && String(item.cpf || '').replace(/\D/g, '').includes(digits));
+      const matchStatus = !statusFilter || item.status === statusFilter;
+      const matchEmpresa = !empresaFilter || String(item.empresa_codigo) === empresaFilter;
+      const matchVendedor = !canFilterVendedor || !vendedorFilter || item.vendedor_id === vendedorFilter;
+
+      const firstAttemptDate = localDateKey(item.first_attempt_at);
+      const matchDataInicio = !dataInicio || (firstAttemptDate && firstAttemptDate >= dataInicio);
+      const matchDataFim = !dataFim || (firstAttemptDate && firstAttemptDate <= dataFim);
+
+      return matchSearch &&
+        matchStatus &&
+        matchEmpresa &&
+        matchVendedor &&
+        matchDataInicio &&
+        matchDataFim;
+    });
+  }, [
+    items,
+    search,
+    statusFilter,
+    empresaFilter,
+    vendedorFilter,
+    dataInicio,
+    dataFim,
+    canFilterVendedor,
+    sellerNameById,
+  ]);
+
+  const activeCount = items.length;
+  const hasFilters = Boolean(
+    search ||
+    statusFilter ||
+    empresaFilter ||
+    (canFilterVendedor && vendedorFilter) ||
+    dataInicio ||
+    dataFim
+  );
+
+  const clearFilters = () => {
+    setSearch('');
+    setStatusFilter('');
+    setEmpresaFilter('');
+    setVendedorFilter('');
+    setDataInicio('');
+    setDataFim('');
+  };
+
+  const exportXlsx = async () => {
+    if (filtered.length === 0) return;
+
+    const XLSX = await import('xlsx');
+    const rows = filtered.map((item) => ({
+      Nome: item.nome || '',
+      CPF: item.cpf ? formatCPF(item.cpf) : '',
+      'Código da empresa': item.empresa_codigo,
+      Empresa: item.empresa_nome,
+      Operação: item.operation_type === 'existing_member' ? 'Inclusão de dependente' : 'Nova adesão',
+      Autorização: item.requires_authorization ? 'Sim' : 'Não',
+      Status: statusLabel[item.status],
+      Vendedor: item.vendedor_id ? sellerNameById.get(item.vendedor_id) || '' : '',
+      'Primeira tentativa': dateTime(item.first_attempt_at),
+      'Última atividade': dateTime(item.last_activity_at),
+      'Finalização pública': dateTime(item.public_completed_at),
+      'Enviado em': dateTime(item.sent_at),
+      Tentativas: item.source_attempt_ids?.length || 0,
+      'Motivo / erro': item.last_error || item.resolution_reason || '',
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    worksheet['!cols'] = [
+      { wch: 30 },
+      { wch: 16 },
+      { wch: 18 },
+      { wch: 35 },
+      { wch: 24 },
+      { wch: 14 },
+      { wch: 22 },
+      { wch: 28 },
+      { wch: 22 },
+      { wch: 22 },
+      { wch: 22 },
+      { wch: 22 },
+      { wch: 12 },
+      { wch: 45 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Link Pendencias');
+    const today = localDateKey(new Date().toISOString());
+    XLSX.writeFile(workbook, `link-pendencias-${today}.xlsx`);
+  };
 
   const openPending = async (item: LinkPending) => {
     if (!item.requires_authorization) return;
@@ -184,12 +363,88 @@ export function LinkPendenciasList({ reloadKey = 0, onSelectCadastro }: LinkPend
           </span>
         </div>
 
-        <div className="mt-5 max-w-xl">
+        <div className="mt-5">
           <Input
             label="Buscar por nome, CPF ou empresa"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
+        </div>
+
+        <div className={`mt-4 grid gap-3 sm:grid-cols-2 ${
+          canFilterVendedor ? 'xl:grid-cols-5' : 'xl:grid-cols-4'
+        }`}>
+          <Select
+            label="Status"
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+          >
+            <option value="">Todos os status</option>
+            {activeStatuses.map((status) => (
+              <option key={status} value={status}>{statusLabel[status]}</option>
+            ))}
+          </Select>
+
+          <Select
+            label="Empresa"
+            value={empresaFilter}
+            onChange={(event) => setEmpresaFilter(event.target.value)}
+          >
+            <option value="">Todas as empresas</option>
+            {empresas.map(([codigo, nome]) => (
+              <option key={codigo} value={codigo}>{nome}</option>
+            ))}
+          </Select>
+
+          {canFilterVendedor && (
+            <Select
+              label="Vendedor"
+              value={vendedorFilter}
+              onChange={(event) => setVendedorFilter(event.target.value)}
+            >
+              <option value="">Todos os vendedores</option>
+              {vendedores.map((seller) => (
+                <option key={seller.id} value={seller.id}>{seller.name}</option>
+              ))}
+            </Select>
+          )}
+
+          <Input
+            label="Data inicial"
+            type="date"
+            value={dataInicio}
+            max={dataFim || undefined}
+            onChange={(event) => setDataInicio(event.target.value)}
+          />
+
+          <Input
+            label="Data final"
+            type="date"
+            value={dataFim}
+            min={dataInicio || undefined}
+            onChange={(event) => setDataFim(event.target.value)}
+          />
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="vm-muted-text text-sm">
+            Mostrando {filtered.length} de {items.length} pendência(s).
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {hasFilters && (
+              <Button type="button" onClick={clearFilters}>
+                Limpar filtros
+              </Button>
+            )}
+            <Button
+              type="button"
+              onClick={() => void exportXlsx()}
+              disabled={filtered.length === 0}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Exportar XLSX
+            </Button>
+          </div>
         </div>
 
         {error && (
@@ -212,6 +467,7 @@ export function LinkPendenciasList({ reloadKey = 0, onSelectCadastro }: LinkPend
         <div className="grid gap-3">
           {filtered.map((item) => {
             const canRepairErpError = ['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(profile?.role ?? '');
+            const sellerName = item.vendedor_id ? sellerNameById.get(item.vendedor_id) : null;
             const canTreat = item.requires_authorization &&
               item.status !== 'enviando' &&
               (item.status !== 'erro_envio' || canRepairErpError);
@@ -244,6 +500,11 @@ export function LinkPendenciasList({ reloadKey = 0, onSelectCadastro }: LinkPend
                         <p className="vm-muted-text mt-0.5 text-sm">
                           {item.cpf ? formatCPF(item.cpf) : 'CPF protegido'} · {item.empresa_codigo} - {item.empresa_nome}
                         </p>
+                        {sellerName && (
+                          <p className="vm-muted-text mt-1 text-xs">
+                            Vendedor: {sellerName}
+                          </p>
+                        )}
                         <p className="vm-meta-text mt-1 text-xs">
                           Primeira tentativa: {dateTime(item.first_attempt_at)} · Última atividade: {dateTime(item.last_activity_at)}
                         </p>
