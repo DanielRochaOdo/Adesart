@@ -395,6 +395,8 @@ data class CadastroLinkItem(
     val linkUrl: String? = null,
     @SerialName("is_active")
     val isActive: Boolean = true,
+    @SerialName("requires_authorization")
+    val requiresAuthorization: Boolean = false,
     @SerialName("click_count")
     val clickCount: Int? = null,
     @SerialName("unique_visit_count")
@@ -417,6 +419,46 @@ data class CadastroLinkItem(
     val deletedAt: String? = null,
     @SerialName("deleted_by")
     val deletedBy: String? = null,
+)
+
+@Serializable
+data class LinkPendenciaItem(
+    val id: String,
+    @SerialName("link_id")
+    val linkId: String,
+    val cpf: String? = null,
+    val nome: String? = null,
+    @SerialName("empresa_codigo")
+    val empresaCodigo: Int,
+    @SerialName("empresa_nome")
+    val empresaNome: String,
+    @SerialName("operation_type")
+    val operationType: String = "new_member",
+    @SerialName("requires_authorization")
+    val requiresAuthorization: Boolean = false,
+    val status: String = "aguardando_analise",
+    @SerialName("flow_stage")
+    val flowStage: String? = null,
+    @SerialName("latest_snapshot")
+    val latestSnapshot: JsonElement? = null,
+    @SerialName("source_attempt_ids")
+    val sourceAttemptIds: List<String> = emptyList(),
+    @SerialName("source_link_ids")
+    val sourceLinkIds: List<String> = emptyList(),
+    @SerialName("cadastro_id")
+    val cadastroId: String? = null,
+    @SerialName("first_attempt_at")
+    val firstAttemptAt: String,
+    @SerialName("last_activity_at")
+    val lastActivityAt: String,
+    @SerialName("public_completed_at")
+    val publicCompletedAt: String? = null,
+    @SerialName("sent_at")
+    val sentAt: String? = null,
+    @SerialName("resolution_reason")
+    val resolutionReason: String? = null,
+    @SerialName("last_error")
+    val lastError: String? = null,
 )
 
 data class CadastroLinkAssociadoResumo(
@@ -454,6 +496,7 @@ data class CadastroLinkHistorySummary(
     val legacyClickCount: Int = 0,
     val visitsStartedAt: String? = null,
     val identifiedAttempts: Int = 0,
+    val rawAttemptCount: Int? = null,
     val anonymousDetailed: Int = 0,
     val detailedAccessEvents: Int = 0,
     val lastClickedAt: String? = null,
