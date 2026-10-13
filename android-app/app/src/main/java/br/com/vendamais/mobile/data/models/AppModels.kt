@@ -205,6 +205,10 @@ data class CadastroResumo(
 data class CadastroDetalhe(
     val id: String,
     val status: String,
+    @SerialName("created_by")
+    val createdBy: String? = null,
+    @SerialName("team_id")
+    val teamId: String? = null,
     @SerialName("tipo_cadastro")
     val tipoCadastro: String = "cadastro",
     val nome: String? = null,
