@@ -596,6 +596,108 @@ const assertNewMemberNotAlreadyActive = async (
   return { active: false };
 };
 
+const queueAllPendingFiles = async (
+  supabase: any,
+  auth: any,
+  existing: any,
+  requestBody: any,
+  cadastroId: string,
+  erpPayload: any,
+  erpToken: string,
+  erpBaseUrl: string,
+) => {
+  const pendingId = String(existing?.link_pendencia_id || "").trim();
+  if (!pendingId) return [] as Record<string, unknown>[];
+
+  const { data: pendingFiles, error: pendingFilesError } = await supabase
+    .from("link_pendencia_files")
+    .select("id,bucket,arquivo_path,arquivo_nome")
+    .eq("link_pendencia_id", pendingId)
+    .order("created_at", { ascending: true });
+  if (pendingFilesError) throw pendingFilesError;
+  if (!pendingFiles || pendingFiles.length === 0) {
+    throw new Error("LINK_PENDING_ATTACHMENT_REQUIRED");
+  }
+
+  const dependentesPayload = Array.isArray(requestBody?.dados?.dependente)
+    ? requestBody.dados.dependente
+    : [];
+  const principalPayload = dependentesPayload?.[0] || {};
+  const principalCpf = normalizeDigits(
+    existing?.cpf ??
+      principalPayload?.cpf ??
+      principalPayload?.numeroCpfDependente ??
+      requestBody?.dados?.responsavelFinanceiro?.cpf,
+  );
+  const principalNome = textValue(
+    principalPayload?.nome,
+    existing?.nome,
+    requestBody?.dados?.responsavelFinanceiro?.nome,
+  );
+  const empresaCodigo = Number(
+    existing?.empresa_codigo ??
+      existing?.empresa_id ??
+      requestBody?.empresa ??
+      requestBody?.dados?.responsavelFinanceiro?.codigoContrato ??
+      0,
+  );
+
+  const { data: currentProfile } = await supabase
+    .from("profiles")
+    .select("external_id")
+    .eq("id", auth.user.id)
+    .maybeSingle();
+
+  const idFuncionario = positiveInt(
+    principalPayload?.funcionarioCadastro,
+    existing?.vendedor_codigo,
+    currentProfile?.external_id,
+  );
+
+  const resolvedPrincipal = await resolvePrimaryDependente(
+    erpPayload,
+    principalCpf,
+    principalNome,
+    empresaCodigo,
+    erpToken,
+    erpBaseUrl,
+  );
+  const idDependente = resolvedPrincipal?.idDependente || null;
+  const queues: Record<string, unknown>[] = [];
+
+  for (const file of pendingFiles) {
+    const queued = await enqueueAttachment(supabase, {
+      cadastroId,
+      createdBy: existing?.created_by || auth.user.id,
+      idFuncionario,
+      idDependente,
+      arquivoPath: String(file.arquivo_path || ""),
+      arquivoNome: String(file.arquivo_nome || ""),
+      clienteNome: textValue(existing?.nome, principalNome),
+      clienteCpf: textValue(existing?.cpf, principalCpf),
+      empresaNome: textValue(existing?.empresa_nome),
+      targetDependenteCpf: resolvedPrincipal?.cpf || principalCpf || null,
+      targetDependenteNome: textValue(resolvedPrincipal?.nome, principalNome),
+    });
+
+    queues.push(queued);
+
+    if (queued?.queue_id) {
+      await supabase.from("link_pendencia_files").update({
+        erp_queue_id: queued.queue_id,
+      }).eq("id", file.id);
+    }
+
+    if (queued?.queued !== true && queued?.already_processed !== true) {
+      throw new Error(
+        `LINK_PENDING_ATTACHMENT_QUEUE_FAILED:${String(queued?.reason || "UNKNOWN")}`,
+      );
+    }
+  }
+
+  return queues;
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Metodo nao permitido" }, 405);
@@ -628,6 +730,7 @@ Deno.serve(async (req: Request) => {
     }
 
     let existing: any = null;
+    let pendingStatus: string | null = null;
     if (cadastroId) {
       const { data } = await supabase
         .from("cadastros")
@@ -639,7 +742,20 @@ Deno.serve(async (req: Request) => {
       existing = data || null;
       pendingIdForError = existing?.link_pendencia_id || null;
 
-      if (existing?.status === "enviado" && existing?.erp_response) {
+      if (existing?.link_pendencia_id) {
+        const { data: pendingRow } = await supabase
+          .from("link_pendencias")
+          .select("status")
+          .eq("id", existing.link_pendencia_id)
+          .maybeSingle();
+        pendingStatus = String(pendingRow?.status || "") || null;
+      }
+
+      if (
+        existing?.status === "enviado" &&
+        existing?.erp_response &&
+        (!existing?.link_pendencia_id || pendingStatus !== "erro_envio")
+      ) {
         return jsonResponse({
           ...(existing.erp_response as Record<string, unknown>),
           idempotent: true,
@@ -659,7 +775,11 @@ Deno.serve(async (req: Request) => {
         .limit(1)
         .maybeSingle();
 
-      if (existingLog?.response_body && existing?.status === "enviado") {
+      if (
+        existingLog?.response_body &&
+        existing?.status === "enviado" &&
+        (!existing?.link_pendencia_id || pendingStatus !== "erro_envio")
+      ) {
         return jsonResponse({
           ...(existing.erp_response || existingLog.response_body as Record<string, unknown>),
           idempotent: true,
@@ -674,6 +794,67 @@ Deno.serve(async (req: Request) => {
     if (!/^https?:\/\//i.test(ERP_BASE_URL)) ERP_BASE_URL = `https://${ERP_BASE_URL}`;
     ERP_BASE_URL = ERP_BASE_URL.replace(/\/+$/, "");
     const ERP_URL = Deno.env.get("ERP_URL") || `${ERP_BASE_URL}/api/vendedor/NovoUsuario2`;
+
+    if (
+      existing?.link_pendencia_id &&
+      existing?.status === "enviado" &&
+      existing?.erp_response &&
+      pendingStatus === "erro_envio"
+    ) {
+      try {
+        const queues = await queueAllPendingFiles(
+          supabase,
+          auth,
+          existing,
+          requestBody,
+          cadastroId,
+          existing.erp_response?.data ?? existing.erp_response,
+          ERP_TOKEN,
+          ERP_BASE_URL,
+        );
+        const now = new Date().toISOString();
+        await supabase.from("link_pendencias").update({
+          status: "enviado",
+          cadastro_id: cadastroId,
+          sent_at: now,
+          sent_by: auth.profile.id,
+          resolved_at: now,
+          resolution_reason: "erp_already_sent_attachments_requeued",
+          last_error: null,
+          last_activity_at: now,
+          updated_at: now,
+        }).eq("id", existing.link_pendencia_id);
+
+        return jsonResponse({
+          ...(existing.erp_response as Record<string, unknown>),
+          idempotent: true,
+          repairedAttachments: true,
+          attachmentQueues: queues,
+        });
+      } catch (repairError) {
+        const message = repairError instanceof Error ? repairError.message : String(repairError);
+        const now = new Date().toISOString();
+        await supabase.from("link_pendencias").update({
+          status: message === "LINK_PENDING_ATTACHMENT_REQUIRED" ? "aguardando_analise" : "erro_envio",
+          last_error: message === "LINK_PENDING_ATTACHMENT_REQUIRED"
+            ? "Anexo obrigatorio ausente."
+            : "ERP ja concluido; falha ao preparar anexos para a fila.",
+          last_activity_at: now,
+          updated_at: now,
+        }).eq("id", existing.link_pendencia_id);
+
+        if (message === "LINK_PENDING_ATTACHMENT_REQUIRED") {
+          return jsonResponse({
+            error: "Anexe ao menos um arquivo antes de concluir esta pendencia.",
+            code: message,
+          }, 409);
+        }
+        return jsonResponse({
+          error: "A adesao ja existe no ERP, mas os anexos ainda nao puderam ser enfileirados.",
+          code: "LINK_PENDING_ATTACHMENT_QUEUE_FAILED",
+        }, 502);
+      }
+    }
 
     if (existing?.link_pendencia_id) {
       if (existing?.tipo_cadastro !== "cadastro") {
@@ -734,6 +915,25 @@ Deno.serve(async (req: Request) => {
     }
 
     if (existing?.link_pendencia_id) {
+      const { count: attachmentCount, error: attachmentCountError } = await supabase
+        .from("link_pendencia_files")
+        .select("id", { count: "exact", head: true })
+        .eq("link_pendencia_id", existing.link_pendencia_id);
+      if (attachmentCountError) throw attachmentCountError;
+      if (!attachmentCount) {
+        const now = new Date().toISOString();
+        await supabase.from("link_pendencias").update({
+          status: "aguardando_analise",
+          last_error: "Anexo obrigatorio ausente.",
+          last_activity_at: now,
+          updated_at: now,
+        }).eq("id", existing.link_pendencia_id);
+        return jsonResponse({
+          error: "Anexe ao menos um arquivo antes de enviar esta pendencia ao ERP.",
+          code: "LINK_PENDING_ATTACHMENT_REQUIRED",
+        }, 409);
+      }
+
       const now = new Date().toISOString();
       await supabase.from("link_pendencias").update({
         status: "enviando",
@@ -900,39 +1100,16 @@ Deno.serve(async (req: Request) => {
           );
 
           if (existing?.link_pendencia_id) {
-            const { data: pendingFiles, error: pendingFilesError } = await supabase
-              .from("link_pendencia_files")
-              .select("id,bucket,arquivo_path,arquivo_nome")
-              .eq("link_pendencia_id", existing.link_pendencia_id)
-              .order("created_at", { ascending: true });
-            if (pendingFilesError) throw pendingFilesError;
-            if (!pendingFiles || pendingFiles.length === 0) {
-              throw new Error("LINK_PENDING_ATTACHMENT_REQUIRED");
-            }
-
-            for (const file of pendingFiles) {
-              const queued = await enqueueAttachment(supabase, {
-                cadastroId,
-                createdBy: synced?.created_by || existing?.created_by || auth.user.id,
-                idFuncionario,
-                idDependente,
-                arquivoPath: String(file.arquivo_path || ""),
-                arquivoNome: String(file.arquivo_nome || ""),
-                clienteNome: textValue(synced?.nome, nomePayload),
-                clienteCpf: textValue(existing?.cpf, responsavel?.cpf),
-                empresaNome: textValue(synced?.empresa_nome, empresaNome),
-                targetDependenteCpf: resolvedPrincipal?.cpf || principalCpf || null,
-                targetDependenteNome: textValue(resolvedPrincipal?.nome, principalNome),
-              });
-              attachmentQueues.push(queued);
-
-              if (queued?.queue_id) {
-                await supabase.from("link_pendencia_files").update({
-                  erp_queue_id: queued.queue_id,
-                }).eq("id", file.id);
-              }
-            }
-
+            attachmentQueues = await queueAllPendingFiles(
+              supabase,
+              auth,
+              existing,
+              requestBody,
+              cadastroId,
+              result,
+              ERP_TOKEN,
+              ERP_BASE_URL,
+            );
             attachmentQueue = attachmentQueues[attachmentQueues.length - 1] || null;
           } else {
             attachmentQueue = await enqueueAttachment(supabase, {
@@ -1035,7 +1212,11 @@ Deno.serve(async (req: Request) => {
     console.error("[erp-novo-usuario2]", error);
     const message = error instanceof Error ? error.message : String(error);
 
-    if (pendingIdForError && message !== "LINK_PENDING_ATTACHMENT_REQUIRED") {
+    if (
+      pendingIdForError &&
+      message !== "LINK_PENDING_ATTACHMENT_REQUIRED" &&
+      !message.startsWith("LINK_PENDING_ATTACHMENT_QUEUE_FAILED:")
+    ) {
       const now = new Date().toISOString();
       await supabase.from("link_pendencias").update({
         status: "erro_envio",
@@ -1054,11 +1235,26 @@ Deno.serve(async (req: Request) => {
         updated_at: now,
       }).eq("id", pendingIdForError);
     }
+    if (pendingIdForError && message.startsWith("LINK_PENDING_ATTACHMENT_QUEUE_FAILED:")) {
+      const now = new Date().toISOString();
+      await supabase.from("link_pendencias").update({
+        status: "erro_envio",
+        last_error: "ERP concluido; um ou mais anexos nao puderam ser enfileirados.",
+        last_activity_at: now,
+        updated_at: now,
+      }).eq("id", pendingIdForError);
+    }
     if (message === "LINK_PENDING_ATTACHMENT_REQUIRED") {
       return jsonResponse({
         error: "Anexe ao menos um arquivo antes de enviar esta pendencia ao ERP.",
         code: message,
       }, 409);
+    }
+    if (message.startsWith("LINK_PENDING_ATTACHMENT_QUEUE_FAILED:")) {
+      return jsonResponse({
+        error: "A adesao foi concluida no ERP, mas um ou mais anexos ainda precisam de reprocessamento.",
+        code: "LINK_PENDING_ATTACHMENT_QUEUE_FAILED",
+      }, 502);
     }
     return jsonResponse({
       error: "Erro interno do servidor",
