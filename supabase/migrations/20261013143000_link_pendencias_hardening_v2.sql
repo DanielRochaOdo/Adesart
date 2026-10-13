@@ -51,7 +51,16 @@ USING (
 )
 WITH CHECK (
   public.can_access_link_pendencia_v1(created_by, vendedor_id, team_id)
+  AND (
+    status <> 'erro_envio'
+    OR public.can_reprocess_link_pendencia_error_v1()
+  )
 );
+
+-- Versoes de anexo sao imutaveis para usuarios. Metadados de fila/ERP
+-- sao atualizados apenas pelo backend com service_role.
+DROP POLICY IF EXISTS "Authenticated update permitted link pending files"
+ON public.link_pendencia_files;
 
 -- Preserva o snapshot publico em link_pendencias.latest_snapshot e registra
 -- todas as alteracoes internas campo a campo no cadastro promovido.
@@ -115,7 +124,13 @@ BEGIN
   FOR v_key IN
     SELECT jsonb_object_keys(v_new)
   LOOP
-    IF v_key IN ('updated_at') THEN
+    IF v_key IN (
+      'updated_at',
+      'status',
+      'payload_erp',
+      'erp_response',
+      'motivo_bloqueio'
+    ) THEN
       CONTINUE;
     END IF;
 
