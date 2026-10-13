@@ -699,6 +699,7 @@ export function PublicCadastroLink() {
           dependentes: dependents.map(({ id: _id, ...dep }) => dep),
         },
         member: existingMember,
+        plans: existingPlans,
       };
     }
 
