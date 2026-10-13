@@ -205,6 +205,7 @@ fun CadastroEditorDialog(
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     val profile = state.profile
+    val isLinkPending = !cadastro.linkPendenciaId.isNullOrBlank()
     val enderecoInicial = remember(cadastro.id) { parseCadastroEndereco(cadastro.endereco) }
 
     var nome by rememberSaveable(cadastro.id) { mutableStateOf(cadastro.nome.orEmpty()) }
@@ -218,10 +219,18 @@ fun CadastroEditorDialog(
     var arquivoTamanho by rememberSaveable(cadastro.id) { mutableStateOf(cadastro.arquivoTamanho ?: 0L) }
     var currentStep by rememberSaveable(cadastro.id) { mutableStateOf(1) }
     var selectedVendedorId by rememberSaveable(cadastro.id) {
-        mutableStateOf(if (profile?.role == "VENDEDOR") profile.id else "")
+        mutableStateOf(
+            if (isLinkPending) cadastro.vendedorId.orEmpty()
+            else if (profile?.role == "VENDEDOR") profile.id
+            else ""
+        )
     }
     var selectedAdesionistaId by rememberSaveable(cadastro.id) {
-        mutableStateOf(if (profile?.role == "ADESIONISTA") profile.id else "")
+        mutableStateOf(
+            if (isLinkPending) cadastro.adesionistaId.orEmpty()
+            else if (profile?.role == "ADESIONISTA") profile.id
+            else ""
+        )
     }
 
     var novoContatoTipo by rememberSaveable(cadastro.id) { mutableStateOf("celular") }
@@ -304,7 +313,7 @@ fun CadastroEditorDialog(
                 .map { it.parentescoId to it.label }
     }
 
-    val canChooseVendedor = profile?.role in setOf(
+    val canChooseVendedor = !isLinkPending && profile?.role in setOf(
         "ADMINISTRADOR",
         "ADMIN",
         "GERENTE",
@@ -313,7 +322,7 @@ fun CadastroEditorDialog(
         "CADASTRO",
         "ADESIONISTA",
     )
-    val canChooseAdesionista = profile?.role in setOf(
+    val canChooseAdesionista = !isLinkPending && profile?.role in setOf(
         "ADMINISTRADOR",
         "GERENTE",
         "GESTOR",
@@ -421,6 +430,9 @@ fun CadastroEditorDialog(
                     put("arquivo_tamanho", uploaded.size)
                 },
             )
+            runCatching {
+                viewModel.refreshLinkPendenciaReadiness(cadastro.linkPendenciaId, cadastro.id)
+            }
             localMessage = "Arquivo anexado e preservado no historico da solicitacao."
             return
         }
@@ -582,6 +594,12 @@ fun CadastroEditorDialog(
     }
 
     LaunchedEffect(cadastro.id, state.vendedores, state.adesionistas, profile?.id, profile?.role) {
+        if (isLinkPending) {
+            selectedVendedorId = cadastro.vendedorId.orEmpty()
+            selectedAdesionistaId = cadastro.adesionistaId.orEmpty()
+            return@LaunchedEffect
+        }
+
         if (profile?.role == "VENDEDOR") {
             selectedVendedorId = profile.id
         } else if (selectedVendedorId.isBlank() && !cadastro.vendedorCodigo.isNullOrBlank()) {
@@ -619,9 +637,13 @@ fun CadastroEditorDialog(
 
     fun buildDraftPatchPayload(): JsonObject {
         val dataIso = toIsoDateOrNull(dataNascimentoField.text)
-        val funcionarioCadastro = state.profile?.externalId?.toIntOrNull() ?: 0
-        val vendedor = resolveVendedor(profile, state, selectedVendedorId)
-        val adesionista = resolveAdesionista(profile, state, selectedAdesionistaId)
+        val funcionarioCadastro = if (isLinkPending) {
+            cadastro.vendedorCodigo?.toIntOrNull() ?: 0
+        } else {
+            state.profile?.externalId?.toIntOrNull() ?: 0
+        }
+        val vendedor = if (isLinkPending) null else resolveVendedor(profile, state, selectedVendedorId)
+        val adesionista = if (isLinkPending) null else resolveAdesionista(profile, state, selectedAdesionistaId)
         val traceId = "snap-${cadastro.id.take(8)}-${System.currentTimeMillis()}"
 
         val contatosJson = buildJsonArray {
@@ -772,6 +794,11 @@ fun CadastroEditorDialog(
                     )
                     return@launch
                 }
+            if (isLinkPending) {
+                runCatching {
+                    viewModel.refreshLinkPendenciaReadiness(cadastro.linkPendenciaId!!, cadastro.id)
+                }
+            }
             onDismiss()
         }
     }
@@ -1006,10 +1033,14 @@ fun CadastroEditorDialog(
             contatos[0] = contatos[0].copy(principal = true)
         }
 
-        val funcionarioCadastro = state.profile?.externalId?.toIntOrNull() ?: 0
-        val vendedor = resolveVendedor(profile, state, selectedVendedorId)
-        val adesionista = resolveAdesionista(profile, state, selectedAdesionistaId)
-        val empresaSelecionada = state.cadastroWorkspace.selectedEmpresa
+        val funcionarioCadastro = if (isLinkPending) {
+            cadastro.vendedorCodigo?.toIntOrNull() ?: 0
+        } else {
+            state.profile?.externalId?.toIntOrNull() ?: 0
+        }
+        val vendedor = if (isLinkPending) null else resolveVendedor(profile, state, selectedVendedorId)
+        val adesionista = if (isLinkPending) null else resolveAdesionista(profile, state, selectedAdesionistaId)
+        val empresaSelecionada = if (isLinkPending) null else state.cadastroWorkspace.selectedEmpresa
         val empresaIdPersist = empresaSelecionada?.id?.takeIf { it > 0 }
             ?: cadastro.empresaId
             ?: cadastro.empresaCodigo
@@ -1082,15 +1113,19 @@ fun CadastroEditorDialog(
                 ?.takeIf { it.length == 11 }
 
         return buildJsonObject {
-            profile?.id?.takeIf { it.isNotBlank() }?.let { put("created_by", it) }
-            profile?.teamId?.takeIf { it.isNotBlank() }?.let { put("team_id", it) }
+            if (!isLinkPending) {
+                profile?.id?.takeIf { it.isNotBlank() }?.let { put("created_by", it) }
+                profile?.teamId?.takeIf { it.isNotBlank() }?.let { put("team_id", it) }
+            }
             put("tipo_cadastro", "cadastro")
             cpfTitularPersist?.let { put("cpf", it) }
-            empresaIdPersist?.let { put("empresa_id", it) }
-            empresaCodigoPersist?.let { put("empresa_codigo", it) }
-            empresaNomePersist?.takeIf { it.isNotBlank() }?.let { put("empresa_nome", it) }
-            empresaCnpjPersist?.takeIf { it.isNotBlank() }?.let { put("empresa_cnpj", it) }
-            empresaSelecionada?.raw?.let { put("empresa_raw", it) }
+            if (!isLinkPending) {
+                empresaIdPersist?.let { put("empresa_id", it) }
+                empresaCodigoPersist?.let { put("empresa_codigo", it) }
+                empresaNomePersist?.takeIf { it.isNotBlank() }?.let { put("empresa_nome", it) }
+                empresaCnpjPersist?.takeIf { it.isNotBlank() }?.let { put("empresa_cnpj", it) }
+                empresaSelecionada?.raw?.let { put("empresa_raw", it) }
+            }
             put("nome", nome)
             if (dataIso != null) {
                 put("data_nascimento", dataIso)
@@ -1430,7 +1465,29 @@ fun CadastroEditorDialog(
                                 )
                             }
 
-                            if (canChooseVendedor) {
+                            if (isLinkPending) {
+                                OutlinedTextField(
+                                    value = listOfNotNull(
+                                        cadastro.vendedorNome?.takeIf { it.isNotBlank() },
+                                        cadastro.vendedorCodigo?.takeIf { it.isNotBlank() }?.let { "Codigo $it" },
+                                    ).joinToString(" - ").ifBlank { "Vendedor de origem nao informado" },
+                                    onValueChange = {},
+                                    modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                    label = { Text("Vendedor de origem") },
+                                    enabled = false,
+                                    colors = enderecoFieldColors,
+                                )
+                                if (!cadastro.adesionistaNome.isNullOrBlank()) {
+                                    OutlinedTextField(
+                                        value = cadastro.adesionistaNome.orEmpty(),
+                                        onValueChange = {},
+                                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                                        label = { Text("Adesionista de origem") },
+                                        enabled = false,
+                                        colors = enderecoFieldColors,
+                                    )
+                                }
+                            } else if (canChooseVendedor) {
                                 SelectionField(
                                     label = "Vendedor",
                                     value = state.vendedores
@@ -1447,7 +1504,7 @@ fun CadastroEditorDialog(
                                         style = MaterialTheme.typography.bodySmall,
                                     )
                                 }
-                            } else if (profile?.role == "VENDEDOR") {
+                            } else if (!isLinkPending && profile?.role == "VENDEDOR") {
                                 OutlinedTextField(
                                     value = profile.toTeamSelectionLabel(),
                                     onValueChange = {},
@@ -2043,7 +2100,8 @@ fun CadastroEditorDialog(
                     if (
                         state.profile?.role in setOf("ADMINISTRADOR", "ADMIN", "VENDEDOR", "CADASTRO") &&
                         currentStep == 1 &&
-                        isPendingCadastroStatus(cadastro.status)
+                        isPendingCadastroStatus(cadastro.status) &&
+                        !isLinkPending
                     ) {
                         IconButton(
                             onClick = {
@@ -2089,7 +2147,14 @@ fun CadastroEditorDialog(
                                         val payload = buildPayload(requireStatus = false) ?: return@launch
                                         saving = true
                                         runCatching { viewModel.updateCadastroRecord(cadastro.id, payload) }
-                                            .onSuccess { localMessage = "Cadastro salvo com sucesso." }
+                                            .onSuccess {
+                                                if (isLinkPending) {
+                                                    runCatching {
+                                                        viewModel.refreshLinkPendenciaReadiness(cadastro.linkPendenciaId!!, cadastro.id)
+                                                    }
+                                                }
+                                                localMessage = "Cadastro salvo com sucesso."
+                                            }
                                             .onFailure { throwable ->
                                                 localMessage = CadastroApiErrorMapper.mapUserMessage(
                                                     throwable.message,
@@ -2281,6 +2346,11 @@ fun CadastroEditorDialog(
                             saving = true
                             runCatching { viewModel.updateCadastroRecord(cadastro.id, payload) }
                                 .onSuccess {
+                                    if (isLinkPending) {
+                                        runCatching {
+                                            viewModel.refreshLinkPendenciaReadiness(cadastro.linkPendenciaId!!, cadastro.id)
+                                        }
+                                    }
                                     showSelectStatusOnClose = false
                                     onDismiss()
                                 }
