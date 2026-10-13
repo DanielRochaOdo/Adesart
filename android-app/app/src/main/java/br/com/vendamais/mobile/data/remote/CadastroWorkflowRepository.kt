@@ -329,6 +329,38 @@ class CadastroWorkflowRepository(
         )
     }
 
+    suspend fun updateLinkPendenciaStatus(
+        session: SavedSession,
+        pendingId: String,
+        status: String,
+        lastError: String? = null,
+        erpResponse: JsonElement? = null,
+        markSent: Boolean = false,
+    ) {
+        val now = java.time.OffsetDateTime.now().toString()
+        val payload = buildJsonObject {
+            put("status", status)
+            put("last_activity_at", now)
+            put("updated_at", now)
+            if (lastError == null) put("last_error", JsonNull) else put("last_error", lastError)
+            erpResponse?.let { put("erp_response", it) }
+            if (markSent) {
+                put("sent_at", now)
+                put("sent_by", session.userId)
+                put("resolved_at", now)
+                put("resolution_reason", "sent_to_erp")
+            }
+        }
+        client.safePatch<JsonElement>(
+            url = "${AppConfig.supabaseUrl}/rest/v1/link_pendencias?id=eq.$pendingId",
+            json = json,
+            body = payload,
+        ) {
+            applyAuthHeaders(session)
+            header("Prefer", "return=minimal")
+        }
+    }
+
     suspend fun registerLinkPendenciaFile(
         session: SavedSession,
         pendingId: String,
