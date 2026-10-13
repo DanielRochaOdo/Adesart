@@ -41,6 +41,7 @@ interface CadastroLinkRow {
   adesionista_codigo: string | null;
   link_url: string | null;
   is_active: boolean;
+  requires_authorization: boolean;
   unique_visit_count: number | null;
   unique_visits_started_at: string | null;
   used_at: string | null;
@@ -252,7 +253,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
     try {
       const { data, error: queryError } = await supabase
         .from('cadastro_links')
-        .select('id, created_by, team_id, empresa_codigo, empresa_nome, empresa_cnpj, empresa_raw, empresa_exige_matricula, planos_raw, vendedor_id, vendedor_nome, vendedor_codigo, adesionista_id, adesionista_nome, adesionista_codigo, link_url, is_active, unique_visit_count, unique_visits_started_at, used_at, used_cpf, created_at, updated_at')
+        .select('id, created_by, team_id, empresa_codigo, empresa_nome, empresa_cnpj, empresa_raw, empresa_exige_matricula, planos_raw, vendedor_id, vendedor_nome, vendedor_codigo, adesionista_id, adesionista_nome, adesionista_codigo, link_url, is_active, requires_authorization, unique_visit_count, unique_visits_started_at, used_at, used_cpf, created_at, updated_at')
         .eq('is_active', true)
         .order('empresa_nome', { ascending: true })
         .order('updated_at', { ascending: false });
@@ -521,6 +522,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
       'Código do vendedor': row.vendedorCodigo || '',
       Empresa: row.empresaNome,
       'Código da empresa': row.empresaCodigo,
+      'Tipo do link': selectedHistoryLink.requires_authorization ? 'Requer autorização' : 'Fluxo normal',
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
@@ -535,6 +537,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
       { wch: 18 },
       { wch: 34 },
       { wch: 18 },
+      { wch: 22 },
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -827,6 +830,9 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                   {selectedHistoryLink.empresa_nome} • Codigo {selectedHistoryLink.empresa_codigo}
                 </p>
                 <p className="vm-meta-text mt-1 text-[11px] sm:text-xs">
+                  <span className="block font-semibold">
+                    Tipo do link: {selectedHistoryLink.requires_authorization ? 'Requer autorização' : 'Fluxo normal'}
+                  </span>
                   Vendedor: {selectedHistoryLink.vendedor_nome} (Código {selectedHistoryLink.vendedor_codigo})
                   {selectedHistoryLink.adesionista_id && (
                     <span className="block">Adesionista: {selectedHistoryLink.adesionista_nome || 'Não identificado'}{selectedHistoryLink.adesionista_codigo?.trim() ? ` (Código ${selectedHistoryLink.adesionista_codigo})` : ''}</span>
