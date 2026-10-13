@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, Loader2, Search, Send, UserRound } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Loader2, Send, UserRound } from 'lucide-react';
 import { Button } from '../Button';
 import { Input } from '../Input';
 import { supabase } from '../../lib/supabase';
@@ -186,7 +186,6 @@ export function LinkPendenciasList({ reloadKey = 0, onSelectCadastro }: LinkPend
             label="Buscar por nome, CPF ou empresa"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            leftIcon={<Search className="h-4 w-4" />}
           />
         </div>
 
