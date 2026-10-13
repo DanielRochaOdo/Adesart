@@ -279,8 +279,8 @@ fun InclusaoDependenteDialog(
         }
         val empresaNomeAtual = empresaNome.takeIf { it.isNotBlank() } ?: responsavelAtual.empresa.orEmpty()
         val payload = buildCadastroPayload(
-            profileId = profile?.id.orEmpty(),
-            teamId = profile?.teamId,
+            profileId = if (isLinkPending) cadastro?.createdBy.orEmpty() else profile?.id.orEmpty(),
+            teamId = if (isLinkPending) cadastro?.teamId else profile?.teamId,
             responsavel = responsavelAtual,
             empresaCodigo = empresaCodigoAtual,
             empresaNome = empresaNomeAtual,
@@ -680,7 +680,7 @@ fun InclusaoDependenteDialog(
         if (!ensureStatusSelecionado()) return
         if (!ensureEmpresaIdentificada(responsavel)) return
         val vendedor = resolveVendedor()
-        if (profile?.role != "VENDEDOR" && state.vendedores.isEmpty()) {
+        if (!isLinkPending && profile?.role != "VENDEDOR" && state.vendedores.isEmpty()) {
             localError = "Nenhum vendedor disponível. Entre em contato com o administrador."
             return
         }
@@ -702,8 +702,8 @@ fun InclusaoDependenteDialog(
         }
 
         val payload = buildCadastroPayload(
-            profileId = profile?.id.orEmpty(),
-            teamId = profile?.teamId,
+            profileId = if (isLinkPending) cadastro?.createdBy.orEmpty() else profile?.id.orEmpty(),
+            teamId = if (isLinkPending) cadastro?.teamId else profile?.teamId,
             responsavel = responsavel,
             empresaCodigo = resolveEmpresaCodigo(responsavel),
             empresaNome = resolveEmpresaNome(responsavel),
@@ -769,8 +769,8 @@ fun InclusaoDependenteDialog(
 
         val adesionista = resolveAdesionista()
         val prePayload = buildCadastroPayload(
-            profileId = profile?.id.orEmpty(),
-            teamId = profile?.teamId,
+            profileId = if (isLinkPending) cadastro?.createdBy.orEmpty() else profile?.id.orEmpty(),
+            teamId = if (isLinkPending) cadastro?.teamId else profile?.teamId,
             responsavel = responsavel,
             empresaCodigo = resolveEmpresaCodigo(responsavel),
             empresaNome = resolveEmpresaNome(responsavel),
@@ -801,8 +801,8 @@ fun InclusaoDependenteDialog(
 
         val hasAttachments = base.any { it.arquivo != null }
         val finalPayloadBase = buildCadastroPayload(
-            profileId = profile?.id.orEmpty(),
-            teamId = profile?.teamId,
+            profileId = if (isLinkPending) cadastro?.createdBy.orEmpty() else profile?.id.orEmpty(),
+            teamId = if (isLinkPending) cadastro?.teamId else profile?.teamId,
             responsavel = responsavel,
             empresaCodigo = resolveEmpresaCodigo(responsavel),
             empresaNome = resolveEmpresaNome(responsavel),
