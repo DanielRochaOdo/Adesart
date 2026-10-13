@@ -294,8 +294,11 @@ fun InclusaoDependenteDialog(
         bytes: ByteArray,
     ) {
         validateUpload(fileName, mimeType, bytes.size.toLong())
-        dependentes[index].arquivo?.path?.takeIf { it.isNotBlank() }?.let { path ->
-            runCatching { viewModel.deleteTempFile(path) }
+        val linkPendingId = cadastro?.linkPendenciaId
+        if (linkPendingId.isNullOrBlank()) {
+            dependentes[index].arquivo?.path?.takeIf { it.isNotBlank() }?.let { path ->
+                runCatching { viewModel.deleteTempFile(path) }
+            }
         }
         val cpf = dependentes[index].cpf.text.ifBlank { "0" }
         val uploaded = viewModel.uploadTempFile(
@@ -304,9 +307,22 @@ fun InclusaoDependenteDialog(
             bytes = bytes,
             prefix = if (isContinuacao) "dependentes-continuar/$cpf" else "dependentes-temp/$cpf",
         )
+        if (!linkPendingId.isNullOrBlank() && cadastro != null) {
+            viewModel.registerLinkPendenciaFile(
+                pendingId = linkPendingId,
+                cadastroId = cadastro.id,
+                file = uploaded,
+                targetCpf = dependentes[index].cpf.text,
+                targetNome = dependentes[index].nome,
+            )
+        }
         updateDependente(dependentes, index) { it.copy(arquivo = uploaded, uploading = false, saved = false) }
         runCatching { persistInclusaoDraftNow() }
-        localNotice = "Arquivo carregado com sucesso."
+        localNotice = if (linkPendingId.isNullOrBlank()) {
+            "Arquivo carregado com sucesso."
+        } else {
+            "Arquivo anexado e preservado no historico da solicitacao."
+        }
     }
 
     suspend fun openDependenteArquivoPreview(index: Int) {
@@ -712,6 +728,17 @@ fun InclusaoDependenteDialog(
                 return
             }
         }
+        if (!cadastro?.linkPendenciaId.isNullOrBlank()) {
+            val missingAttachment = base.indexOfFirst { it.arquivo == null || it.arquivo.path.isBlank() }
+            if (missingAttachment >= 0) {
+                localError = "Anexo obrigatorio: inclua o arquivo do Dependente ${missingAttachment + 1} antes de enviar ao ERP."
+                return
+            }
+            viewModel.updateLinkPendenciaStatus(
+                pendingId = cadastro.linkPendenciaId,
+                status = "pronto_erp",
+            )
+        }
 
         val adesionista = resolveAdesionista()
         val prePayload = buildCadastroPayload(
@@ -754,7 +781,7 @@ fun InclusaoDependenteDialog(
             empresaNome = resolveEmpresaNome(responsavel),
             empresaRaw = empresaRaw,
             planosRaw = empresaPlanosRaw ?: extractPlanosRawFromEmpresa(empresaRaw),
-            status = if (hasAttachments) "incompleto" else "enviado",
+            status = if (!cadastro?.linkPendenciaId.isNullOrBlank()) "enviado" else if (hasAttachments) "incompleto" else "enviado",
             statusAdesaoId = selectedStatusId.takeIf { it.isNotBlank() },
             vendedor = vendedor ?: TeamMemberOption("", "", "", null),
             adesionista = adesionista,
@@ -779,7 +806,7 @@ fun InclusaoDependenteDialog(
 
         val codes = extractDependenteCodes(response)
         val funcionario = profile?.externalId?.toIntOrNull() ?: 0
-        if (hasAttachments) {
+        if (hasAttachments && cadastro?.linkPendenciaId.isNullOrBlank()) {
             if (funcionario <= 0 || cadastroId == null) {
                 throw IllegalStateException(
                     "Dependentes criados no ERP, mas o anexo nao pode ser enfileirado. O cadastro foi mantido pendente para nova tentativa.",
@@ -803,7 +830,7 @@ fun InclusaoDependenteDialog(
             }
         }
 
-        completionHasPendingAttachments = hasAttachments
+        completionHasPendingAttachments = hasAttachments && cadastro?.linkPendenciaId.isNullOrBlank()
         cadastroId?.let { id ->
             runCatching {
                 viewModel.closeDuplicateInclusaoPendentes(
@@ -1322,18 +1349,20 @@ fun InclusaoDependenteDialog(
                                                 },
                                             )
                                         }
-                                        IconButton(
-                                            onClick = {
-                                                scope.launch {
-                                                    runCatching { viewModel.deleteTempFile(dep.arquivo.path) }
-                                                    updateDependente(dependentes, index) { it.copy(arquivo = null, saved = false) }
-                                                }
-                                            },
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Delete,
-                                                contentDescription = "Remover arquivo",
-                                            )
+                                        if (cadastro?.linkPendenciaId.isNullOrBlank()) {
+                                            IconButton(
+                                                onClick = {
+                                                    scope.launch {
+                                                        runCatching { viewModel.deleteTempFile(dep.arquivo.path) }
+                                                        updateDependente(dependentes, index) { it.copy(arquivo = null, saved = false) }
+                                                    }
+                                                },
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Delete,
+                                                    contentDescription = "Remover arquivo",
+                                                )
+                                            }
                                         }
                                     }
                                     IconButton(
