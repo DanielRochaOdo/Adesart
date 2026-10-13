@@ -118,16 +118,28 @@ export function LinkPendenciasList({
     setLoading(true);
     setError('');
     try {
-      const { data, error: queryError } = await supabase
-        .from('link_pendencias')
-        .select('id,link_id,cpf,nome,empresa_codigo,empresa_nome,operation_type,requires_authorization,status,flow_stage,latest_snapshot,source_attempt_ids,source_link_ids,cadastro_id,vendedor_id,first_attempt_at,last_activity_at,public_completed_at,sent_at,resolution_reason,last_error')
-        .in('status', activeStatuses)
-        .order('last_activity_at', { ascending: false })
-        .limit(1000);
+      const pageSize = 1000;
+      let rangeStart = 0;
+      const loadedItems: LinkPending[] = [];
 
-      if (queryError) throw queryError;
+      while (true) {
+        const { data, error: queryError } = await supabase
+          .from('link_pendencias')
+          .select('id,link_id,cpf,nome,empresa_codigo,empresa_nome,operation_type,requires_authorization,status,flow_stage,latest_snapshot,source_attempt_ids,source_link_ids,cadastro_id,vendedor_id,first_attempt_at,last_activity_at,public_completed_at,sent_at,resolution_reason,last_error')
+          .in('status', activeStatuses)
+          .order('last_activity_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(rangeStart, rangeStart + pageSize - 1);
 
-      const loadedItems = (data || []) as LinkPending[];
+        if (queryError) throw queryError;
+
+        const pageItems = (data || []) as LinkPending[];
+        loadedItems.push(...pageItems);
+
+        if (pageItems.length < pageSize) break;
+        rangeStart += pageSize;
+      }
+
       setItems(loadedItems);
       onCountChange?.(loadedItems.length);
 
