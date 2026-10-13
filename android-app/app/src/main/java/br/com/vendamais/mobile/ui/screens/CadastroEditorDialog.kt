@@ -396,6 +396,35 @@ fun CadastroEditorDialog(
             size = bytes.size.toLong(),
         )
         val previousPath = arquivoPath
+        if (!cadastro.linkPendenciaId.isNullOrBlank()) {
+            val uploaded = viewModel.uploadTempFile(
+                fileName = fileName,
+                mimeType = mimeType,
+                bytes = bytes,
+                prefix = "cadastros/${cadastro.id}",
+            )
+            viewModel.registerLinkPendenciaFile(
+                pendingId = cadastro.linkPendenciaId,
+                cadastroId = cadastro.id,
+                file = uploaded,
+            )
+            arquivoPath = uploaded.path
+            arquivoNome = uploaded.nome
+            arquivoMimeType = uploaded.mime
+            arquivoTamanho = uploaded.size
+            viewModel.persistCadastroDraftSilently(
+                cadastro.id,
+                buildJsonObject {
+                    put("arquivo_path", uploaded.path)
+                    put("arquivo_nome", uploaded.nome)
+                    put("arquivo_mime_type", uploaded.mime)
+                    put("arquivo_tamanho", uploaded.size)
+                },
+            )
+            localMessage = "Arquivo anexado e preservado no historico da solicitacao."
+            return
+        }
+
         val draftAttachment = withContext(Dispatchers.IO) {
             DraftAttachmentStorage.copyBytesToDraftStorage(
                 context = context,
@@ -1857,7 +1886,7 @@ fun CadastroEditorDialog(
                                 Text("Plano do titular: $planoTitularResumo")
                                 Text("Dependentes: ${dependentes.size}")
                                 Text("Contatos: ${contatos.size}")
-                                Text("Arquivo obrigatorio: ${if (state.cadastroWorkspace.config?.exigirArquivo == true) "Sim" else "Nao"}")
+                                Text("Arquivo obrigatorio: ${if (!cadastro.linkPendenciaId.isNullOrBlank() || state.cadastroWorkspace.config?.exigirArquivo == true) "Sim" else "Nao"}")
                             }
                         }
 
@@ -1910,7 +1939,7 @@ fun CadastroEditorDialog(
                                             }
                                         }
                                     }
-                                    if (arquivoPath.isNotBlank()) {
+                                    if (arquivoPath.isNotBlank() && cadastro.linkPendenciaId.isNullOrBlank()) {
                                         IconButton(
                                             onClick = {
                                                 scope.launch {
