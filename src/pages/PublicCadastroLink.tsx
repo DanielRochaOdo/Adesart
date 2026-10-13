@@ -311,6 +311,7 @@ export function PublicCadastroLink() {
   // A preparacao no servidor determina se ha cobertura para TODOS os planos.
   // Nunca exigir aceite com base apenas em um link antigo da consulta inicial.
   const coverageUrl = preparedCoverageUrl;
+  const authorizationRequired = requiresAuthorization || linkData?.requiresAuthorization === true;
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
     setValidationErrors([]);
@@ -377,9 +378,13 @@ export function PublicCadastroLink() {
       // autoritativa para a regra de autorização. Isso evita que um resolve
       // antigo/cacheado leve o cliente ao contrato por engano.
       if (typeof result.requiresAuthorization === 'boolean') {
-        setRequiresAuthorization(result.requiresAuthorization);
+        const authenticatedRequiresAuthorization = result.requiresAuthorization === true;
+        // A exigencia de autorizacao pertence ao link e nao pode regredir durante
+        // a jornada. Uma resposta posterior nunca deve trocar um link "Sim" para
+        // "Nao" e expor o CTA de contrato por engano.
+        setRequiresAuthorization((current) => current || authenticatedRequiresAuthorization);
         setLinkData((current) => current
-          ? { ...current, requiresAuthorization: result.requiresAuthorization }
+          ? { ...current, requiresAuthorization: current.requiresAuthorization || authenticatedRequiresAuthorization }
           : current);
       }
 
@@ -752,7 +757,7 @@ export function PublicCadastroLink() {
   };
 
   const finalizePendingReview = async (forceAuthorization = false) => {
-    if (!forceAuthorization && !requiresAuthorization) return;
+    if (!forceAuthorization && !authorizationRequired) return;
 
     const pending = flowMode === 'existing_member'
       ? [
@@ -954,7 +959,7 @@ export function PublicCadastroLink() {
   if (stage === 'success') return shell(
     <div className="py-4 text-center">
       <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600" />
-      {requiresAuthorization ? (
+      {authorizationRequired ? (
         <>
           <h2 className="mt-4 text-2xl font-bold text-slate-900">Solicitação recebida com sucesso</h2>
           <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600">
@@ -1100,7 +1105,7 @@ export function PublicCadastroLink() {
             <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Dependentes</span><strong className="mt-1 block text-slate-900">{dependents.length}</strong>{dependents.map((dep) => <p key={dep.id} className="mt-2 text-slate-600">{dep.nome} - {plans.find((plan) => plan.Plano === dep.plano)?.nomeExibicao}</p>)}</div>
             <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Contato</span><strong className="mt-1 block text-slate-900">{formatPhone(form.telefone)}</strong><span className="text-slate-600">{form.email}</span></div>
           </div>
-          {requiresAuthorization ? (
+          {authorizationRequired ? (
             <Button onClick={() => void finalizePendingReview()} disabled={busy} className="mt-5 min-h-12 w-full text-base">
               {busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}
               Finalizar
@@ -1121,7 +1126,7 @@ export function PublicCadastroLink() {
             <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Dependentes</span><strong className="mt-1 block text-slate-900">{dependents.length}</strong>{dependents.map((dep) => <p key={dep.id} className="mt-2 text-slate-600">{dep.nome} - {plans.find((plan) => plan.Plano === dep.plano)?.nomeExibicao}</p>)}</div>
             <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Contato</span><strong className="mt-1 block text-slate-900">{formatPhone(form.telefone)}</strong><span className="text-slate-600">{form.email}</span></div>
           </div>
-          {requiresAuthorization ? (
+          {authorizationRequired ? (
             <Button onClick={() => void finalizePendingReview()} disabled={busy} className="mt-5 min-h-12 w-full text-base">
               {busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}
               Finalizar
