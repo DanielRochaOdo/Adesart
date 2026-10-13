@@ -427,7 +427,7 @@ Deno.serve(async (req: Request) => {
     if (cadastroId) {
       const { data, error: cadastroError } = await supabase
         .from("cadastros")
-        .select("id,status,tipo_cadastro,link_pendencia_id,responsavel_financeiro_codigo,responsavel_financeiro_cpf,created_by,nome,empresa_nome,erp_response")
+        .select("id,status,tipo_cadastro,link_pendencia_id,responsavel_financeiro_codigo,responsavel_financeiro_cpf,created_by,nome,empresa_nome,vendedor_codigo,adesionista_codigo,erp_response")
         .eq("id", cadastroId)
         .maybeSingle();
       if (cadastroError) throw cadastroError;
@@ -464,8 +464,12 @@ Deno.serve(async (req: Request) => {
           body?.dados?.responsavelFinanceiro?.codigo ??
           0,
       );
-      const requestedDependents = Array.isArray(body?.dados?.dependente) ? body.dados.dependente : [];
-      const idFuncionario = Number(body?.dados?.parceiro?.codigo || 0);
+      const idFuncionario = Number(pendingCadastro?.vendedor_codigo || 0);
+      const requestedDependentsRaw = Array.isArray(body?.dados?.dependente) ? body.dados.dependente : [];
+      const requestedDependents = requestedDependentsRaw.map((dep: any) => ({
+        ...dep,
+        funcionarioCadastro: idFuncionario,
+      }));
 
       if (
         !Number.isInteger(holderCode) || holderCode <= 0 ||
@@ -668,6 +672,17 @@ Deno.serve(async (req: Request) => {
         ...body,
         dados: {
           ...body.dados,
+          parceiro: {
+            ...(body.dados?.parceiro || {}),
+            codigo: idFuncionario,
+            ...(Number(pendingCadastro?.adesionista_codigo || 0) > 0
+              ? { adesionista: Number(pendingCadastro.adesionista_codigo) }
+              : {}),
+          },
+          responsavelFinanceiro: {
+            ...(body.dados?.responsavelFinanceiro || {}),
+            codigo: holderCode,
+          },
           dependente: newDependents,
         },
       };
