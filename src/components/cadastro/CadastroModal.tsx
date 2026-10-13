@@ -84,6 +84,10 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
   const funcionarioCadastroId = profile?.external_id ? parseInt(profile.external_id) : null;
 
   const cadastroAtual = cadastroFresh || cadastro;
+  const isLinkPending = Boolean(cadastroAtual.link_pendencia_id);
+  const erpFuncionarioCadastroId = isLinkPending
+    ? Number(cadastroAtual.vendedor_codigo || 0) || null
+    : funcionarioCadastroId;
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -323,7 +327,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
             planoValor: String(dep?.planoValor ?? dep?.valorPlano ?? dep?.plano_valor ?? '0,00'),
             nomeMae: dep?.nomeMae ?? dep?.nome_mae ?? '',
             carenciaAtendimento: Number(dep?.carenciaAtendimento ?? 0) || 0,
-            funcionarioCadastro: Number(dep?.funcionarioCadastro ?? funcionarioCadastroId ?? 0) || 0,
+            funcionarioCadastro: Number(dep?.funcionarioCadastro ?? erpFuncionarioCadastroId ?? 0) || 0,
           } as Dependente;
         });
 
@@ -481,7 +485,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
           planoValor: '0,00',
           nomeMae: formData.nomeMae || '',
           carenciaAtendimento: 0,
-          funcionarioCadastro: funcionarioCadastroId || 0,
+          funcionarioCadastro: erpFuncionarioCadastroId || 0,
         };
 
         setDependentes([responsavelComoDependente]);
@@ -489,7 +493,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
     } catch (err) {
       console.error('[CadastroModal] Erro ao criar titular automÃ¡tico:', err);
     }
-  }, [dependentesInicializados, planosEmpresa, cadastroAtual?.cpf, cadastroAtual?.dependentes, funcionarioCadastroId, loadingPlanos, formData.sexo, formData.nome, formData.dataNascimento, formData.nomeMae, dependentes.length]);
+  }, [dependentesInicializados, planosEmpresa, cadastroAtual?.cpf, cadastroAtual?.dependentes, erpFuncionarioCadastroId, loadingPlanos, formData.sexo, formData.nome, formData.dataNascimento, formData.nomeMae, dependentes.length]);
 
   useEffect(() => {
     try {
@@ -522,6 +526,11 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
   };
 
   const handleEmpresaSelected = async (empresa: Empresa) => {
+    if (isLinkPending) {
+      setError('A empresa de origem da solicitação por link não pode ser alterada.');
+      return;
+    }
+
     setSelectedEmpresa(empresa);
     setError('');
 
@@ -775,8 +784,12 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
       return false;
     }
 
-    if (!funcionarioCadastroId) {
-      setError('CÃ³digo do usuÃ¡rio (External ID) nÃ£o configurado. Configure seu cÃ³digo na pÃ¡gina de Perfil antes de cadastrar.');
+    if (!erpFuncionarioCadastroId) {
+      setError(
+        isLinkPending
+          ? 'O vendedor de origem do link não possui código externo válido.'
+          : 'Código do usuário (External ID) não configurado. Configure seu código na página de Perfil antes de cadastrar.'
+      );
       return false;
     }
 
@@ -917,9 +930,9 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
         cadastroCompleto,
         selectedEmpresa.id,
         cadastroAtual.vendedor_codigo,
-        funcionarioCadastroId,
-        profile?.role,
-        profile?.external_id,
+        erpFuncionarioCadastroId,
+        isLinkPending ? null : profile?.role,
+        isLinkPending ? null : profile?.external_id,
         cadastroAtual.adesionista_codigo
       );
 
@@ -1224,10 +1237,20 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
         <div className="p-6 space-y-6">
           {currentStep === 1 ? (
             <>
-              <EmpresaSearchCard
-                onEmpresaSelected={handleEmpresaSelected}
-                selectedEmpresa={selectedEmpresa}
-              />
+              {isLinkPending ? (
+                <div className="vm-cadastro-subcard rounded-2xl p-4">
+                  <p className="vm-muted-text text-xs font-medium uppercase tracking-wide">Empresa de origem</p>
+                  <p className="vm-page-title mt-1 font-semibold">
+                    {cadastroAtual.empresa_codigo} - {cadastroAtual.empresa_nome}
+                  </p>
+                  <p className="vm-muted-text mt-1 text-xs">A empresa não pode ser alterada em uma solicitação originada por link.</p>
+                </div>
+              ) : (
+                <EmpresaSearchCard
+                  onEmpresaSelected={handleEmpresaSelected}
+                  selectedEmpresa={selectedEmpresa}
+                />
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
@@ -1506,7 +1529,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
                 <DependentesSection
                   dependentes={dependentes}
                   planos={planosEmpresa}
-                  funcionarioCadastro={funcionarioCadastroId}
+                  funcionarioCadastro={erpFuncionarioCadastroId}
                   onChange={setDependentes}
                   onEditingStateChange={setDependenteEmEdicao}
                 />
@@ -1530,7 +1553,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
                     <span className="font-medium text-slate-900">Dependentes:</span> {dependentes.length}
                   </div>
                   <div className="rounded-lg bg-white px-3 py-2 border border-emerald-100">
-                    <span className="font-medium text-slate-900">Arquivo obrigatório:</span> {config?.exigir_arquivo ? 'Sim' : 'Não'}
+                    <span className="font-medium text-slate-900">Arquivo obrigatório:</span> {isLinkPending || config?.exigir_arquivo ? 'Sim' : 'Não'}
                   </div>
                   <div className="rounded-lg bg-white px-3 py-2 border border-emerald-100 md:col-span-2">
                     <span className="font-medium text-slate-900">Planos selecionados:</span> {planosSelecionadosResumo}
@@ -1543,7 +1566,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Arquivo {config?.exigir_arquivo && <span className="text-red-500">*</span>}
+                      Arquivo {(isLinkPending || config?.exigir_arquivo) && <span className="text-red-500">*</span>}
                     </label>
                     <input
                       type="file"
