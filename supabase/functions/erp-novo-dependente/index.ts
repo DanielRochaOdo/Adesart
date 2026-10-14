@@ -18,6 +18,13 @@ const normalizeText = (value: unknown) => String(value ?? "")
   .replace(/[\u0300-\u036f]/g, "")
   .toUpperCase();
 
+const isAlreadyActiveContractMessage = (value: unknown) => {
+  const normalized = normalizeText(value);
+  return normalized.includes("CADASTRAD") &&
+    normalized.includes("ATIV") &&
+    normalized.includes("CONTRATO");
+};
+
 const normalizeDate = (value: unknown) => {
   const raw = String(value ?? "").trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
@@ -421,6 +428,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const cadastroId = (req.headers.get("X-Cadastro-Id") || req.headers.get("x-cadastro-id") || "").trim();
+    const idempotencyKey = (req.headers.get("X-Idempotency-Key") || req.headers.get("x-idempotency-key") || "").trim();
     let pendingCadastro: any = null;
     let pendingStatus: string | null = null;
 
@@ -842,22 +850,140 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    // Fluxo existente sem Link Pendencias: mantem o comportamento anterior.
+    // Fluxo existente sem Link Pendencias.
+    // Antes de enviar, registra o estado conhecido no S4E. Isso permite
+    // diferenciar um duplicado que ja existia de uma operacao que se tornou
+    // ativa durante esta propria tentativa.
+    const holderCode = Number(body?.dados?.responsavelFinanceiro?.codigo || 0);
+    const requestedDependents = Array.isArray(body?.dados?.dependente)
+      ? body.dados.dependente
+      : [];
+
+    if (idempotencyKey) {
+      const { data: previousSuccess } = await supabase
+        .from("api_logs")
+        .select("response_body")
+        .eq("endpoint", "erp-novo-dependente")
+        .eq("success", true)
+        .contains("request_body", { idempotency_key: idempotencyKey })
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const previousBody = previousSuccess?.response_body as Record<string, unknown> | null;
+      if (previousBody?.success === true && previousBody?.data) {
+        return jsonResponse({
+          ...previousBody,
+          idempotent: true,
+          reused: true,
+        }, 200);
+      }
+    }
+
+    let regularPreflightBeforeSend: {
+      holderActive: boolean;
+      duplicates: ExistingDependent[];
+    } | null = null;
+
+    if (Number.isInteger(holderCode) && holderCode > 0 && requestedDependents.length > 0) {
+      try {
+        regularPreflightBeforeSend = await preflightPendingDependentInclusion(
+          ERP_TOKEN,
+          holderCode,
+          requestedDependents,
+        );
+      } catch (preflightError) {
+        console.warn(
+          "[erp-novo-dependente] Preflight regular indisponivel; mantendo envio normal:",
+          preflightError,
+        );
+      }
+    }
+
+    if (
+      regularPreflightBeforeSend &&
+      regularPreflightBeforeSend.duplicates.length > 0
+    ) {
+      return jsonResponse({
+        error: "Um ou mais dependentes informados ja possuem vinculo ativo no S4E. Nenhuma nova inclusao foi enviada.",
+        code: "DEPENDENT_ACTIVE_IN_ERP",
+        dependentes: regularPreflightBeforeSend.duplicates,
+      }, 422);
+    }
+
     const response = await fetch(ERP_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token: ERP_TOKEN, dados: body.dados }),
+      signal: AbortSignal.timeout(45_000),
     });
-    const result = await response.json().catch(() => ({}));
-    const ok = response.ok && Boolean(result?.dados);
-    const technicalMessage = String(
+    let result = await response.json().catch(() => ({}));
+    let ok = response.ok && Boolean(result?.dados);
+    let technicalMessage = String(
       result?.message || result?.mensagem || "Erro ao incluir dependente no ERP",
     );
+    let reconciledAlreadyActive = false;
+
+    if (
+      !ok &&
+      regularPreflightBeforeSend?.duplicates.length === 0 &&
+      isAlreadyActiveContractMessage(technicalMessage) &&
+      Number.isInteger(holderCode) &&
+      holderCode > 0 &&
+      requestedDependents.length > 0
+    ) {
+      try {
+        const postflight = await preflightPendingDependentInclusion(
+          ERP_TOKEN,
+          holderCode,
+          requestedDependents,
+        );
+        const linkedNow = postflight.duplicates.filter(
+          (item) => item.reason === "already_linked_to_holder" && item.codigoDependente,
+        );
+
+        if (
+          linkedNow.length === requestedDependents.length &&
+          postflight.holderActive
+        ) {
+          result = {
+            dados: {
+              dependentes: linkedNow
+                .sort((a, b) => a.requestIndex - b.requestIndex)
+                .map((item) => ({
+                  codigo: item.codigoDependente,
+                  cpf: item.cpf,
+                  nome: item.nome,
+                })),
+            },
+            mensagem: "Inclusao confirmada por reconciliacao com o S4E.",
+            reconciliadoVendaMais: true,
+          };
+          ok = true;
+          reconciledAlreadyActive = true;
+          console.warn(
+            "[erp-novo-dependente] S4E retornou ja cadastrado/ativo apos preflight sem duplicados; inclusao reconciliada como sucesso.",
+          );
+        }
+      } catch (postflightError) {
+        console.warn(
+          "[erp-novo-dependente] Nao foi possivel reconciliar resposta ja cadastrado/ativo:",
+          postflightError,
+        );
+      }
+    }
+
     const userMessage = isTechnicalErpFailure(technicalMessage)
       ? ERP_DEPENDENTE_FALHA_INTERNA
       : technicalMessage;
-    const responseBody = ok
-      ? { success: true, data: result }
+    const responseBody: any = ok
+      ? {
+          success: true,
+          data: result,
+          ...(reconciledAlreadyActive
+            ? { reconciled: true, reconciliation_reason: "became_active_after_send" }
+            : {}),
+        }
       : { error: userMessage };
 
     const { error: legacyLogError } = await supabase.from("api_logs").insert({
@@ -865,9 +991,14 @@ Deno.serve(async (req: Request) => {
       user_email: auth.user.email,
       endpoint: "erp-novo-dependente",
       method: "POST",
-      request_body: { sanitized: true, cadastro_id: cadastroId || null, link_pending: false },
+      request_body: {
+        sanitized: true,
+        cadastro_id: cadastroId || null,
+        idempotency_key: idempotencyKey || null,
+        link_pending: false,
+      },
       response_body: ok
-        ? { success: true }
+        ? responseBody
         : { error: userMessage, technical_error: technicalMessage },
       status_code: ok ? 200 : response.status,
       success: ok,
