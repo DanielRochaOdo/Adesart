@@ -160,7 +160,11 @@ Deno.serve(async (req: Request) => {
 
     const { data: link, error: linkError } = await supabase
       .from("cadastro_links")
+<<<<<<< HEAD
       .select("id, created_by, empresa_codigo, empresa_nome, vendedor_nome, vendedor_codigo, requires_authorization, click_count, unique_visit_count, unique_visits_started_at, last_unique_visit_at, created_at")
+=======
+      .select("id, created_by, vendedor_id, empresa_codigo, empresa_nome, vendedor_nome, vendedor_codigo, click_count, unique_visit_count, unique_visits_started_at, last_unique_visit_at, created_at")
+>>>>>>> 7278634 (fix(vendedor): limitar pendencias e habilitar historico dos links vinculados)
       .eq("id", linkId)
       .maybeSingle();
 
@@ -169,7 +173,7 @@ Deno.serve(async (req: Request) => {
 
     const role = String(internalUser.profile?.role || "").toUpperCase();
     const canViewAll = FULL_ACCESS_ROLES.has(role);
-    if (!canViewAll && String(link.created_by || "") !== String(internalUser.profile?.id || "")) {
+    if (!canViewAll && String(link.vendedor_id || "") !== String(internalUser.profile?.id || "")) {
       return jsonResponse({ error: "Sem permissao para visualizar este historico" }, 403);
     }
 
