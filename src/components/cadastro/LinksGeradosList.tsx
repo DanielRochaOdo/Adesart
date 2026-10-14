@@ -495,7 +495,13 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
         body: { linkId: link.id },
       });
 
-      if (functionError) throw functionError;
+      if (functionError) {
+        const response = (functionError as { context?: Response }).context;
+        const payload = response && typeof response.json === 'function'
+          ? await response.json().catch(() => null) as { error?: string } | null
+          : null;
+        throw new Error(payload?.error || functionError.message || 'Não foi possível carregar o histórico');
+      }
       if (!data?.ok) throw new Error(data?.error || 'Não foi possível carregar o histórico');
 
       setHistoryRows(Array.isArray(data.rows) ? data.rows as LinkHistoryRow[] : []);
