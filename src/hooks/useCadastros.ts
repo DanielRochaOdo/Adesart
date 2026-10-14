@@ -250,6 +250,10 @@ export function useCadastros() {
             .range(rangeStart, rangeStart + rangeSize - 1);
 
           query = query.in('status', statuses);
+          // Vendedores consultam apenas pendencias efetivamente vinculadas ao seu perfil.
+          if (listStatus === 'pendentes' && profile?.role === 'VENDEDOR') {
+            query = query.eq('vendedor_id', profile.id);
+          }
 
           const { data: chunk, error: queryError } = await query;
 
@@ -296,7 +300,7 @@ export function useCadastros() {
 
     inFlightListRequestsRef.current.set(listStatus, request);
     return request;
-  }, []);
+  }, [profile?.id, profile?.role]);
 
   const fetchStats = async () => {
     if (!profile?.id) {
