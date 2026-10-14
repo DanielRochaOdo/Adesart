@@ -12,6 +12,7 @@ const ERP_ERROR_ROLES = new Set(["ADMINISTRADOR", "CADASTRO", "GERENTE"]);
 
 const canOperate = (profile: any, pending: any) => {
   if (!profile?.id || profile?.is_active === false) return false;
+  if (String(profile.role || "").toUpperCase() === "VENDEDOR" && String(pending?.vendedor_id || "") !== String(profile.id)) return false;
   if (String(pending?.status || "") !== "erro_envio") return true;
   return ERP_ERROR_ROLES.has(String(profile?.role || "").toUpperCase());
 };

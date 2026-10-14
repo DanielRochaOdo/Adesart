@@ -147,6 +147,9 @@ Deno.serve(async (req: Request) => {
       .maybeSingle();
     if (pendingError) throw pendingError;
     if (!pending) return jsonResponse({ error: "Pendencia nao encontrada" }, 404);
+    if (String(auth.profile?.role || "").toUpperCase() === "VENDEDOR" && String(pending.vendedor_id || "") !== String(auth.profile.id)) {
+      return jsonResponse({ error: "Sem permissao para esta pendencia" }, 403);
+    }
 
     if (pending.requires_authorization !== true) {
       return jsonResponse({
