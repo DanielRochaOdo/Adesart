@@ -33,6 +33,20 @@ const positiveInt = (...values: unknown[]) => {
 const normalizeDigits = (value: unknown) =>
   String(value ?? "").replace(/\D/g, "");
 
+const normalizeText = (value: unknown) =>
+  String(value ?? "")
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+
+const isAlreadyActiveContractMessage = (value: unknown) => {
+  const normalized = normalizeText(value);
+  return normalized.includes("CADASTRAD") &&
+    normalized.includes("ATIV") &&
+    normalized.includes("CONTRATO");
+};
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const dependenteFromPayloadByCpf = (payload: any, targetCpf: string) => {
@@ -974,6 +988,35 @@ Deno.serve(async (req: Request) => {
       }).eq("id", existing.link_pendencia_id);
     }
 
+    let regularPreflightBeforeSend: {
+      active: boolean;
+      codigoAssociado?: unknown;
+      codigoEmpresa?: unknown;
+    } | null = null;
+
+    if (!existing?.link_pendencia_id) {
+      try {
+        regularPreflightBeforeSend = await assertNewMemberNotAlreadyActive(
+          textValue(existing?.cpf, responsavel?.cpf),
+          Number(existing?.empresa_codigo || existing?.empresa_id || empresaCodigoPayload || 0),
+          ERP_TOKEN,
+          ERP_BASE_URL,
+        );
+      } catch (preflightError) {
+        console.warn(
+          "[erp-novo-usuario2] Preflight regular indisponivel; mantendo envio normal:",
+          preflightError,
+        );
+      }
+
+      if (regularPreflightBeforeSend?.active) {
+        return jsonResponse({
+          error: "Este CPF ja possui uma adesao ativa no S4E. Nenhum novo cadastro foi enviado.",
+          code: "CPF_ACTIVE_IN_ERP",
+        }, 422);
+      }
+    }
+
     const startedAt = Date.now();
     const response = await fetch(ERP_URL, {
       method: "POST",
@@ -982,11 +1025,60 @@ Deno.serve(async (req: Request) => {
       signal: AbortSignal.timeout(45_000),
     });
 
-    const result = await response.json().catch(() => ({}));
-    const hasCode = positiveInt(result?.dados?.codigo, result?.data?.dados?.codigo);
-    const ok = response.ok && Boolean(hasCode);
+    let result = await response.json().catch(() => ({}));
+    let hasCode = positiveInt(result?.dados?.codigo, result?.data?.dados?.codigo);
+    let ok = response.ok && Boolean(hasCode);
+    let reconciledAlreadyActive = false;
+
+    if (
+      !ok &&
+      regularPreflightBeforeSend?.active === false &&
+      isAlreadyActiveContractMessage(extractMessage(result))
+    ) {
+      try {
+        const postflight = await assertNewMemberNotAlreadyActive(
+          textValue(existing?.cpf, responsavel?.cpf),
+          Number(existing?.empresa_codigo || existing?.empresa_id || empresaCodigoPayload || 0),
+          ERP_TOKEN,
+          ERP_BASE_URL,
+        );
+
+        const reconciledCode = positiveInt(postflight.codigoAssociado);
+        if (postflight.active && reconciledCode) {
+          const originalDados = result?.dados && typeof result.dados === "object"
+            ? result.dados
+            : {};
+          result = {
+            ...result,
+            dados: {
+              ...originalDados,
+              codigo: reconciledCode,
+            },
+            reconciliadoVendaMais: true,
+          };
+          hasCode = reconciledCode;
+          ok = true;
+          reconciledAlreadyActive = true;
+          console.warn(
+            "[erp-novo-usuario2] S4E retornou ja cadastrado/ativo apos preflight inativo; operacao reconciliada como sucesso.",
+          );
+        }
+      } catch (postflightError) {
+        console.warn(
+          "[erp-novo-usuario2] Nao foi possivel reconciliar resposta ja cadastrado/ativo:",
+          postflightError,
+        );
+      }
+    }
+
     const responseBody: any = ok
-      ? { success: true, data: result }
+      ? {
+          success: true,
+          data: result,
+          ...(reconciledAlreadyActive
+            ? { reconciled: true, reconciliation_reason: "became_active_after_send" }
+            : {}),
+        }
       : { error: extractMessage(result), details: result };
 
     let canonicalSync: Record<string, unknown> | null = null;
