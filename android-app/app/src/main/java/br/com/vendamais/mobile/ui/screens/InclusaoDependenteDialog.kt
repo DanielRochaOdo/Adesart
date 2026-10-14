@@ -259,6 +259,42 @@ fun InclusaoDependenteDialog(
     val cpfValidationErrors = remember { mutableStateMapOf<Int, String>() }
     val consultedCpfByIndex = remember { mutableStateMapOf<Int, String>() }
 
+    fun resolveVendedor(): TeamMemberOption? {
+        if (isLinkPending) {
+            val code = cadastro?.vendedorCodigo?.trim().orEmpty()
+            if (code.isBlank()) return null
+            return TeamMemberOption(
+                cadastro?.vendedorId.orEmpty(),
+                cadastro?.vendedorNome.orEmpty(),
+                "",
+                code,
+            )
+        }
+        return if (profile?.role == "VENDEDOR") {
+            TeamMemberOption(profile.id, profile.name, profile.email, profile.externalId)
+        } else {
+            state.vendedores.firstOrNull { it.id == selectedVendedorId }
+        }
+    }
+
+    fun resolveAdesionista(): TeamMemberOption? {
+        if (isLinkPending) {
+            val code = cadastro?.adesionistaCodigo?.trim().orEmpty()
+            if (code.isBlank()) return null
+            return TeamMemberOption(
+                cadastro?.adesionistaId.orEmpty(),
+                cadastro?.adesionistaNome.orEmpty(),
+                "",
+                code,
+            )
+        }
+        return if (profile?.role == "ADESIONISTA") {
+            TeamMemberOption(profile.id, profile.name, profile.email, profile.externalId)
+        } else {
+            state.adesionistas.firstOrNull { it.id == selectedAdesionistaId }
+        }
+    }
+
     suspend fun persistInclusaoDraftNow() {
         val cadastroAtual = cadastro ?: return
         val responsavelAtual = responsavelSelecionado ?: return
@@ -436,42 +472,6 @@ fun InclusaoDependenteDialog(
                 )
             }
             runCatching { File(cameraPath).delete() }
-        }
-    }
-
-    fun resolveVendedor(): TeamMemberOption? {
-        if (isLinkPending) {
-            val code = cadastro?.vendedorCodigo?.trim().orEmpty()
-            if (code.isBlank()) return null
-            return TeamMemberOption(
-                cadastro?.vendedorId.orEmpty(),
-                cadastro?.vendedorNome.orEmpty(),
-                "",
-                code,
-            )
-        }
-        return if (profile?.role == "VENDEDOR") {
-            TeamMemberOption(profile.id, profile.name, profile.email, profile.externalId)
-        } else {
-            state.vendedores.firstOrNull { it.id == selectedVendedorId }
-        }
-    }
-
-    fun resolveAdesionista(): TeamMemberOption? {
-        if (isLinkPending) {
-            val code = cadastro?.adesionistaCodigo?.trim().orEmpty()
-            if (code.isBlank()) return null
-            return TeamMemberOption(
-                cadastro?.adesionistaId.orEmpty(),
-                cadastro?.adesionistaNome.orEmpty(),
-                "",
-                code,
-            )
-        }
-        return if (profile?.role == "ADESIONISTA") {
-            TeamMemberOption(profile.id, profile.name, profile.email, profile.externalId)
-        } else {
-            state.adesionistas.firstOrNull { it.id == selectedAdesionistaId }
         }
     }
 
