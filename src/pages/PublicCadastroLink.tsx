@@ -306,6 +306,32 @@ export function PublicCadastroLink() {
     () => flowMode === 'existing_member' ? existingPlans : (linkData?.planos || []),
     [existingPlans, flowMode, linkData],
   );
+
+  useEffect(() => {
+    if (plans.length !== 1) return;
+
+    const onlyPlanCode = Number(plans[0].Plano || 0);
+    if (!onlyPlanCode) return;
+
+    if (flowMode === 'new_member') {
+      setForm((current) => (
+        current.titularPlano
+          ? current
+          : { ...current, titularPlano: onlyPlanCode }
+      ));
+    }
+
+    setDependents((current) => {
+      let changed = false;
+      const next = current.map((dependent) => {
+        if (dependent.plano) return dependent;
+        changed = true;
+        return { ...dependent, plano: onlyPlanCode };
+      });
+      return changed ? next : current;
+    });
+  }, [flowMode, plans]);
+
   const coverageCode = flowMode === 'existing_member' ? (dependents[0]?.plano || 0) : form.titularPlano;
   const coverageName = coverageNameFromCode(coverageCode);
   // A preparacao no servidor determina se ha cobertura para TODOS os planos.
