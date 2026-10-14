@@ -56,6 +56,17 @@ val GlassDarkStrong = Color(0xDB0F172A)
 val GlassBorderLight = Color(0x26334155)
 val GlassBorderDark = Color(0x22FFFFFF)
 
+// Liquid Glass alinhado ao Web: superfícies discretas, borda legível e brilho
+// concentrado no topo. Evita o aspecto de "mancha" no centro da tela.
+val LiquidGlassLight = Color(0xB8F1F7F4)
+val LiquidGlassLightStrong = Color(0xE0F7FAF8)
+val LiquidGlassDark = Color(0x940F172A)
+val LiquidGlassDarkStrong = Color(0xCC0F172A)
+val LiquidSpecularLight = Color(0x33FFFFFF)
+val LiquidSpecularDark = Color(0x09FFFFFF)
+val LiquidGreenGlow = Color(0x2410B981)
+val LiquidCyanGlow = Color(0x1214B8A6)
+
 val ActionPrimary = Emerald
 val ActionPrimaryPressed = EmeraldDark
 val ActionPrimaryDisabled = Slate300

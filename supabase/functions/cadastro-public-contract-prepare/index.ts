@@ -80,11 +80,11 @@ const validateCadastro = (cadastro: CadastroInput, cpf: string, link: any) => {
   return null;
 };
 
-const fetchCurrentPlans = async (link: any) => {
+const fetchCurrentPlans = async (companyCode: number) => {
   const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
   const ERP_BASE_URL = Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
   if (!ERP_TOKEN) throw new Error("ERP_TOKEN not configured");
-  const response = await fetch(`${ERP_BASE_URL}/api/empresa/BuscaEmpresas?token=${encodeURIComponent(ERP_TOKEN)}&empresaId=${encodeURIComponent(String(link.empresa_codigo))}`, { headers: { Accept: "application/json" } });
+  const response = await fetch(`${ERP_BASE_URL}/api/empresa/BuscaEmpresas?token=${encodeURIComponent(ERP_TOKEN)}&empresaId=${encodeURIComponent(String(companyCode))}`, { headers: { Accept: "application/json" } });
   if (!response.ok) throw new Error("ERP_CATALOG_UNAVAILABLE");
   const result = await response.json();
   const empresa = Array.isArray(result?.dados) ? result.dados[0] : null;
@@ -102,6 +102,294 @@ const renderTemplate = (body: string, values: Record<string, string>) => {
 };
 
 
+
+const prepareExistingMemberContract = async (
+  supabase: any,
+  attempt: any,
+  link: any,
+  cadastro: CadastroInput,
+  confirmedEmail: string,
+) => {
+  const cpf = normalizeDigits(attempt.profile_snapshot?.cpf);
+  const member = attempt.erp_member_snapshot;
+  const companyCode = Number(member?.codigoEmpresa || 0);
+  const memberCode = Number(member?.codigoAssociado || 0);
+
+  if (!member || !isValidCpf(cpf) || !Number.isInteger(companyCode) || companyCode <= 0 || !Number.isInteger(memberCode) || memberCode <= 0) {
+    return jsonResponse({ error: "Vinculo do associado invalido. Inicie novamente.", code: "INVALID_MEMBER_SNAPSHOT" }, 409);
+  }
+  if (cadastro?.cpf && await hashSensitiveValue(normalizeDigits(cadastro.cpf)) !== attempt.cpf_hash) {
+    return jsonResponse({ error: "CPF divergente da sessao autenticada" }, 400);
+  }
+  if (!Array.isArray(cadastro?.contatos)) {
+    return jsonResponse({ error: "Confirme um telefone valido antes de continuar." }, 400);
+  }
+
+  const phone = cadastro.contatos
+    .filter((item) => ["celular", "whatsapp", "fixo"].includes(item.tipo))
+    .map((item) => normalizeDigits(item.valor))
+    .find((value) => value.length >= 10) || "";
+  if (phone.length < 10) {
+    return jsonResponse({ error: "Confirme um telefone valido antes de continuar." }, 400);
+  }
+
+  if (!Array.isArray(cadastro?.dependentes) || cadastro.dependentes.length === 0) {
+    return jsonResponse({ error: "Adicione ao menos um dependente antes de revisar os termos." }, 400);
+  }
+
+  const normalizedDependents = cadastro.dependentes.map((dep) => ({
+    tipo: Number(dep?.tipo || 0),
+    nome: String(dep?.nome || "").trim(),
+    dataNascimento: normalizeDate(dep?.dataNascimento),
+    cpf: normalizeDigits(dep?.cpf),
+    sexo: Number(dep?.sexo),
+    nomeMae: String(dep?.nomeMae || "").trim(),
+    plano: Number(dep?.plano || 0),
+  }));
+
+  const seenCpfs = new Set<string>([cpf]);
+  for (let index = 0; index < normalizedDependents.length; index += 1) {
+    const dep = normalizedDependents[index];
+    const label = `Dependente ${index + 1}`;
+    if (!isValidCpf(dep.cpf)) return jsonResponse({ error: `${label}: informe um CPF valido.` }, 400);
+    if (seenCpfs.has(dep.cpf)) return jsonResponse({ error: `${label}: este CPF ja foi informado na solicitacao.` }, 400);
+    seenCpfs.add(dep.cpf);
+    if (dep.tipo <= 1) return jsonResponse({ error: `${label}: selecione o grau de parentesco.` }, 400);
+    if (!dep.nome) return jsonResponse({ error: `${label}: informe o nome completo.` }, 400);
+    if (!dep.dataNascimento) return jsonResponse({ error: `${label}: informe uma data de nascimento valida.` }, 400);
+    if (![0, 1].includes(dep.sexo)) return jsonResponse({ error: `${label}: selecione o sexo.` }, 400);
+    if (!dep.nomeMae) return jsonResponse({ error: `${label}: informe o nome da mae.` }, 400);
+    if (dep.plano <= 0) return jsonResponse({ error: `${label}: selecione o plano.` }, 400);
+  }
+
+  const { plans: currentPlans, vigenciaMeses } = await fetchCurrentPlans(companyCode);
+  const currentMap = new Map<number, any>(
+    currentPlans.map((item: any): [number, any] => [Number(item.Plano), item]),
+  );
+  const selectedCodes = normalizedDependents.map((dep) => dep.plano);
+  if (selectedCodes.some((code) => !currentMap.has(code))) {
+    return jsonResponse({
+      error: "Um dos planos selecionados nao esta mais disponivel para a empresa do associado.",
+      code: "PLAN_CHANGED",
+    }, 409);
+  }
+
+  const uniquePlans = [...new Set(selectedCodes)];
+  const { data: namedPlanRows, error: namedPlanError } = await supabase
+    .from("cadastro_planos_map")
+    .select("plano_id, nome_exibicao, ativo")
+    .in("plano_id", uniquePlans);
+  if (namedPlanError) throw namedPlanError;
+  const displayNames = new Map<number, string>((namedPlanRows || [])
+    .filter((row: any) => row.ativo !== false && String(row.nome_exibicao || "").trim())
+    .map((row: any) => [Number(row.plano_id), String(row.nome_exibicao).trim()]));
+  for (const [code, plan] of currentMap) {
+    plan.nomeExibicao = displayNames.get(code) || plan.nomeExibicao;
+  }
+
+  const dependents = normalizedDependents.map((dep) => {
+    const plan: any = currentMap.get(dep.plano);
+    return {
+      ...dep,
+      sexoDescricao: dep.sexo === 1 ? "Masculino" : "Feminino",
+      planoNome: plan.nomeExibicao,
+      planoValor: Number(plan.ValorDependente || 0),
+    };
+  });
+
+  const normalizedContacts: Contact[] = [
+    { tipo: "whatsapp", valor: phone, principal: true },
+    { tipo: "email", valor: confirmedEmail, principal: true },
+  ];
+
+  const holderName = String(member?.nomeAssociado || attempt.profile_snapshot?.nome || "").trim();
+  const holderBirthDate = normalizeDate(attempt.profile_snapshot?.dataNascimento || member?.dataNascimento);
+  const companyName = String(member?.empresaNome || link.empresa_nome || "").trim();
+
+  const { available: coverageAvailable, files: coverageFiles } =
+    await resolvePublishedOptionalCoverage(supabase, uniquePlans);
+
+  const templateCodes = [...new Set([0, ...uniquePlans])];
+  const { data: templateRows, error: templateError } = await supabase
+    .from("contract_templates")
+    .select("id, plan_code, title, body_text, version, effective_from, effective_until, is_active")
+    .in("plan_code", templateCodes)
+    .eq("is_active", true);
+  if (templateError) throw templateError;
+
+  const activeTemplates = (templateRows || []).filter((item: any) =>
+    (!item.effective_from || new Date(item.effective_from).getTime() <= Date.now()) &&
+    (!item.effective_until || new Date(item.effective_until).getTime() >= Date.now())
+  );
+  const templateMap = new Map(activeTemplates.map((item: any) => [Number(item.plan_code), item]));
+  const missingPlans = uniquePlans.filter((code) => !templateMap.has(code));
+  const defaultTemplate: any = templateMap.get(0);
+  if (missingPlans.length > 0 && !defaultTemplate) {
+    return jsonResponse({
+      error: "O contrato deste plano ainda nao esta configurado.",
+      code: "CONTRACT_NOT_CONFIGURED",
+      missingPlans,
+    }, 409);
+  }
+
+  const dependentsSummary = dependents
+    .map((dep, index) => `${index + 1}. ${dep.nome} - ${dep.planoNome} - ${money(dep.planoValor)}`)
+    .join("\n");
+  const plansSummary = dependents
+    .map((dep) => `Dependente: ${dep.nome} - ${dep.planoNome} - ${money(dep.planoValor)}`)
+    .join("\n");
+  const beneficiaries = joinBeneficiaries(dependents.map((dep) => dep.nome));
+  const totalMonthlyValue = dependents.reduce((sum, dep) => sum + Number(dep.planoValor || 0), 0);
+
+  const replacements = {
+    NOME_RF: holderName,
+    CPF_RF: formatCpf(cpf),
+    DATA_NASCIMENTO_RF: holderBirthDate,
+    EMPRESA: companyName,
+    EMPRESA_CODIGO: String(companyCode),
+    EMAIL: confirmedEmail,
+    PLANOS: plansSummary,
+    DEPENDENTES: dependentsSummary,
+    DATA_ACEITE: formatDateOnly(new Date()),
+    VALOR_DO_PLANO: moneyValue(totalMonthlyValue),
+    BENEFICIARIOS: beneficiaries,
+    PERIODO_CONTRATO: contractDurationText(vigenciaMeses),
+    PARAMETRO_VIGENCIA: String(vigenciaMeses),
+    VIGENCIA_MESES: String(vigenciaMeses),
+    VIGENCIA_EXTENSO: vigenciaExtenso(vigenciaMeses),
+  };
+
+  const templatesToRender: any[] = defaultTemplate && missingPlans.length > 0
+    ? [defaultTemplate]
+    : uniquePlans.map((code) => templateMap.get(code)).filter(Boolean);
+  const renderedContractText = templatesToRender
+    .map((template) => renderTemplate(String(template.body_text || ""), replacements).trim())
+    .filter(Boolean)
+    .join("\n\n")
+    .trim();
+
+  let contractText: string;
+  try {
+    contractText = applyContractDuration(renderedContractText, vigenciaMeses);
+  } catch (durationError) {
+    console.error("[cadastro-public-contract-prepare] vigencia ausente nos termos de inclusao", durationError);
+    return jsonResponse({
+      error: "Nao foi possivel apresentar a vigencia contratual. Fale com seu consultor.",
+      code: "CONTRACT_DURATION_UNAVAILABLE",
+    }, 409);
+  }
+  if (!contractText) {
+    return jsonResponse({
+      error: "O contrato deste plano ainda nao esta configurado.",
+      code: "CONTRACT_NOT_CONFIGURED",
+      missingPlans: uniquePlans,
+    }, 409);
+  }
+
+  const snapshot = {
+    version: 1,
+    flowMode: "existing_member",
+    preparedAt: new Date().toISOString(),
+    link: {
+      id: link.id,
+      empresaCodigo: companyCode,
+      empresaNome: companyName,
+      empresaCnpj: null,
+      empresaExigeMatricula: 0,
+      vendedorId: link.vendedor_id || null,
+      vendedorCodigo: String(link.vendedor_codigo || ""),
+      vendedorNome: String(link.vendedor_nome || ""),
+      createdBy: link.created_by,
+      teamId: link.team_id || null,
+      adesionistaId: link.adesionista_id || null,
+      adesionistaCodigo: link.adesionista_id ? String(link.adesionista_codigo || "") : "",
+      adesionistaNome: link.adesionista_id ? String(link.adesionista_nome || "") : "",
+    },
+    member: {
+      codigoAssociado: memberCode,
+      codigoDependente: Number(member?.codigoDependente || 0) || null,
+      codigoPlano: Number(member?.codigoPlano || 0) || null,
+    },
+    cadastro: {
+      cpf,
+      nome: holderName,
+      dataNascimento: holderBirthDate,
+      sexoCodigo: Number(cadastro?.sexoCodigo ?? -1),
+      nomeMae: String(cadastro?.nomeMae || ""),
+      numeroMatricula: "",
+      contatos: normalizedContacts,
+      endereco: {},
+      titularPlano: 0,
+      titularPlanoNome: "",
+      titularPlanoValor: 0,
+      dependentes: dependents,
+      valorMensalTotal: totalMonthlyValue,
+      beneficiarios: dependents.map((dep) => dep.nome),
+      duracaoContratoMeses: vigenciaMeses,
+      coberturaPlanoCodigos: uniquePlans,
+      coberturaDisponivel: coverageAvailable,
+      coberturaPlanoArquivos: coverageFiles.map(({ code, family, fileName }) => ({
+        planoCodigo: code,
+        familia: family,
+        arquivo: fileName,
+      })),
+    },
+    confirmedEmail,
+  };
+
+  const contractHash = await sha256(contractText);
+  const dataHash = await sha256(stableStringify(snapshot));
+  const contractToken = randomToken();
+  const templateIds = templatesToRender.map((template) => template.id);
+  const templateVersions = Object.fromEntries(
+    templatesToRender.map((template) => [String(template.plan_code), Number(template.version)]),
+  );
+
+  await supabase.from("public_contract_sessions")
+    .update({ status: "superseded", updated_at: new Date().toISOString() })
+    .eq("attempt_id", attempt.id)
+    .eq("status", "prepared");
+
+  const { data: session, error: sessionError } = await supabase
+    .from("public_contract_sessions")
+    .insert({
+      attempt_id: attempt.id,
+      contract_token_hash: await sha256(contractToken),
+      snapshot,
+      contract_text: contractText,
+      contract_hash: contractHash,
+      data_hash: dataHash,
+      template_ids: templateIds,
+      template_versions: templateVersions,
+      confirmed_email: confirmedEmail,
+    })
+    .select("id")
+    .single();
+  if (sessionError || !session) throw sessionError || new Error("CONTRACT_SESSION_CREATE_FAILED");
+
+  const coverageEntry = coverageFiles.find((entry) => uniquePlans.includes(Number(entry.code))) || coverageFiles[0] || null;
+  const coverageUrl = coverageAvailable && coverageEntry?.fileName
+    ? supabase.storage.from("plan-coverages").getPublicUrl(coverageEntry.fileName).data.publicUrl
+    : null;
+
+  return jsonResponse({
+    ok: true,
+    contractToken,
+    contractHash,
+    contractText,
+    coverageAvailable,
+    coverageUrl,
+    summary: {
+      empresa: companyName,
+      titular: holderName,
+      dependentes: dependents.map((dep) => ({ nome: dep.nome, plano: dep.planoNome, valor: dep.planoValor })),
+      confirmedEmail,
+      duracaoContratoMeses: vigenciaMeses,
+      flowMode: "existing_member",
+    },
+  });
+};
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 200, headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse({ error: "Metodo nao permitido" }, 405);
@@ -116,9 +404,23 @@ Deno.serve(async (req: Request) => {
     const supabase = createServiceClient();
     const attempt = await resolveAttempt(supabase, attemptToken);
     if (!attempt || attempt.status !== "authenticated" || !attempt.profile_snapshot) return jsonResponse({ error: "Sessao expirada. Inicie novamente.", code: "SESSION_EXPIRED" }, 401);
+    const flowMode = String(attempt.flow_mode || "new_member");
+    if (!["new_member", "existing_member"].includes(flowMode)) {
+      return jsonResponse({ error: "Esta sessao nao permite preparar termos contratuais.", code: "INVALID_FLOW_MODE" }, 409);
+    }
 
     const { data: link, error: linkError } = await supabase.from("cadastro_links").select("*").eq("id", attempt.link_id).maybeSingle();
     if (linkError || !link || !link.is_active) return jsonResponse({ error: "Link indisponivel" }, 410);
+
+    if (flowMode === "existing_member") {
+      return await prepareExistingMemberContract(
+        supabase,
+        attempt,
+        link,
+        body.cadastro as CadastroInput,
+        confirmedEmail,
+      );
+    }
 
     const cpf = normalizeDigits(attempt.profile_snapshot?.cpf);
     if (body.cadastro?.cpf && await hashSensitiveValue(normalizeDigits(body.cadastro.cpf)) !== attempt.cpf_hash) {
@@ -135,7 +437,7 @@ Deno.serve(async (req: Request) => {
 
     if (selectedCodes.some((code) => !allowedCodes.has(code))) return jsonResponse({ error: "Plano nao permitido para este link", code: "PLAN_NOT_ALLOWED" }, 400);
 
-    const { plans: currentPlans, vigenciaMeses } = await fetchCurrentPlans(link);
+    const { plans: currentPlans, vigenciaMeses } = await fetchCurrentPlans(Number(link.empresa_codigo));
     const currentMap = new Map<number, any>(currentPlans.map((item: any): [number, any] => [Number(item.Plano), item]));
     if (selectedCodes.some((code) => !currentMap.has(code))) return jsonResponse({ error: "Um dos planos selecionados nao esta mais disponivel para esta empresa", code: "PLAN_CHANGED" }, 409);
 

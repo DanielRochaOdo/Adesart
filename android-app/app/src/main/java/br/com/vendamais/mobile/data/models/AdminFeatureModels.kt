@@ -459,12 +459,22 @@ data class PublicCadastroPrefill(
 )
 
 @Serializable
+data class PublicExistingMemberInfo(
+    val nome: String = "",
+    val empresa: String = "",
+    val telefone: String = "",
+    val email: String = "",
+)
+
+@Serializable
 data class PublicCadastroAuthenticateResponse(
     val ok: Boolean = false,
     val state: String? = null,
     @SerialName("attemptToken")
     val attemptToken: String? = null,
     val person: PublicCadastroPrefill? = null,
+    val member: PublicExistingMemberInfo? = null,
+    val plans: List<PublicPlanoInfo> = emptyList(),
     val reason: String? = null,
     val error: String? = null,
     val code: String? = null,

@@ -1,0 +1,258 @@
+name: iOS Store Release
+run-name: iOS Store Release ${{ github.ref_name }}
+
+on:
+  push:
+    tags:
+      - "ios-store-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Build + App Store Connect
+    runs-on: macos-latest
+    env:
+      IOS_BUNDLE_ID: br.com.vendamais.mobile
+      IOS_EXPORT_METHOD: app-store-connect
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve release metadata
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+
+          if [[ ! "$tag" =~ ^ios-store-v([0-9]+\.[0-9]+\.[0-9]+)-b([0-9]+)-[0-9]{14}$ ]]; then
+            echo "::error::Tag de release iOS invalida: $tag"
+            exit 1
+          fi
+
+          echo "version_name=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          echo "version_code=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Validate iOS production secrets
+        shell: bash
+        env:
+          IOS_APPSTORE_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_APPSTORE_CERTIFICATE_P12_BASE64 }}
+          IOS_APPSTORE_CERTIFICATE_PASSWORD: ${{ secrets.IOS_APPSTORE_CERTIFICATE_PASSWORD }}
+          IOS_APPSTORE_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_APPSTORE_PROVISIONING_PROFILE_BASE64 }}
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          APPSTORE_CONNECT_API_KEY_P8_BASE64: ${{ secrets.APPSTORE_CONNECT_API_KEY_P8_BASE64 }}
+          APPSTORE_CONNECT_KEY_ID: ${{ secrets.APPSTORE_CONNECT_KEY_ID }}
+          APPSTORE_CONNECT_ISSUER_ID: ${{ secrets.APPSTORE_CONNECT_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in IOS_APPSTORE_CERTIFICATE_P12_BASE64 IOS_APPSTORE_CERTIFICATE_PASSWORD IOS_APPSTORE_PROVISIONING_PROFILE_BASE64 IOS_TEAM_ID APPSTORE_CONNECT_API_KEY_P8_BASE64 APPSTORE_CONNECT_KEY_ID APPSTORE_CONNECT_ISSUER_ID; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::GitHub Secret ausente: $name"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Install Apple Distribution certificate and profile
+        id: signing
+        shell: bash
+        env:
+          IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_APPSTORE_CERTIFICATE_P12_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_APPSTORE_CERTIFICATE_PASSWORD }}
+          IOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.IOS_APPSTORE_PROVISIONING_PROFILE_BASE64 }}
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+        run: |
+          set -euo pipefail
+
+          cert_path="$RUNNER_TEMP/vendamais-appstore.p12"
+          profile_path="$RUNNER_TEMP/vendamais-appstore.mobileprovision"
+          profile_plist="$RUNNER_TEMP/vendamais-appstore-profile.plist"
+          keychain_path="$RUNNER_TEMP/vendamais-appstore.keychain-db"
+          keychain_password="$(openssl rand -hex 24)"
+
+          printf '%s' "$IOS_CERTIFICATE_P12_BASE64" | base64 --decode > "$cert_path"
+          printf '%s' "$IOS_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$profile_path"
+
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$cert_path" -k "$keychain_path" -P "$IOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain_path"
+          security list-keychains -d user -s "$keychain_path" login.keychain-db
+
+          security cms -D -i "$profile_path" > "$profile_plist"
+          profile_uuid=$(/usr/libexec/PlistBuddy -c "Print :UUID" "$profile_plist")
+          profile_name=$(/usr/libexec/PlistBuddy -c "Print :Name" "$profile_plist")
+          profile_team=$(/usr/libexec/PlistBuddy -c "Print :TeamIdentifier:0" "$profile_plist")
+
+          if [[ "$profile_team" != "$IOS_TEAM_ID" ]]; then
+            echo "::error::IOS_TEAM_ID nao corresponde ao provisioning profile."
+            exit 1
+          fi
+
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$profile_path" "$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.mobileprovision"
+
+          echo "profile_name=$profile_name" >> "$GITHUB_OUTPUT"
+          echo "keychain_path=$keychain_path" >> "$GITHUB_OUTPUT"
+
+      - name: Sync iOS version
+        working-directory: android-app
+        shell: bash
+        env:
+          VENDA_VERSION_NAME: ${{ steps.release.outputs.version_name }}
+          VENDA_VERSION_CODE: ${{ steps.release.outputs.version_code }}
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon syncIosVersion
+
+      - name: Archive signed iOS app
+        working-directory: android-app
+        shell: bash
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          PROFILE_NAME: ${{ steps.signing.outputs.profile_name }}
+          KEYCHAIN_PATH: ${{ steps.signing.outputs.keychain_path }}
+        run: |
+          set -euo pipefail
+          echo "Assinatura iOS: Apple Distribution"
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+          xcodebuild \
+            -project iosApp/VendaMaisIOS.xcodeproj \
+            -scheme VendaMaisIOS \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -archivePath "$RUNNER_TEMP/VendaMaisIOS.xcarchive" \
+            PRODUCT_BUNDLE_IDENTIFIER="$IOS_BUNDLE_ID" \
+            DEVELOPMENT_TEAM="$IOS_TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
+            archive
+
+      - name: Export App Store IPA
+        id: export
+        working-directory: android-app
+        shell: bash
+        env:
+          IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+          PROFILE_NAME: ${{ steps.signing.outputs.profile_name }}
+          VERSION_NAME: ${{ steps.release.outputs.version_name }}
+        run: |
+          set -euo pipefail
+
+          export_options="$RUNNER_TEMP/ExportOptions.plist"
+          cat > "$export_options" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key>
+              <string>app-store-connect</string>
+              <key>signingStyle</key>
+              <string>manual</string>
+              <key>teamID</key>
+              <string>${IOS_TEAM_ID}</string>
+              <key>manageAppVersionAndBuildNumber</key>
+              <false/>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>${IOS_BUNDLE_ID}</key>
+                  <string>${PROFILE_NAME}</string>
+              </dict>
+          </dict>
+          </plist>
+          EOF
+
+          mkdir -p "$RUNNER_TEMP/ios-export"
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$RUNNER_TEMP/VendaMaisIOS.xcarchive" \
+            -exportPath "$RUNNER_TEMP/ios-export" \
+            -exportOptionsPlist "$export_options"
+
+          ipa_path="$(find "$RUNNER_TEMP/ios-export" -maxdepth 1 -name '*.ipa' -print -quit)"
+          if [[ -z "$ipa_path" ]]; then
+            echo "::error::IPA nao foi gerado."
+            exit 1
+          fi
+
+          mkdir -p iosApp/build/release-artifacts
+          output_path="iosApp/build/release-artifacts/vendamais-mobile-ios-v${VERSION_NAME}.ipa"
+          cp "$ipa_path" "$output_path"
+          echo "ipa_path=$PWD/$output_path" >> "$GITHUB_OUTPUT"
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vendamais-ios-store-v${{ steps.release.outputs.version_name }}
+          if-no-files-found: error
+          retention-days: 30
+          path: android-app/iosApp/build/release-artifacts/vendamais-mobile-ios-v${{ steps.release.outputs.version_name }}.ipa
+
+      - name: Configure App Store Connect API key
+        shell: bash
+        env:
+          APPSTORE_CONNECT_API_KEY_P8_BASE64: ${{ secrets.APPSTORE_CONNECT_API_KEY_P8_BASE64 }}
+          APPSTORE_CONNECT_KEY_ID: ${{ secrets.APPSTORE_CONNECT_KEY_ID }}
+        run: |
+          set -euo pipefail
+          key_dir="$HOME/.appstoreconnect/private_keys"
+          mkdir -p "$key_dir"
+          printf '%s' "$APPSTORE_CONNECT_API_KEY_P8_BASE64" | base64 --decode > "$key_dir/AuthKey_${APPSTORE_CONNECT_KEY_ID}.p8"
+          chmod 600 "$key_dir/AuthKey_${APPSTORE_CONNECT_KEY_ID}.p8"
+
+      - name: Validate IPA with App Store Connect
+        shell: bash
+        env:
+          APPSTORE_CONNECT_KEY_ID: ${{ secrets.APPSTORE_CONNECT_KEY_ID }}
+          APPSTORE_CONNECT_ISSUER_ID: ${{ secrets.APPSTORE_CONNECT_ISSUER_ID }}
+          IPA_PATH: ${{ steps.export.outputs.ipa_path }}
+        run: |
+          set -euo pipefail
+          xcrun altool \
+            --validate-app \
+            --type ios \
+            --file "$IPA_PATH" \
+            --apiKey "$APPSTORE_CONNECT_KEY_ID" \
+            --apiIssuer "$APPSTORE_CONNECT_ISSUER_ID"
+
+      - name: Upload IPA to App Store Connect
+        shell: bash
+        env:
+          APPSTORE_CONNECT_KEY_ID: ${{ secrets.APPSTORE_CONNECT_KEY_ID }}
+          APPSTORE_CONNECT_ISSUER_ID: ${{ secrets.APPSTORE_CONNECT_ISSUER_ID }}
+          IPA_PATH: ${{ steps.export.outputs.ipa_path }}
+        run: |
+          set -euo pipefail
+          xcrun altool \
+            --upload-app \
+            --type ios \
+            --file "$IPA_PATH" \
+            --apiKey "$APPSTORE_CONNECT_KEY_ID" \
+            --apiIssuer "$APPSTORE_CONNECT_ISSUER_ID"
+
+          echo "IPA enviado ao App Store Connect. O processamento e a revisao da Apple continuam obrigatorios."
+
+      - name: Cleanup temporary Apple credentials
+        if: always()
+        shell: bash
+        env:
+          KEYCHAIN_PATH: ${{ steps.signing.outputs.keychain_path }}
+          APPSTORE_CONNECT_KEY_ID: ${{ secrets.APPSTORE_CONNECT_KEY_ID }}
+        run: |
+          if [[ -n "${KEYCHAIN_PATH:-}" && -f "$KEYCHAIN_PATH" ]]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
+          if [[ -n "${APPSTORE_CONNECT_KEY_ID:-}" ]]; then
+            rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_${APPSTORE_CONNECT_KEY_ID}.p8"
+          fi

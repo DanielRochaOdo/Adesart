@@ -11,8 +11,11 @@ on:
       - 'tsconfig.link-web.json'
       - 'supabase/functions/_shared/**'
       - 'supabase/functions/cadastro-link-resolve/**'
+      - 'supabase/functions/cadastro-public-authenticate/**'
       - 'supabase/functions/cadastro-public-contract-prepare/**'
+      - 'supabase/functions/cadastro-public-dependent-submit/**'
       - 'supabase/functions/cadastro-public-submit/**'
+      - 'supabase/migrations/20261007103000_public_link_existing_member_dependents.sql'
       - 'supabase/functions/process-contract-deliveries/**'
       - '.github/workflows/validate-link-web.yml'
   workflow_dispatch:
@@ -40,7 +43,9 @@ jobs:
           deno check --node-modules-dir=auto \
             supabase/functions/cadastro-link-resolve/index.ts \
             supabase/functions/cadastro-link-history/index.ts \
+            supabase/functions/cadastro-public-authenticate/index.ts \
             supabase/functions/cadastro-public-contract-prepare/index.ts \
+            supabase/functions/cadastro-public-dependent-submit/index.ts \
             supabase/functions/cadastro-public-submit/index.ts \
             supabase/functions/process-contract-deliveries/index.ts
       - run: deno test --node-modules-dir=auto supabase/functions/_shared/plan-coverages.test.ts supabase/functions/_shared/contract-duration.test.ts supabase/functions/_shared/link-visits.test.ts

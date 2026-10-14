@@ -41,7 +41,14 @@ Deno.serve(async (req: Request) => {
 
     const rawPlans = (Array.isArray(link.planos_raw) ? link.planos_raw : [])
       .map(sanitizePlan)
-      .filter((item: any) => item.Plano > 0);
+      // O fluxo publico nao deve oferecer planos gratuitos/zerados.
+      // Como os selects exibem preco de titular e dependente, ambos precisam
+      // possuir valor comercial maior que zero.
+      .filter((item: any) =>
+        item.Plano > 0 &&
+        Number(item.ValorTitular) > 0 &&
+        Number(item.ValorDependente) > 0
+      );
 
     // O ERP retorna PrecoPlano principalmente com o codigo do plano e os valores.
     // Assim como os modulos internos, o fluxo publico usa cadastro_planos_map como

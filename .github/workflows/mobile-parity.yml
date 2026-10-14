@@ -1,0 +1,44 @@
+name: Mobile parity
+
+on:
+  push:
+    paths:
+      - "android-app/**"
+      - "AGENTS.md"
+  pull_request:
+    paths:
+      - "android-app/**"
+      - "AGENTS.md"
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Android debug build
+        working-directory: android-app
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleStandardDebug
+
+  ios:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Sync iOS version
+        working-directory: android-app
+        run: |
+          chmod +x gradlew
+          ./gradlew syncIosVersion
+      - name: Build iOS simulator
+        working-directory: android-app
+        run: |
+          xcodebuild -project iosApp/VendaMaisIOS.xcodeproj -scheme VendaMaisIOS -sdk iphonesimulator -configuration Debug CODE_SIGNING_ALLOWED=NO build

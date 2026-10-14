@@ -30,3 +30,16 @@ android-app/.idea/
 # Android signing
 android-app/**/*.jks
 android-app/**/*.keystore
+
+# iOS / Xcode local state
+android-app/iosApp/**/xcuserdata/
+android-app/iosApp/**/*.xcuserstate
+android-app/iosApp/DerivedData/
+
+# Local release credentials / generated artifacts
+GooglePlay/
+android-app/release-downloads/
+**/*service-account*.json
+
+# App Store Connect API keys
+**/AuthKey_*.p8
