@@ -141,7 +141,7 @@ fun CadastrosScreen(
     onLinkClearEmpresa: () -> Unit,
     onLinkVendedorChange: (String) -> Unit,
     onLinkAdesionistaChange: (String) -> Unit,
-    onGenerateLink: () -> Unit,
+    onGenerateLink: (Boolean) -> Unit,
     onRegenerateLink: (String) -> Unit,
     onDeleteLink: (String) -> Unit,
     onOpenLinkHistory: (String) -> Unit,
@@ -297,6 +297,9 @@ fun CadastrosScreen(
 
     val pendentesCount = state.cadastroStats.cadastro_incompletos + state.cadastroStats.inclusao_incompletos
     val completosCount = state.cadastroStats.cadastro_enviados + state.cadastroStats.inclusao_enviados
+    val linkPendenciasCount = state.linkWorkspace.linkPendencias.count {
+        it.status !in setOf("enviado", "encerrado")
+    }
     val profileRole = state.profile?.role.orEmpty()
     val isListTab = state.cadastroTab in setOf(CadastroAreaTab.INCOMPLETOS, CadastroAreaTab.COMPLETOS)
     val useSupervisorGroupedView = isListTab && profileRole == "SUPERVISOR"
@@ -321,6 +324,7 @@ fun CadastrosScreen(
                 selectedTab = state.cadastroTab,
                 pendentesCount = pendentesCount,
                 completosCount = completosCount,
+                linkPendenciasCount = linkPendenciasCount,
                 onTabSelected = { tab ->
                     when (tab) {
                         CadastroAreaTab.INCOMPLETOS -> onFilterChange(CadastroFiltro.PENDENTES)
@@ -400,6 +404,16 @@ fun CadastrosScreen(
                             )
                         }
                     }
+                }
+            }
+
+            CadastroAreaTab.LINK_PENDENCIAS -> {
+                item {
+                    LinkPendenciasCard(
+                        workspace = state.linkWorkspace,
+                        profileRole = state.profile?.role.orEmpty(),
+                        onOpenPending = viewModel::openLinkPendencia,
+                    )
                 }
             }
 
@@ -1153,6 +1167,7 @@ private fun CadastroTabBar(
     selectedTab: CadastroAreaTab,
     pendentesCount: Int,
     completosCount: Int,
+    linkPendenciasCount: Int,
     onTabSelected: (CadastroAreaTab) -> Unit,
 ) {
     Column(
@@ -1184,23 +1199,31 @@ private fun CadastroTabBar(
             )
         }
 
+        CadastroTabButton(
+            label = "Pendentes",
+            selected = selectedTab == CadastroAreaTab.INCOMPLETOS,
+            onClick = { onTabSelected(CadastroAreaTab.INCOMPLETOS) },
+            modifier = Modifier.fillMaxWidth(),
+            badge = pendentesCount.takeIf { it > 0 }?.toString(),
+        )
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             CadastroTabButton(
-                label = "Enviadas",
+                label = "Cadastradas",
                 selected = selectedTab == CadastroAreaTab.COMPLETOS,
                 onClick = { onTabSelected(CadastroAreaTab.COMPLETOS) },
                 modifier = Modifier.weight(1f),
                 badge = completosCount.takeIf { it > 0 }?.toString(),
             )
             CadastroTabButton(
-                label = "Pendente",
-                selected = selectedTab == CadastroAreaTab.INCOMPLETOS,
-                onClick = { onTabSelected(CadastroAreaTab.INCOMPLETOS) },
+                label = "Link Pendencias",
+                selected = selectedTab == CadastroAreaTab.LINK_PENDENCIAS,
+                onClick = { onTabSelected(CadastroAreaTab.LINK_PENDENCIAS) },
                 modifier = Modifier.weight(1f),
-                badge = pendentesCount.takeIf { it > 0 }?.toString(),
+                badge = linkPendenciasCount.takeIf { it > 0 }?.toString(),
             )
         }
     }

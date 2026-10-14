@@ -37,6 +37,7 @@ type LinkData = {
   empresaNome: string;
   empresaCnpj: string | null;
   empresaExigeMatricula: number;
+  requiresAuthorization: boolean;
   planos: PublicPlan[];
   vendedorNome: string;
   vendedorTelefone?: string | null;
@@ -270,6 +271,7 @@ export function PublicCadastroLink() {
   const { parentescos } = useConfigCadastro();
   const [linkToken] = useState(() => routeToken || sessionStorage.getItem('adesart-public-link-token') || '');
   const [linkData, setLinkData] = useState<LinkData | null>(null);
+  const [requiresAuthorization, setRequiresAuthorization] = useState(false);
   const [knownConsultant, setKnownConsultant] = useState<Pick<LinkData, 'vendedorNome' | 'vendedorTelefone'> | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [acceptedCoverage, setAcceptedCoverage] = useState(false);
@@ -304,11 +306,38 @@ export function PublicCadastroLink() {
     () => flowMode === 'existing_member' ? existingPlans : (linkData?.planos || []),
     [existingPlans, flowMode, linkData],
   );
+
+  useEffect(() => {
+    if (plans.length !== 1) return;
+
+    const onlyPlanCode = Number(plans[0].Plano || 0);
+    if (!onlyPlanCode) return;
+
+    if (flowMode === 'new_member') {
+      setForm((current) => (
+        current.titularPlano
+          ? current
+          : { ...current, titularPlano: onlyPlanCode }
+      ));
+    }
+
+    setDependents((current) => {
+      let changed = false;
+      const next = current.map((dependent) => {
+        if (dependent.plano) return dependent;
+        changed = true;
+        return { ...dependent, plano: onlyPlanCode };
+      });
+      return changed ? next : current;
+    });
+  }, [flowMode, plans]);
+
   const coverageCode = flowMode === 'existing_member' ? (dependents[0]?.plano || 0) : form.titularPlano;
   const coverageName = coverageNameFromCode(coverageCode);
   // A preparacao no servidor determina se ha cobertura para TODOS os planos.
   // Nunca exigir aceite com base apenas em um link antigo da consulta inicial.
   const coverageUrl = preparedCoverageUrl;
+  const authorizationRequired = requiresAuthorization || linkData?.requiresAuthorization === true;
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
     setValidationErrors([]);
@@ -339,7 +368,9 @@ export function PublicCadastroLink() {
           });
           throw new Error(result.error || 'Link indisponível');
         }
-        setLinkData(result.link as LinkData);
+        const resolvedLink = result.link as LinkData;
+        setLinkData(resolvedLink);
+        setRequiresAuthorization(resolvedLink.requiresAuthorization === true);
         if (routeToken) window.history.replaceState({}, '', '/adesao');
       } catch (resolveError) {
         setError(resolveError instanceof Error ? resolveError.message : 'Não foi possível carregar este link.');
@@ -369,6 +400,25 @@ export function PublicCadastroLink() {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Não foi possível validar seus dados.');
 
+      // A autenticação consulta novamente o link no servidor e é a fonte
+      // autoritativa para a regra de autorização. Isso evita que um resolve
+      // antigo/cacheado leve o cliente ao contrato por engano.
+      if (typeof result.requiresAuthorization === 'boolean') {
+        const authenticatedRequiresAuthorization = result.requiresAuthorization === true;
+        // A exigencia de autorizacao pertence ao link e nao pode regredir durante
+        // a jornada. Uma resposta posterior nunca deve trocar um link "Sim" para
+        // "Nao" e expor o CTA de contrato por engano.
+        setRequiresAuthorization((current) => current || authenticatedRequiresAuthorization);
+        setLinkData((current) => current
+          ? { ...current, requiresAuthorization: current.requiresAuthorization || authenticatedRequiresAuthorization }
+          : current);
+      }
+
+      if (result.state === 'pending_review_completed') {
+        setSuccessMessage('Seus dados foram enviados para análise. Em caso de dúvidas você pode entrar em contato com seu consultor.');
+        setStage('success');
+        return;
+      }
       if (result.state === 'completed') {
         setStage('completed');
         return;
@@ -489,6 +539,7 @@ export function PublicCadastroLink() {
     const pending = detailsErrors();
     if (pending.length) { setValidationErrors(pending); setError(''); return; }
     setError('');
+    void savePendingProgress('details');
     setStage('dependents');
   };
 
@@ -596,7 +647,7 @@ export function PublicCadastroLink() {
     return errors;
   };
 
-  const goReview = () => {
+  const goReview = async () => {
     if (flowMode === 'existing_member' && dependents.length === 0) {
       setValidationErrors(['Adicione ao menos um dependente.']);
       setError('');
@@ -604,11 +655,22 @@ export function PublicCadastroLink() {
     }
     const pending = dependentErrors();
     if (pending.length) { setValidationErrors(pending); setError(''); return; }
+
+    setBusy(true);
     setError('');
-    setStage(flowMode === 'existing_member' ? 'existing_contact' : 'review');
+    try {
+      const serverAuthorization = await savePendingProgress('dependents');
+      if (serverAuthorization === null) {
+        setError('Não foi possível confirmar a regra de autorização deste link. Tente novamente.');
+        return;
+      }
+      setStage(flowMode === 'existing_member' ? 'existing_contact' : 'review');
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const goExistingReview = () => {
+  const goExistingReview = async () => {
     const pending = [
       normalizePhone(form.telefone).length < 10 && 'Telefone / WhatsApp: informe um número válido com DDD.',
       !isEmail(form.email) && 'E-mail: informe um endereço válido.',
@@ -618,8 +680,19 @@ export function PublicCadastroLink() {
       setError('');
       return;
     }
+
+    setBusy(true);
     setError('');
-    setStage('existing_review');
+    try {
+      const serverAuthorization = await savePendingProgress('existing_contact');
+      if (serverAuthorization === null) {
+        setError('Não foi possível confirmar a regra de autorização deste link. Tente novamente.');
+        return;
+      }
+      setStage('existing_review');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const submitExistingDependents = async () => {
@@ -679,6 +752,115 @@ export function PublicCadastroLink() {
     ];
   };
 
+  const currentPendingSnapshot = () => {
+    if (flowMode === 'existing_member') {
+      return {
+        cadastro: {
+          cpf: removeCPFMask(cpf),
+          nome: existingMember?.nome || form.nome,
+          telefone: normalizePhone(form.telefone),
+          email: form.email.trim().toLowerCase(),
+          dependentes: dependents.map(({ id: _id, ...dep }) => dep),
+        },
+        member: existingMember,
+        plans: existingPlans,
+      };
+    }
+
+    return {
+      cadastro: {
+        cpf: removeCPFMask(cpf),
+        nome: form.nome,
+        dataNascimento: form.dataNascimento,
+        sexoCodigo: form.sexoCodigo,
+        nomeMae: form.nomeMae,
+        numeroMatricula: form.numeroMatricula,
+        telefone: normalizePhone(form.telefone),
+        email: form.email.trim().toLowerCase(),
+        contatos: buildContacts(),
+        endereco: { ...form.endereco, cep: form.endereco.cep.replace(/\D/g, '') },
+        titularPlano: form.titularPlano,
+        dependentes: dependents.map(({ id: _id, ...dep }) => dep),
+      },
+    };
+  };
+
+  const savePendingProgress = async (
+    progressStage: 'details' | 'dependents' | 'existing_contact' | 'review' | 'existing_review',
+  ): Promise<boolean | null> => {
+    if (!attemptToken) return null;
+    try {
+      const response = await fetch(apiUrl('cadastro-public-save-progress'), {
+        method: 'POST',
+        headers: publicHeaders(),
+        body: JSON.stringify({
+          attemptToken,
+          stage: progressStage,
+          snapshot: currentPendingSnapshot(),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok || typeof result.requiresAuthorization !== 'boolean') {
+        throw new Error(result.error || 'Regra de autorização não retornada pelo servidor.');
+      }
+
+      const serverRequiresAuthorization = result.requiresAuthorization === true;
+      setRequiresAuthorization((current) => current || serverRequiresAuthorization);
+      setLinkData((current) => current
+        ? { ...current, requiresAuthorization: current.requiresAuthorization || serverRequiresAuthorization }
+        : current);
+
+      return serverRequiresAuthorization;
+    } catch (progressError) {
+      console.warn('[PublicCadastroLink] Não foi possível persistir o progresso da solicitação:', progressError);
+      return null;
+    }
+  };
+
+  const finalizePendingReview = async (forceAuthorization = false) => {
+    if (!forceAuthorization && !authorizationRequired) return;
+
+    const pending = flowMode === 'existing_member'
+      ? [
+          ...dependentErrors(),
+          dependents.length === 0 && 'Adicione ao menos um dependente.',
+          normalizePhone(form.telefone).length < 10 && 'Telefone / WhatsApp: informe um número válido com DDD.',
+          !isEmail(form.email) && 'E-mail: informe um endereço válido.',
+        ].filter(Boolean) as string[]
+      : [...detailsErrors(), ...dependentErrors()];
+
+    if (pending.length) {
+      setValidationErrors(pending);
+      setError('');
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+    try {
+      const response = await fetch(apiUrl('cadastro-public-pending-finalize'), {
+        method: 'POST',
+        headers: publicHeaders(),
+        body: JSON.stringify({
+          attemptToken,
+          snapshot: currentPendingSnapshot(),
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        const fields = Array.isArray(result.fields) ? result.fields.join(' ') : '';
+        throw new Error(fields || result.error || 'Não foi possível finalizar a solicitação.');
+      }
+      setSuccessMessage('Seus dados foram enviados para análise. Em caso de dúvidas você pode entrar em contato com seu consultor.');
+      sessionStorage.removeItem('adesart-public-attempt-token');
+      setStage('success');
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : 'Não foi possível finalizar a solicitação.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const prepareContract = async () => {
     if (!isEmail(emailToConfirm)) { setError('Confirme um e-mail válido.'); return; }
     setBusy(true);
@@ -706,6 +888,15 @@ export function PublicCadastroLink() {
       });
       const result = await response.json();
       if (!response.ok || !result.ok) {
+        if (result.code === 'AUTHORIZATION_REVIEW_REQUIRED') {
+          setRequiresAuthorization(true);
+          setLinkData((current) => current
+            ? { ...current, requiresAuthorization: true }
+            : current);
+          setEmailModalOpen(false);
+          await finalizePendingReview(true);
+          return;
+        }
         if (result.code === 'CONTRACT_NOT_CONFIGURED' && Array.isArray(result.missingPlans)) {
           throw new Error(`Contrato ainda não configurado para o(s) plano(s): ${result.missingPlans.join(', ')}.`);
         }
@@ -829,11 +1020,23 @@ export function PublicCadastroLink() {
   if (stage === 'success') return shell(
     <div className="py-4 text-center">
       <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600" />
-      <h2 className="mt-4 text-2xl font-bold text-slate-900">{flowMode === 'existing_member' ? 'Dependente(s) incluído(s)' : 'Adesão recebida'}</h2>
-      <p className="mt-3 font-semibold text-emerald-700">{flowMode === 'existing_member' ? 'Sua solicitação foi concluída com sucesso.' : 'Parabéns! Sua adesão foi recebida com sucesso.'}</p>
-      <p className="mt-2 text-sm leading-6 text-slate-600">{successMessage}</p>
-      <ConsultantContact link={linkData} />
-      {flowMode !== 'existing_member' && <div className="mt-5"><AppButtons /></div>}
+      {authorizationRequired ? (
+        <>
+          <h2 className="mt-4 text-2xl font-bold text-slate-900">Solicitação recebida com sucesso</h2>
+          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600">
+            {successMessage || 'Seus dados foram enviados para análise. Em caso de dúvidas você pode entrar em contato com seu consultor.'}
+          </p>
+          <ConsultantContact link={linkData} />
+        </>
+      ) : (
+        <>
+          <h2 className="mt-4 text-2xl font-bold text-slate-900">{flowMode === 'existing_member' ? 'Dependente(s) incluído(s)' : 'Adesão recebida'}</h2>
+          <p className="mt-3 font-semibold text-emerald-700">{flowMode === 'existing_member' ? 'Sua solicitação foi concluída com sucesso.' : 'Parabéns! Sua adesão foi recebida com sucesso.'}</p>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{successMessage}</p>
+          <ConsultantContact link={linkData} />
+          {flowMode !== 'existing_member' && <div className="mt-5"><AppButtons /></div>}
+        </>
+      )}
     </div>
   );
 
@@ -963,7 +1166,14 @@ export function PublicCadastroLink() {
             <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Dependentes</span><strong className="mt-1 block text-slate-900">{dependents.length}</strong>{dependents.map((dep) => <p key={dep.id} className="mt-2 text-slate-600">{dep.nome} - {plans.find((plan) => plan.Plano === dep.plano)?.nomeExibicao}</p>)}</div>
             <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Contato</span><strong className="mt-1 block text-slate-900">{formatPhone(form.telefone)}</strong><span className="text-slate-600">{form.email}</span></div>
           </div>
-          <Button onClick={() => { setEmailToConfirm(form.email); setEmailModalOpen(true); setError(''); }} disabled={busy} className="mt-5 min-h-12 w-full text-base"><FileCheck2 className="mr-2 h-5 w-5" />Revisar termos da inclusão</Button>
+          {authorizationRequired ? (
+            <Button onClick={() => void finalizePendingReview()} disabled={busy} className="mt-5 min-h-12 w-full text-base">
+              {busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}
+              Finalizar
+            </Button>
+          ) : (
+            <Button onClick={() => { void savePendingProgress('existing_review'); setEmailToConfirm(form.email); setEmailModalOpen(true); setError(''); }} disabled={busy} className="mt-5 min-h-12 w-full text-base"><FileCheck2 className="mr-2 h-5 w-5" />Revisar termos da inclusão</Button>
+          )}
         </section>
       )}
 
@@ -977,7 +1187,14 @@ export function PublicCadastroLink() {
             <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Dependentes</span><strong className="mt-1 block text-slate-900">{dependents.length}</strong>{dependents.map((dep) => <p key={dep.id} className="mt-2 text-slate-600">{dep.nome} - {plans.find((plan) => plan.Plano === dep.plano)?.nomeExibicao}</p>)}</div>
             <div className="vm-public-info rounded-2xl p-4 sm:p-5"><span className="text-slate-500">Contato</span><strong className="mt-1 block text-slate-900">{formatPhone(form.telefone)}</strong><span className="text-slate-600">{form.email}</span></div>
           </div>
-          <Button onClick={() => { setEmailToConfirm(form.email); setEmailModalOpen(true); setError(''); }} className="mt-5 min-h-12 w-full text-base"><FileCheck2 className="mr-2 h-5 w-5" />Revisar contrato</Button>
+          {authorizationRequired ? (
+            <Button onClick={() => void finalizePendingReview()} disabled={busy} className="mt-5 min-h-12 w-full text-base">
+              {busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CheckCircle2 className="mr-2 h-5 w-5" />}
+              Finalizar
+            </Button>
+          ) : (
+            <Button onClick={() => { void savePendingProgress('review'); setEmailToConfirm(form.email); setEmailModalOpen(true); setError(''); }} className="mt-5 min-h-12 w-full text-base"><FileCheck2 className="mr-2 h-5 w-5" />Revisar contrato</Button>
+          )}
         </section>
       )}
 

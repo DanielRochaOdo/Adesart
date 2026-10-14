@@ -8,13 +8,14 @@ import { InclusaoDependenteModal } from '../components/cadastro/InclusaoDependen
 import { ContinuarInclusaoDependenteModal } from '../components/cadastro/ContinuarInclusaoDependenteModal';
 import { LinkCadastroCard } from '../components/cadastro/LinkCadastroCard';
 import { LinksGeradosList } from '../components/cadastro/LinksGeradosList';
+import { LinkPendenciasList } from '../components/cadastro/LinkPendenciasList';
 import { useCadastros, Cadastro as CadastroType } from '../hooks/useCadastros';
 import { Plus, FileText, Loader2, CheckCircle, UserPlus, Link as LinkIcon, ClipboardList } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../lib/supabase';
 
 interface CadastroPageState {
-  activeTab: 'novo' | 'link' | 'dependente' | 'incompletos' | 'completos';
+  activeTab: 'novo' | 'link' | 'dependente' | 'incompletos' | 'completos' | 'link_pendencias';
   selectedCadastroId: string | null;
   showInclusaoDependente: boolean;
 }
@@ -25,10 +26,13 @@ export function Cadastro() {
 
   const { profile } = useAuth();
   const { cadastros, stats, loading, error, loadCadastros, refresh } = useCadastros();
-  const [activeTab, setActiveTab] = useState<'novo' | 'link' | 'dependente' | 'incompletos' | 'completos'>('novo');
+  const [activeTab, setActiveTab] = useState<'novo' | 'link' | 'dependente' | 'incompletos' | 'completos' | 'link_pendencias'>('novo');
   const [selectedCadastro, setSelectedCadastro] = useState<CadastroType | null>(null);
   const [showInclusaoDependente, setShowInclusaoDependente] = useState(false);
   const [linkListReloadKey, setLinkListReloadKey] = useState(0);
+  const [linkPendenciasReloadKey, setLinkPendenciasReloadKey] = useState(0);
+  const [linkPendenciasCount, setLinkPendenciasCount] = useState(0);
+  const [selectedCadastroReturnTab, setSelectedCadastroReturnTab] = useState<'incompletos' | 'link_pendencias'>('incompletos');
 
   console.log('[Cadastro] 📊 Stats:', stats);
   console.log('[Cadastro] 📋 Cadastros length:', cadastros.length);
@@ -99,6 +103,34 @@ export function Cadastro() {
     }
   }, [activeTab, loadCadastros]);
 
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    let cancelled = false;
+
+    const loadLinkPendenciasCount = async () => {
+      const { count, error: countError } = await supabase
+        .from('link_pendencias')
+        .select('id', { count: 'exact', head: true })
+        .in('status', ['aguardando_analise', 'pronto_erp', 'enviando', 'erro_envio']);
+
+      if (countError) {
+        console.error('[Cadastro] Erro ao carregar contador de Link Pendências:', countError);
+        return;
+      }
+
+      if (!cancelled) {
+        setLinkPendenciasCount(count || 0);
+      }
+    };
+
+    void loadLinkPendenciasCount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.id, linkPendenciasReloadKey]);
+
   const handleNewCadastroSuccess = async (cadastro: CadastroType, isBlocked: boolean = false) => {
     await refresh();
 
@@ -109,7 +141,7 @@ export function Cadastro() {
     }
   };
 
-  const handleTabChange = (tab: 'novo' | 'link' | 'dependente' | 'incompletos' | 'completos') => {
+  const handleTabChange = (tab: 'novo' | 'link' | 'dependente' | 'incompletos' | 'completos' | 'link_pendencias') => {
     console.log('[Cadastro] 🔄 handleTabChange para tab:', tab);
     console.log('[Cadastro] 📋 Cadastros length atual:', cadastros.length);
 
@@ -123,17 +155,30 @@ export function Cadastro() {
       : null;
 
   const handleSelectCadastro = (cadastro: CadastroType) => {
+    setSelectedCadastroReturnTab('incompletos');
+    setSelectedCadastro(cadastro);
+  };
+
+  const handleSelectLinkPendingCadastro = (cadastro: CadastroType) => {
+    setSelectedCadastroReturnTab('link_pendencias');
     setSelectedCadastro(cadastro);
   };
 
   const handleCloseModal = () => {
     setSelectedCadastro(null);
-    setActiveTab('incompletos');
+    setActiveTab(selectedCadastroReturnTab);
+    if (selectedCadastroReturnTab === 'link_pendencias') {
+      setLinkPendenciasReloadKey((prev) => prev + 1);
+    }
   };
 
   const handleModalSuccess = () => {
-    refresh();
+    void refresh();
     setSelectedCadastro(null);
+    setActiveTab(selectedCadastroReturnTab);
+    if (selectedCadastroReturnTab === 'link_pendencias') {
+      setLinkPendenciasReloadKey((prev) => prev + 1);
+    }
   };
 
   return (
@@ -227,6 +272,20 @@ export function Cadastro() {
               </span>
             )}
           </button>
+          <button
+            onClick={() => handleTabChange('link_pendencias')}
+            className={`vm-cadastro-tab flex-1 sm:flex-none flex items-center justify-center rounded-xl px-4 py-2.5 text-xs font-semibold sm:px-4 sm:py-3 sm:text-sm whitespace-nowrap ${
+              activeTab === 'link_pendencias' ? 'vm-cadastro-tab-active' : ''
+            }`}
+          >
+            <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2 sm:mr-2" />
+            <span>Link Pendências</span>
+            {linkPendenciasCount > 0 && (
+              <span className="vm-tab-badge-warning ml-2 rounded-full px-2 py-0.5 text-xs font-extrabold">
+                {linkPendenciasCount}
+              </span>
+            )}
+          </button>
         </div>
 
         {loading ? (
@@ -287,6 +346,13 @@ export function Cadastro() {
             )}
             {activeTab === 'completos' && (
               <CadastrosCompletosList cadastros={cadastros} />
+            )}
+            {activeTab === 'link_pendencias' && (
+              <LinkPendenciasList
+                reloadKey={linkPendenciasReloadKey}
+                onSelectCadastro={handleSelectLinkPendingCadastro}
+                onCountChange={setLinkPendenciasCount}
+              />
             )}
           </div>
         )}

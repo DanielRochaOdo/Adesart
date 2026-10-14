@@ -9,6 +9,7 @@ import {
   normalizeDigits,
   resolveAttempt,
   sha256,
+  upsertLinkPendingJourney,
 } from "../_shared/public-flow.ts";
 
 const ERP_REQUEST_TIMEOUT_MS = 20_000;
@@ -559,6 +560,20 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Esta sessao nao permite concluir uma nova adesao.", code: "INVALID_FLOW_MODE" }, 409);
     }
 
+    const { data: currentLink, error: currentLinkError } = await supabase
+      .from("cadastro_links")
+      .select("id,requires_authorization")
+      .eq("id", attempt.link_id)
+      .maybeSingle();
+    if (currentLinkError) throw currentLinkError;
+    if (!currentLink) return jsonResponse({ error: "Link indisponivel", code: "LINK_UNAVAILABLE" }, 410);
+    if (currentLink.requires_authorization === true) {
+      return jsonResponse({
+        error: "Esta solicitacao deve ser finalizada para analise interna, sem contrato publico.",
+        code: "AUTHORIZATION_REVIEW_REQUIRED",
+      }, 409);
+    }
+
     stage = "load_contract_session";
     const tokenHash = await sha256(body.contractToken.trim());
     const { data: initialSession, error: sessionError } = await supabase
@@ -946,12 +961,43 @@ Deno.serve(async (req: Request) => {
     if (jobsError) throw jobsError;
 
     stage = "complete_attempt";
+    const completedAt = new Date().toISOString();
     const { error: attemptUpdateError } = await supabase.from("public_adesao_attempts").update({
       status: "completed",
-      completed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      completion_kind: "adhesion_completed",
+      completed_at: completedAt,
+      draft_snapshot: snapshot,
+      last_stage: "completed",
+      updated_at: completedAt,
     }).eq("id", attempt.id);
     if (attemptUpdateError) throw attemptUpdateError;
+
+    await upsertLinkPendingJourney({
+      supabase,
+      attempt: {
+        ...attempt,
+        status: "completed",
+        completion_kind: "adhesion_completed",
+        completed_at: completedAt,
+        draft_snapshot: snapshot,
+        last_stage: "completed",
+      },
+      link: {
+        id: l.id,
+        empresa_codigo: l.empresaCodigo,
+        empresa_nome: l.empresaNome,
+        created_by: l.createdBy,
+        vendedor_id: l.vendedorId,
+        team_id: l.teamId,
+        requires_authorization: false,
+      },
+      snapshot,
+      stage: "completed",
+      status: "enviado",
+      publicCompletedAt: completedAt,
+      cadastroId,
+      erpResponse: erpResult,
+    });
 
     stage = "deliver_contract";
     const deliveryResult = await triggerDeliveryWorker(claimed.id);

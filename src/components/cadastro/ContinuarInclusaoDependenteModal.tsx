@@ -17,6 +17,7 @@ import { EmpresaNaoIdentificadaModal } from './EmpresaNaoIdentificadaModal';
 import { ERP_MAX_FILE_SIZE, uploadToStorage, UploadedFile, validateFile } from '../../utils/uploadFile';
 import { compressFileForErp } from '../../utils/compressErpFile';
 import { clearDraft, loadDraft, saveBeforeFilePicker, saveDraft } from '../../utils/draftStorage';
+import { refreshLinkPendingReadiness } from '../../lib/linkPending';
 import { clearPendingFile, loadPendingFile, savePendingFile } from '../../utils/pendingFileStore';
 
 interface ContinuarInclusaoDependenteModalProps {
@@ -197,6 +198,10 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
   const [loadingEmpresa, setLoadingEmpresa] = useState(false);
 
   const funcionarioCadastroId = profile?.external_id ? parseInt(profile.external_id) : null;
+  const isLinkPending = Boolean(cadastro.link_pendencia_id);
+  const erpFuncionarioCadastroId = isLinkPending
+    ? Number(cadastro.vendedor_codigo || 0) || null
+    : funcionarioCadastroId;
 
   const setDependentesState = (value: React.SetStateAction<DependenteForm[]>) => {
     const next =
@@ -291,37 +296,38 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
       updated_at: new Date().toISOString()
     };
 
-    if (selectedEmpresa) {
-      updateData.empresa_id = selectedEmpresa.id;
-      updateData.empresa_codigo = selectedEmpresa.id;
-      updateData.empresa_nome = selectedEmpresa.nomeFantasia || selectedEmpresa.razaoSocial || empresaNome;
-      updateData.empresa_raw = selectedEmpresa.raw || selectedEmpresa;
-      updateData.empresa_cnpj = selectedEmpresa.cnpj || cadastro.empresa_cnpj;
-      // Snapshot dos planos já consultados, sem nova chamada ao ERP.
-      if (Array.isArray(selectedEmpresa.precoPlano) && selectedEmpresa.precoPlano.length > 0) {
-        updateData.planos_raw = selectedEmpresa.precoPlano;
+    if (!isLinkPending) {
+      if (selectedEmpresa) {
+        updateData.empresa_id = selectedEmpresa.id;
+        updateData.empresa_codigo = selectedEmpresa.id;
+        updateData.empresa_nome = selectedEmpresa.nomeFantasia || selectedEmpresa.razaoSocial || empresaNome;
+        updateData.empresa_raw = selectedEmpresa.raw || selectedEmpresa;
+        updateData.empresa_cnpj = selectedEmpresa.cnpj || cadastro.empresa_cnpj;
+        if (Array.isArray(selectedEmpresa.precoPlano) && selectedEmpresa.precoPlano.length > 0) {
+          updateData.planos_raw = selectedEmpresa.precoPlano;
+        }
+      } else {
+        updateData.empresa_codigo = empresaCodigo;
+        updateData.empresa_nome = empresaNome;
+        if (empresaCodigo && !cadastro.empresa_id) updateData.empresa_id = empresaCodigo;
       }
-    } else {
-      updateData.empresa_codigo = empresaCodigo;
-      updateData.empresa_nome = empresaNome;
-      if (empresaCodigo && !cadastro.empresa_id) updateData.empresa_id = empresaCodigo;
-    }
 
-    if (selectedVendedor) {
-      const vendedor = vendedores.find(v => v.id === selectedVendedor);
-      if (vendedor) {
-        updateData.vendedor_id = vendedor.id;
-        updateData.vendedor_codigo = vendedor.external_id;
-        updateData.vendedor_nome = vendedor.name;
+      if (selectedVendedor) {
+        const vendedor = vendedores.find(v => v.id === selectedVendedor);
+        if (vendedor) {
+          updateData.vendedor_id = vendedor.id;
+          updateData.vendedor_codigo = vendedor.external_id;
+          updateData.vendedor_nome = vendedor.name;
+        }
       }
-    }
 
-    if (selectedAdesionista) {
-      const adesionista = adesionistas.find(a => a.id === selectedAdesionista);
-      if (adesionista) {
-        updateData.adesionista_id = adesionista.id;
-        updateData.adesionista_codigo = adesionista.external_id;
-        updateData.adesionista_nome = adesionista.name;
+      if (selectedAdesionista) {
+        const adesionista = adesionistas.find(a => a.id === selectedAdesionista);
+        if (adesionista) {
+          updateData.adesionista_id = adesionista.id;
+          updateData.adesionista_codigo = adesionista.external_id;
+          updateData.adesionista_nome = adesionista.name;
+        }
       }
     }
 
@@ -343,9 +349,25 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
     if (profile?.id && draftHydratedRef.current) {
       saveDraft('continuar-inclusao-dependente-modal', buildDraftPayload(), profile.id, cadastro.id);
     }
+
+    if (cadastro.link_pendencia_id) {
+      try {
+        await refreshLinkPendingReadiness(cadastro.link_pendencia_id, cadastro.id);
+      } catch (readinessError) {
+        console.warn('[ContinuarInclusaoDependenteModal] Não foi possível recalcular a prontidão:', readinessError);
+      }
+    }
   };
 
   useEffect(() => {
+    if (isLinkPending) {
+      setSelectedVendedor(cadastro.vendedor_id || '');
+      setSelectedAdesionista(cadastro.adesionista_id || '');
+      fetchVendedores();
+      fetchAdesionistas();
+      return;
+    }
+
     if (profile?.role === 'VENDEDOR') {
       if (profile.id && profile.name && profile.external_id) {
         setSelectedVendedor(profile.id);
@@ -812,7 +834,8 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
 
     try {
       const dependente = dependentesRef.current[index];
-      if (dependente.arquivo?.path) {
+      const isLinkPending = Boolean(cadastro.link_pendencia_id);
+      if (dependente.arquivo?.path && !isLinkPending) {
         try {
           await supabase.storage
             .from('cadastros-temp-files')
@@ -833,11 +856,37 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
         prefix
       );
 
+      if (cadastro.link_pendencia_id) {
+        const { error: versionError } = await supabase
+          .from('link_pendencia_files')
+          .insert({
+            link_pendencia_id: cadastro.link_pendencia_id,
+            cadastro_id: cadastro.id,
+            bucket: 'cadastros-temp-files',
+            arquivo_path: uploadedFile.path,
+            arquivo_nome: uploadedFile.nome,
+            mime_type: uploadedFile.mime || file.type || 'application/octet-stream',
+            file_size_bytes: uploadedFile.size || file.size || null,
+            target_dependente_cpf: cpfLimpo || null,
+            target_dependente_nome: dependente.nome || null,
+            uploaded_by: profile.id,
+          });
+        if (versionError) throw versionError;
+      }
+
       const novosDependentes = dependentesRef.current.map((dep, idx) =>
         idx === index ? { ...dep, arquivo: uploadedFile, uploadingFile: false } : dep
       );
       setDependentesState(novosDependentes);
       persistContinuarDraftSnapshot(novosDependentes);
+
+      if (cadastro.link_pendencia_id) {
+        try {
+          await refreshLinkPendingReadiness(cadastro.link_pendencia_id, cadastro.id);
+        } catch (readinessError) {
+          console.warn('[ContinuarInclusaoDependenteModal] Anexo salvo, mas a prontidão não pôde ser recalculada:', readinessError);
+        }
+      }
 
       try {
         await clearPendingFile(profile.id, 'continuar-inclusao-dependente-modal', getPendingFileSlotKey(index));
@@ -845,7 +894,9 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
         console.warn('Erro ao limpar arquivo pendente apos upload:', err);
       }
 
-      setSuccess('Arquivo carregado com sucesso!');
+      setSuccess(cadastro.link_pendencia_id
+        ? 'Arquivo anexado e preservado no histórico da solicitação!'
+        : 'Arquivo carregado com sucesso!');
       setTimeout(() => setSuccess(''), 3000);
     } catch (err) {
       console.error('Erro ao fazer upload:', err);
@@ -989,8 +1040,8 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
       }
     }
 
-    if (!selectedVendedor) {
-      setError('Vendedor é obrigatório');
+    if (isLinkPending ? !erpFuncionarioCadastroId : !selectedVendedor) {
+      setError(isLinkPending ? 'O vendedor de origem do link não possui código externo válido.' : 'Vendedor é obrigatório');
       return false;
     }
 
@@ -1146,16 +1197,24 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
       await persistContinuarProgress();
 
       const vendedorSelecionado = vendedores.find(v => v.id === selectedVendedor);
-      if (!vendedorSelecionado?.external_id) {
-        setError('Vendedor selecionado não possui código externo válido');
+      const codigoParceiro = isLinkPending
+        ? erpFuncionarioCadastroId
+        : vendedorSelecionado?.external_id
+          ? parseInt(vendedorSelecionado.external_id)
+          : null;
+      if (!codigoParceiro) {
+        setError(isLinkPending
+          ? 'O vendedor de origem do link não possui código externo válido'
+          : 'Vendedor selecionado não possui código externo válido');
         setLoading(false);
         return;
       }
 
-      const codigoParceiro = parseInt(vendedorSelecionado.external_id);
-      const codigoAdesionista = adesionistas.find(a => a.id === selectedAdesionista)?.external_id
-        ? parseInt(adesionistas.find(a => a.id === selectedAdesionista)!.external_id)
-        : undefined;
+      const codigoAdesionista = isLinkPending
+        ? (cadastro.adesionista_codigo ? parseInt(cadastro.adesionista_codigo) : undefined)
+        : adesionistas.find(a => a.id === selectedAdesionista)?.external_id
+          ? parseInt(adesionistas.find(a => a.id === selectedAdesionista)!.external_id)
+          : undefined;
 
       const mesAnoAtual = new Date().toISOString().slice(0, 7);
 
@@ -1183,7 +1242,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
           numeroCarteira: "",
           observacaoUsuario: "",
           dataNascimento: formatDateFromISO(dataNascimentoISO),
-          funcionarioCadastro: funcionarioCadastroId,
+          funcionarioCadastro: erpFuncionarioCadastroId,
           dataCadastroLoteContrato: "",
           estadoCivil: 0
         };
@@ -1218,6 +1277,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
           headers: {
             'Authorization': `Bearer ${session.access_token}`,
             'Content-Type': 'application/json',
+            'X-Cadastro-Id': cadastro.id,
           },
           body: JSON.stringify(payload),
         }
@@ -1236,7 +1296,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
 
       erpInclusaoConcluida = true;
 
-      if (result?.data?.dados?.dependentes && result.data.dados.dependentes.length > 0) {
+      if (!cadastro.link_pendencia_id && result?.data?.dados?.dependentes && result.data.dados.dependentes.length > 0) {
         for (let i = 0; i < dependentesAtuais.length; i++) {
           const dep = dependentesAtuais[i];
           if (dep.arquivo && result.data.dados.dependentes[i]) {
@@ -1404,6 +1464,10 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
   };
 
   const handleEmpresaSelected = async (empresa: Empresa) => {
+    if (isLinkPending) {
+      setError('A empresa de origem da solicitação por link não pode ser alterada.');
+      return;
+    }
     setSelectedEmpresa(empresa);
     setEmpresaCodigo(empresa.id);
     setEmpresaNome(empresa.nomeFantasia);
@@ -1574,35 +1638,42 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {profile?.role !== 'VENDEDOR' && (
-              <Select
-                label="Vendedor"
-                value={selectedVendedor}
-                onChange={(e) => setSelectedVendedor(e.target.value)}
-                required
-              >
-                <option value="">Selecione</option>
-                {vendedores.map(v => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                  </option>
-                ))}
-              </Select>
-            )}
-
-            {profile?.role !== 'ADESIONISTA' && profile?.role !== 'VENDEDOR' && (
-              <Select
-                label="Adesionista (Opcional)"
-                value={selectedAdesionista}
-                onChange={(e) => setSelectedAdesionista(e.target.value)}
-              >
-                <option value="">Nenhum</option>
-                {adesionistas.map(a => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </Select>
+            {isLinkPending ? (
+              <div className="md:col-span-2 vm-cadastro-subcard rounded-xl p-4 text-sm">
+                <p><strong>Vendedor de origem:</strong> {cadastro.vendedor_nome || 'Não informado'} {cadastro.vendedor_codigo ? `(Código ${cadastro.vendedor_codigo})` : ''}</p>
+                {cadastro.adesionista_nome && (
+                  <p className="mt-1"><strong>Adesionista de origem:</strong> {cadastro.adesionista_nome}</p>
+                )}
+                <p className="vm-muted-text mt-2 text-xs">A atribuição de origem do link não pode ser alterada durante a análise.</p>
+              </div>
+            ) : (
+              <>
+                {profile?.role !== 'VENDEDOR' && (
+                  <Select
+                    label="Vendedor"
+                    value={selectedVendedor}
+                    onChange={(e) => setSelectedVendedor(e.target.value)}
+                    required
+                  >
+                    <option value="">Selecione</option>
+                    {vendedores.map(v => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </Select>
+                )}
+                {profile?.role !== 'ADESIONISTA' && profile?.role !== 'VENDEDOR' && (
+                  <Select
+                    label="Adesionista (Opcional)"
+                    value={selectedAdesionista}
+                    onChange={(e) => setSelectedAdesionista(e.target.value)}
+                  >
+                    <option value="">Nenhum</option>
+                    {adesionistas.map(a => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </Select>
+                )}
+              </>
             )}
           </div>
 
@@ -1835,7 +1906,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
                   <span className="font-medium text-slate-900">Dependentes:</span> {dependentes.length}
                 </div>
                 <div className="rounded-lg bg-white px-3 py-2 border border-emerald-100">
-                  <span className="font-medium text-slate-900">Vendedor:</span> {vendedores.find(v => v.id === selectedVendedor)?.name || '-'}
+                  <span className="font-medium text-slate-900">Vendedor:</span> {isLinkPending ? (cadastro.vendedor_nome || '-') : (vendedores.find(v => v.id === selectedVendedor)?.name || '-')}
                 </div>
                 <div className="rounded-lg bg-white px-3 py-2 border border-emerald-100">
                   <span className="font-medium text-slate-900">Arquivo obrigatório:</span> Sim
@@ -1865,7 +1936,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
                       <span className="text-sm text-emerald-700 flex-1">
                         {dep.arquivo ? dep.arquivo.nome : 'Arquivo já enviado'}
                       </span>
-                      {dep.arquivo && (
+                      {dep.arquivo && !cadastro.link_pendencia_id && (
                         <button
                           onClick={async () => {
                             try {

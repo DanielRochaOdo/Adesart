@@ -34,6 +34,7 @@ import br.com.vendamais.mobile.data.models.ErpAssociadoItem
 import br.com.vendamais.mobile.data.models.ErpAssociadoResponse
 import br.com.vendamais.mobile.data.models.LemmitLimitInfo
 import br.com.vendamais.mobile.data.models.LemmitResponse
+import br.com.vendamais.mobile.data.models.LinkPendenciaItem
 import br.com.vendamais.mobile.data.models.MobileProfile
 import br.com.vendamais.mobile.data.models.StatusAdesao
 import br.com.vendamais.mobile.data.models.TeamMemberOption
@@ -169,7 +170,7 @@ class CadastroWorkflowRepository(
             query = {
                 parameter(
                     "select",
-                    "id,empresa_codigo,empresa_nome,empresa_cnpj,vendedor_nome,vendedor_codigo,adesionista_id,adesionista_nome,adesionista_codigo,link_url,is_active,click_count,unique_visit_count,unique_visits_started_at,last_unique_visit_at,last_clicked_at,used_at,used_cpf,created_at,updated_at"
+                    "id,empresa_codigo,empresa_nome,empresa_cnpj,vendedor_nome,vendedor_codigo,adesionista_id,adesionista_nome,adesionista_codigo,link_url,is_active,requires_authorization,click_count,unique_visit_count,unique_visits_started_at,last_unique_visit_at,last_clicked_at,used_at,used_cpf,created_at,updated_at"
                 )
                 parameter("is_active", "eq.true")
                 parameter("order", "empresa_nome.asc,updated_at.desc")
@@ -187,7 +188,7 @@ class CadastroWorkflowRepository(
             query = {
                 parameter(
                     "select",
-                    "id,empresa_codigo,empresa_nome,empresa_cnpj,vendedor_nome,vendedor_codigo,adesionista_id,adesionista_nome,adesionista_codigo,link_url,is_active,click_count,unique_visit_count,unique_visits_started_at,last_unique_visit_at,last_clicked_at,used_at,used_cpf,created_at,updated_at,deleted_at,deleted_by"
+                    "id,empresa_codigo,empresa_nome,empresa_cnpj,vendedor_nome,vendedor_codigo,adesionista_id,adesionista_nome,adesionista_codigo,link_url,is_active,requires_authorization,click_count,unique_visit_count,unique_visits_started_at,last_unique_visit_at,last_clicked_at,used_at,used_cpf,created_at,updated_at,deleted_at,deleted_by"
                 )
                 parameter("vendedor_id", "eq.$userId")
                 parameter("order", "empresa_codigo.asc,created_at.desc")
@@ -262,6 +263,157 @@ class CadastroWorkflowRepository(
         }
     }
 
+    suspend fun fetchLinkPendencias(session: SavedSession): List<LinkPendenciaItem> {
+        return getList(
+            path = "link_pendencias",
+            session = session,
+            query = {
+                parameter(
+                    "select",
+                    "id,link_id,cpf,nome,empresa_codigo,empresa_nome,operation_type,requires_authorization,status,flow_stage,latest_snapshot,source_attempt_ids,source_link_ids,cadastro_id,first_attempt_at,last_activity_at,public_completed_at,sent_at,resolution_reason,last_error",
+                )
+                parameter("status", "in.(aguardando_analise,pronto_erp,enviando,erro_envio)")
+                parameter("order", "last_activity_at.desc")
+                parameter("limit", 1000)
+            },
+        )
+    }
+
+    suspend fun promoteLinkPendencia(
+        session: SavedSession,
+        pendingId: String,
+    ): CadastroDetalhe {
+        val response: JsonElement = client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-link-pending-promote",
+            json = json,
+            body = buildJsonObject { put("pendingId", pendingId) },
+        ) {
+            applyAuthHeaders(session)
+        }
+
+        val root = response as? JsonObject
+            ?: throw IllegalStateException("Resposta invalida ao abrir Link Pendencias.")
+        val explicitError = root["error"]?.jsonPrimitive?.contentOrNull
+        if (!explicitError.isNullOrBlank()) throw IllegalStateException(explicitError)
+        val cadastroJson = root["cadastro"]
+            ?: throw IllegalStateException("Cadastro da pendencia nao foi retornado.")
+        return json.decodeFromJsonElement(CadastroDetalhe.serializer(), cadastroJson)
+    }
+
+    suspend fun savePublicLinkProgress(
+        attemptToken: String,
+        stage: String,
+        snapshot: JsonElement,
+    ) {
+        client.safePost<JsonElement>(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-save-progress",
+            json = json,
+            body = buildJsonObject {
+                put("attemptToken", attemptToken.trim())
+                put("stage", stage.trim())
+                put("snapshot", snapshot)
+            },
+        )
+    }
+
+    suspend fun finalizePublicPending(
+        attemptToken: String,
+        snapshot: JsonElement,
+    ): PublicCadastroSubmitResponse {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-pending-finalize",
+            json = json,
+            body = buildJsonObject {
+                put("attemptToken", attemptToken.trim())
+                put("snapshot", snapshot)
+            },
+        )
+    }
+
+    suspend fun refreshLinkPendenciaReadiness(
+        session: SavedSession,
+        pendingId: String,
+        cadastroId: String,
+    ): JsonElement {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-link-pending-readiness",
+            json = json,
+            body = buildJsonObject {
+                put("pendingId", pendingId)
+                put("cadastroId", cadastroId)
+            },
+        ) {
+            applyAuthHeaders(session)
+        }
+    }
+
+    suspend fun updateLinkPendenciaStatus(
+        session: SavedSession,
+        pendingId: String,
+        status: String,
+        lastError: String? = null,
+        erpResponse: JsonElement? = null,
+        markSent: Boolean = false,
+    ) {
+        val now = java.time.OffsetDateTime.now().toString()
+        val payload = buildJsonObject {
+            put("status", status)
+            put("last_activity_at", now)
+            put("updated_at", now)
+            if (lastError == null) put("last_error", JsonNull) else put("last_error", lastError)
+            erpResponse?.let { put("erp_response", it) }
+            if (markSent) {
+                put("sent_at", now)
+                put("sent_by", session.userId)
+                put("resolved_at", now)
+                put("resolution_reason", "sent_to_erp")
+            }
+        }
+        client.safePatch<JsonElement>(
+            url = "${AppConfig.supabaseUrl}/rest/v1/link_pendencias?id=eq.$pendingId",
+            json = json,
+            body = payload,
+        ) {
+            applyAuthHeaders(session)
+            header("Prefer", "return=minimal")
+        }
+    }
+
+    suspend fun registerLinkPendenciaFile(
+        session: SavedSession,
+        pendingId: String,
+        cadastroId: String,
+        file: UploadedTempFile,
+        targetCpf: String? = null,
+        targetNome: String? = null,
+    ) {
+        val body = buildJsonObject {
+            put("link_pendencia_id", pendingId)
+            put("cadastro_id", cadastroId)
+            put("bucket", "cadastros-temp-files")
+            put("arquivo_path", file.path)
+            put("arquivo_nome", file.nome)
+            put("mime_type", file.mime)
+            put("file_size_bytes", file.size)
+            targetCpf?.filter(Char::isDigit)?.takeIf { it.isNotBlank() }?.let {
+                put("target_dependente_cpf", it)
+            }
+            targetNome?.trim()?.takeIf { it.isNotBlank() }?.let {
+                put("target_dependente_nome", it)
+            }
+            put("uploaded_by", session.userId)
+        }
+
+        client.safePost<JsonElement>(
+            url = "${AppConfig.supabaseUrl}/rest/v1/link_pendencia_files",
+            json = json,
+            body = body,
+        ) {
+            applyAuthHeaders(session)
+            header("Prefer", "return=minimal")
+        }
+    }
+
     suspend fun fetchCadastroLinkHistory(
         session: SavedSession,
         linkId: String,
@@ -286,6 +438,7 @@ class CadastroWorkflowRepository(
         empresa: EmpresaResumo,
         vendedor: TeamMemberOption? = null,
         adesionista: TeamMemberOption? = null,
+        requiresAuthorization: Boolean = false,
     ): CadastroLinkItem {
         val rawToken = CadastroLinkCrypto.generateCadastroLinkToken()
         val tokenHash = CadastroLinkCrypto.hashCadastroLinkToken(rawToken)
@@ -321,6 +474,7 @@ class CadastroWorkflowRepository(
             put("empresa_cnpj", empresa.cnpj)
             put("empresa_raw", empresa.raw ?: JsonObject(emptyMap()))
             put("empresa_exige_matricula", empresa.exigeMatricula ?: 0)
+            put("requires_authorization", requiresAuthorization)
             put("planos_raw", empresa.precoPlano ?: buildJsonArray {})
             put("vendedor_id", vendedorId)
             put("vendedor_codigo", vendedorCodigo)
@@ -661,7 +815,16 @@ class CadastroWorkflowRepository(
             validateCadastroReady(cadastro, config)
             val targetCadastroId = cadastro.id.ifBlank { cadastroId }
 
-            val funcionarioCadastroId = profile.externalId?.toIntOrNull()
+            val isLinkPending = !cadastro.linkPendenciaId.isNullOrBlank()
+            val funcionarioCadastroId = if (isLinkPending) {
+                cadastro.vendedorCodigo?.toIntOrNull()
+            } else {
+                profile.externalId?.toIntOrNull()
+            }
+            if (isLinkPending && funcionarioCadastroId == null) {
+                throw IllegalStateException("O vendedor de origem do link nao possui codigo externo valido.")
+            }
+
             val baseData = CadastroPayloadBuilder.detailToBaseData(json, cadastro)
             val dependentes = CadastroPayloadBuilder.detailDependentes(json, cadastro, funcionarioCadastroId ?: 0)
             val payload = CadastroPayloadBuilder.buildErpPayload(
@@ -671,8 +834,8 @@ class CadastroWorkflowRepository(
                 ?: throw IllegalStateException("Empresa nao vinculada ao cadastro."),
                 vendedorCodigo = cadastro.vendedorCodigo,
                 funcionarioCadastroId = funcionarioCadastroId,
-                userRole = profile.role,
-                userExternalId = profile.externalId,
+                userRole = if (isLinkPending) null else profile.role,
+                userExternalId = if (isLinkPending) null else profile.externalId,
                 adesionistaCodigo = cadastro.adesionistaCodigo,
                 arquivoPath = cadastro.arquivoPath,
             )
@@ -799,7 +962,9 @@ class CadastroWorkflowRepository(
                 id = cadastroAtual.id,
                 payload = buildJsonObject {
                     put("arquivo_path", arquivoAtual)
-                    put("created_by", session.userId)
+                    if (cadastroAtual.linkPendenciaId.isNullOrBlank()) {
+                        put("created_by", session.userId)
+                    }
                 },
             )
         }.onFailure { throwable ->
@@ -990,7 +1155,7 @@ class CadastroWorkflowRepository(
                 parameter("id", "eq.$id")
                 parameter(
                     "select",
-                    "id,status,tipo_cadastro,nome,cpf,data_nascimento,sexo_codigo,nome_mae,contatos,endereco,dependentes,empresa_id,empresa_codigo,empresa_nome,empresa_cnpj,empresa_exige_matricula,empresa_raw,planos_raw,numero_matricula,status_adesao_id,vendedor_id,vendedor_nome,vendedor_codigo,adesionista_id,adesionista_nome,adesionista_codigo,responsavel_financeiro_codigo,responsavel_financeiro_nome,responsavel_financeiro_cpf,contatos_responsavel_financeiro,motivo_bloqueio,erp_dados_associado,erp_response,arquivo_path,arquivo_nome,arquivo_mime_type,arquivo_tamanho,plano_codigo,plano_nome,created_at,updated_at"
+                    "id,status,created_by,team_id,tipo_cadastro,nome,cpf,data_nascimento,sexo_codigo,nome_mae,contatos,endereco,dependentes,empresa_id,empresa_codigo,empresa_nome,empresa_cnpj,empresa_exige_matricula,empresa_raw,planos_raw,numero_matricula,status_adesao_id,vendedor_id,vendedor_nome,vendedor_codigo,adesionista_id,adesionista_nome,adesionista_codigo,responsavel_financeiro_codigo,responsavel_financeiro_nome,responsavel_financeiro_cpf,contatos_responsavel_financeiro,motivo_bloqueio,erp_dados_associado,erp_response,arquivo_path,arquivo_nome,arquivo_mime_type,arquivo_tamanho,link_pendencia_id,plano_codigo,plano_nome,created_at,updated_at"
                 )
                 parameter("limit", 1)
             },
@@ -1036,7 +1201,9 @@ class CadastroWorkflowRepository(
 
         val payloadComAuditoria = buildJsonObject {
             payload.forEach { (key, value) -> put(key, value) }
-            put("created_by", session.userId)
+            if (cadastro.linkPendenciaId.isNullOrBlank()) {
+                put("created_by", session.userId)
+            }
         }
         return runCatching {
             patchCadastroById(session, cadastro.id, payloadComAuditoria)
@@ -1052,13 +1219,19 @@ class CadastroWorkflowRepository(
         payload: JsonObject,
         resolveDraftConflict: Boolean = true,
     ): CadastroDetalhe {
+        val currentOrigin = runCatching { fetchCadastroDetalhe(session, id) }.getOrNull()
+        val isLinkPending = !currentOrigin?.linkPendenciaId.isNullOrBlank()
         val payloadComCreatedBy = buildJsonObject {
-            payload.forEach { (key, value) -> put(key, value) }
+            payload.forEach { (key, value) ->
+                if (!(isLinkPending && key in setOf("created_by", "team_id"))) {
+                    put(key, value)
+                }
+            }
             val createdByPayload = payload["created_by"]
                 ?.jsonPrimitive
                 ?.contentOrNull
                 ?.trim()
-            if (createdByPayload.isNullOrBlank()) {
+            if (!isLinkPending && createdByPayload.isNullOrBlank()) {
                 put("created_by", session.userId)
             }
         }
@@ -1505,7 +1678,7 @@ class CadastroWorkflowRepository(
         if (cadastro.nome.isNullOrBlank()) throw IllegalStateException("Cadastro sem nome.")
         if (cadastro.dataNascimento.isNullOrBlank()) throw IllegalStateException("Cadastro sem data de nascimento.")
         if ((cadastro.empresaId ?: cadastro.empresaCodigo) == null) throw IllegalStateException("Selecione uma empresa antes de enviar.")
-        if (config?.exigirArquivo == true && cadastro.arquivoPath.isNullOrBlank()) {
+        if ((cadastro.linkPendenciaId != null || config?.exigirArquivo == true) && cadastro.arquivoPath.isNullOrBlank()) {
             throw IllegalStateException("Anexo obrigatorio. Selecione um arquivo antes de finalizar.")
         }
         validateEnderecoCepForErp(cadastro.endereco)
@@ -1522,9 +1695,9 @@ class CadastroWorkflowRepository(
                 throw IllegalStateException("Selecione um plano valido para $alvo antes de enviar.")
             }
         }
-        if (config?.exigirArquivo == true && cadastro.arquivoPath.isNullOrBlank()) {
-            Log.w(logTag, "validateCadastroReady arquivo ausente id=${cadastro.id} exigirArquivo=true")
-            throw IllegalStateException("Esta configuracao exige arquivo anexado antes do envio.")
+        if ((cadastro.linkPendenciaId != null || config?.exigirArquivo == true) && cadastro.arquivoPath.isNullOrBlank()) {
+            Log.w(logTag, "validateCadastroReady arquivo ausente id=${cadastro.id} linkPendencia=${cadastro.linkPendenciaId != null} exigirArquivo=${config?.exigirArquivo == true}")
+            throw IllegalStateException("Esta solicitacao exige arquivo anexado antes do envio.")
         }
     }
 
@@ -1622,11 +1795,12 @@ class CadastroWorkflowRepository(
         }
 
         val cpfFromPayload = extractCpfFromErpPayload(payload)
-        val cpfFromCadastro = runCatching {
-            fetchCadastroDetalhe(session, cadastroId).cpf
-                ?.filter(Char::isDigit)
-                ?.takeIf { it.length == 11 }
+        val cadastroDetalhe = runCatching {
+            fetchCadastroDetalhe(session, cadastroId)
         }.getOrNull()
+        val cpfFromCadastro = cadastroDetalhe?.cpf
+            ?.filter(Char::isDigit)
+            ?.takeIf { it.length == 11 }
         val cpfForSync = cpfFromPayload ?: cpfFromCadastro
 
         val body = buildJsonObject {
@@ -1638,7 +1812,9 @@ class CadastroWorkflowRepository(
                 put("motivo_bloqueio", JsonNull)
             }
             cpfForSync?.let { put("cpf", it) }
-            put("created_by", session.userId)
+            if (cadastroDetalhe != null && cadastroDetalhe.linkPendenciaId.isNullOrBlank()) {
+                put("created_by", session.userId)
+            }
         }
 
         Log.i(

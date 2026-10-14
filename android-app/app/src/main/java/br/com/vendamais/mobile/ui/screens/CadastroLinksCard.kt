@@ -130,7 +130,7 @@ fun CadastroLinksCard(
     onSearchEmpresa: () -> Unit,
     onSelectEmpresa: (EmpresaResumo) -> Unit,
     onClearEmpresa: () -> Unit,
-    onGenerateLink: () -> Unit,
+    onGenerateLink: (Boolean) -> Unit,
     onRegenerateLink: (String) -> Unit,
     onDeleteLink: (String) -> Unit,
     onOpenHistory: (String) -> Unit,
@@ -141,6 +141,8 @@ fun CadastroLinksCard(
     var pendingEmpresa by remember { mutableStateOf<EmpresaResumo?>(null) }
     var showObservacoesModal by remember { mutableStateOf(false) }
     var showAuthorizationModal by remember { mutableStateOf(false) }
+    var showAuthorizationWarning by remember { mutableStateOf(false) }
+    var selectedRequiresAuthorization by remember { mutableStateOf<Boolean?>(null) }
     var authorizationError by remember { mutableStateOf<String?>(null) }
     var invalidCompanyName by remember { mutableStateOf<String?>(null) }
     var associadosDialog by remember { mutableStateOf<AssociadosDialogState?>(null) }
@@ -314,6 +316,14 @@ fun CadastroLinksCard(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodySmall,
                             )
+                            selectedRequiresAuthorization?.let { requires ->
+                                Text(
+                                    text = "Autorizacao: ${if (requires) "Sim" else "Nao"}",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                            }
                         }
 
                         if (isGerente) {
@@ -361,8 +371,15 @@ fun CadastroLinksCard(
 
                         VendaButton(
                             label = "Gerar link publico",
-                            onClick = onGenerateLink,
-                            enabled = !isGerente || workspace.selectedVendedorId.isNotBlank(),
+                            onClick = {
+                                when (selectedRequiresAuthorization) {
+                                    true -> showAuthorizationWarning = true
+                                    false -> onGenerateLink(false)
+                                    null -> authorizationError = "Informe se a empresa requer autorizacao antes de gerar o link."
+                                }
+                            },
+                            enabled = (!isGerente || workspace.selectedVendedorId.isNotBlank()) &&
+                                selectedRequiresAuthorization != null,
                             loading = workspace.operationLoading,
                             leadingIcon = Icons.Rounded.Share,
                             modifier = Modifier.fillMaxWidth(),
@@ -373,6 +390,7 @@ fun CadastroLinksCard(
                             onClick = {
                                 authorizationError = null
                                 pendingEmpresa = null
+                                selectedRequiresAuthorization = null
                                 onClearEmpresa()
                             },
                             leadingIcon = Icons.Rounded.Edit,
@@ -536,8 +554,10 @@ fun CadastroLinksCard(
                     TextButton(
                         onClick = {
                             showAuthorizationModal = false
-                            authorizationError = "O QR Code não tem permissão ser gerado"
+                            authorizationError = null
+                            selectedRequiresAuthorization = true
                             pendingEmpresa = null
+                            onSelectEmpresa(empresa)
                         },
                     ) { Text("Sim") }
                 },
@@ -546,6 +566,7 @@ fun CadastroLinksCard(
                         onClick = {
                             showAuthorizationModal = false
                             authorizationError = null
+                            selectedRequiresAuthorization = false
                             pendingEmpresa = null
                             onSelectEmpresa(empresa)
                         },
@@ -553,6 +574,37 @@ fun CadastroLinksCard(
                 },
             )
         }
+    }
+
+    if (showAuthorizationWarning) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!workspace.operationLoading) showAuthorizationWarning = false
+            },
+            title = { Text("Empresa com autorizacao obrigatoria") },
+            text = {
+                Text(
+                    "As solicitacoes iniciadas por este link, concluidas ou nao, serao registradas em Link Pendencias. " +
+                        "Nenhum cadastro sera enviado automaticamente ao S4E. A adesao somente sera concluida apos a analise interna, " +
+                        "inclusao do anexo obrigatorio e envio manual ao ERP.",
+                )
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showAuthorizationWarning = false },
+                    enabled = !workspace.operationLoading,
+                ) { Text("Cancelar") }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showAuthorizationWarning = false
+                        onGenerateLink(true)
+                    },
+                    enabled = !workspace.operationLoading,
+                ) { Text("Entendi, gerar link") }
+            },
+        )
     }
 
     invalidCompanyName?.let { empresaNome ->
@@ -1137,6 +1189,12 @@ private fun LinkHistoryDialog(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
+                            text = "Tipo do link: ${if (link.requiresAuthorization) "Requer autorizacao" else "Fluxo normal"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
                             text = "Vendedor: ${link.vendedorNome ?: "-"} (Código ${link.vendedorCodigo ?: "-"})",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1383,9 +1441,18 @@ private fun LinkHistoryRowCard(row: CadastroLinkHistoryRow) {
 
 @Composable
 private fun historyStatusColor(status: String) = when (status) {
-    "Concluiu a adesão" -> EmeraldSoft
-    "Chegou ao contrato e não concluiu" -> MaterialTheme.colorScheme.tertiaryContainer
-    "Validou CPF/data e abandonou depois" -> MaterialTheme.colorScheme.secondaryContainer
+    "Concluiu a adesão",
+    "Concluiu adesão após nova tentativa",
+    "Incluiu dependente",
+    "Concluiu inclusão de dependente após nova tentativa",
+    -> EmeraldSoft
+    "Finalizou solicitação — aguardando análise",
+    "Finalizou solicitação após nova tentativa",
+    "Chegou ao contrato e não concluiu",
+    -> MaterialTheme.colorScheme.tertiaryContainer
+    "Validou CPF/data e abandonou depois",
+    "Validou associado e abandonou inclusão de dependente",
+    -> MaterialTheme.colorScheme.secondaryContainer
     else -> MaterialTheme.colorScheme.surface
 }
 

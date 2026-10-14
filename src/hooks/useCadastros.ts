@@ -55,6 +55,10 @@ const CADASTRO_LIST_COLUMNS = [
   'adesionista_codigo',
   'adesionista_nome',
   'arquivo_path',
+  'arquivo_nome',
+  'arquivo_mime_type',
+  'arquivo_tamanho',
+  'link_pendencia_id',
 ].join(', ');
 
 const normalizeCpf = (value?: string | null) => (value || '').replace(/\D/g, '');
@@ -138,6 +142,10 @@ export interface Cadastro {
   adesionista_codigo: string | null;
   adesionista_nome: string | null;
   arquivo_path: string | null;
+  arquivo_nome?: string | null;
+  arquivo_mime_type?: string | null;
+  arquivo_tamanho?: number | null;
+  link_pendencia_id?: string | null;
   responsavel_financeiro_codigo: number | null;
   responsavel_financeiro_nome: string | null;
   responsavel_financeiro_cpf: string | null;

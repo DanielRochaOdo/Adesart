@@ -18,6 +18,7 @@ import { supabase } from '../../lib/supabase';
 import { ERP_MAX_FILE_SIZE, uploadToStorage, UploadedFile, validateFile } from '../../utils/uploadFile';
 import { compressFileForErp } from '../../utils/compressErpFile';
 import { clearDraft, loadDraft, saveBeforeFilePicker, saveDraft } from '../../utils/draftStorage';
+import { refreshLinkPendingReadiness } from '../../lib/linkPending';
 
 interface CadastroModalProps {
   cadastro: Cadastro;
@@ -84,6 +85,10 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
   const funcionarioCadastroId = profile?.external_id ? parseInt(profile.external_id) : null;
 
   const cadastroAtual = cadastroFresh || cadastro;
+  const isLinkPending = Boolean(cadastroAtual.link_pendencia_id);
+  const erpFuncionarioCadastroId = isLinkPending
+    ? Number(cadastroAtual.vendedor_codigo || 0) || null
+    : funcionarioCadastroId;
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -166,7 +171,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
       }
     }
 
-    return {
+    const editableData = {
       nome: formData.nome || null,
       data_nascimento: dataNascimento,
       sexo_codigo: formData.sexo !== '' && formData.sexo !== null && formData.sexo !== undefined ? formData.sexo : null,
@@ -176,6 +181,17 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
       endereco: formData.endereco,
       dependentes,
       arquivo_path: arquivo ? arquivo.path : null,
+      arquivo_nome: arquivo?.nome || cadastroAtual.arquivo_nome || null,
+      arquivo_mime_type: arquivo?.mime || cadastroAtual.arquivo_mime_type || null,
+      arquivo_tamanho: arquivo?.size || cadastroAtual.arquivo_tamanho || null,
+    };
+
+    if (isLinkPending) {
+      return editableData;
+    }
+
+    return {
+      ...editableData,
       empresa_id: selectedEmpresa?.id || cadastroAtual.empresa_id || null,
       empresa_codigo: selectedEmpresa?.id || cadastroAtual.empresa_codigo || null,
       empresa_nome: selectedEmpresa?.nomeFantasia || selectedEmpresa?.razaoSocial || cadastroAtual.empresa_nome || null,
@@ -187,7 +203,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
         Array.isArray(selectedEmpresa?.precoPlano) && selectedEmpresa.precoPlano.length > 0
           ? selectedEmpresa.precoPlano
           : cadastroAtual.planos_raw || null,
-      // Completa apenas a atribuição do próprio vendedor, sem substituir terceiros.
+      // Fluxos normais podem completar a atribuição do próprio vendedor.
       ...(profile?.role === 'VENDEDOR' && profile.id && profile.external_id &&
         (!cadastroAtual.vendedor_id || cadastroAtual.vendedor_id === profile.id) &&
         (!cadastroAtual.vendedor_codigo || cadastroAtual.vendedor_codigo === profile.external_id)
@@ -203,6 +219,15 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
   const persistCadastroProgress = async (logContext?: 'save' | 'close') => {
     const updated = await updateCadastro(cadastroAtual.id, buildCadastroProgressData(logContext));
     setCadastroFresh(updated as Cadastro);
+
+    if (cadastroAtual.link_pendencia_id) {
+      try {
+        await refreshLinkPendingReadiness(cadastroAtual.link_pendencia_id, cadastroAtual.id);
+      } catch (readinessError) {
+        console.warn('[CadastroModal] Não foi possível recalcular a prontidão da pendência:', readinessError);
+      }
+    }
+
     return updated;
   };
 
@@ -323,7 +348,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
             planoValor: String(dep?.planoValor ?? dep?.valorPlano ?? dep?.plano_valor ?? '0,00'),
             nomeMae: dep?.nomeMae ?? dep?.nome_mae ?? '',
             carenciaAtendimento: Number(dep?.carenciaAtendimento ?? 0) || 0,
-            funcionarioCadastro: Number(dep?.funcionarioCadastro ?? funcionarioCadastroId ?? 0) || 0,
+            funcionarioCadastro: Number(dep?.funcionarioCadastro ?? erpFuncionarioCadastroId ?? 0) || 0,
           } as Dependente;
         });
 
@@ -336,10 +361,10 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
       if (cadastroAtual.arquivo_path) {
         const fileName = cadastroAtual.arquivo_path.split('/').pop() || 'arquivo';
         setArquivo({
-          nome: fileName,
+          nome: cadastroAtual.arquivo_nome || fileName,
           path: cadastroAtual.arquivo_path,
-          mime: 'application/octet-stream',
-          size: 0
+          mime: cadastroAtual.arquivo_mime_type || 'application/octet-stream',
+          size: Number(cadastroAtual.arquivo_tamanho || 0)
         });
       }
       cadastroStateInitializedRef.current = true;
@@ -481,7 +506,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
           planoValor: '0,00',
           nomeMae: formData.nomeMae || '',
           carenciaAtendimento: 0,
-          funcionarioCadastro: funcionarioCadastroId || 0,
+          funcionarioCadastro: erpFuncionarioCadastroId || 0,
         };
 
         setDependentes([responsavelComoDependente]);
@@ -489,7 +514,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
     } catch (err) {
       console.error('[CadastroModal] Erro ao criar titular automÃ¡tico:', err);
     }
-  }, [dependentesInicializados, planosEmpresa, cadastroAtual?.cpf, cadastroAtual?.dependentes, funcionarioCadastroId, loadingPlanos, formData.sexo, formData.nome, formData.dataNascimento, formData.nomeMae, dependentes.length]);
+  }, [dependentesInicializados, planosEmpresa, cadastroAtual?.cpf, cadastroAtual?.dependentes, erpFuncionarioCadastroId, loadingPlanos, formData.sexo, formData.nome, formData.dataNascimento, formData.nomeMae, dependentes.length]);
 
   useEffect(() => {
     try {
@@ -522,6 +547,11 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
   };
 
   const handleEmpresaSelected = async (empresa: Empresa) => {
+    if (isLinkPending) {
+      setError('A empresa de origem da solicitação por link não pode ser alterada.');
+      return;
+    }
+
     setSelectedEmpresa(empresa);
     setError('');
 
@@ -642,7 +672,11 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
     setError('');
 
     try {
-      if (arquivo?.path) {
+      const isLinkPending = Boolean(cadastroAtual.link_pendencia_id);
+
+      // No fluxo Link Pendencias nenhum anexo anterior e destruido: todas as
+      // versoes precisam permanecer disponiveis para envio e auditoria no ERP.
+      if (arquivo?.path && !isLinkPending) {
         try {
           await supabase.storage
             .from('cadastros-temp-files')
@@ -663,14 +697,45 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
         `cadastros/${cadastroAtual.id}`
       );
 
+      if (cadastroAtual.link_pendencia_id) {
+        const { error: versionError } = await supabase
+          .from('link_pendencia_files')
+          .insert({
+            link_pendencia_id: cadastroAtual.link_pendencia_id,
+            cadastro_id: cadastroAtual.id,
+            bucket: 'cadastros-temp-files',
+            arquivo_path: uploadedFile.path,
+            arquivo_nome: uploadedFile.nome,
+            mime_type: uploadedFile.mime || file.type || 'application/octet-stream',
+            file_size_bytes: uploadedFile.size || file.size || null,
+            uploaded_by: profile.id,
+          });
+        if (versionError) throw versionError;
+      }
+
       setArquivo(uploadedFile);
       setPendingCompressionFile(null);
 
       await updateCadastro(cadastroAtual.id, {
-        arquivo_path: uploadedFile.path
+        arquivo_path: uploadedFile.path,
+        arquivo_nome: uploadedFile.nome,
+        arquivo_mime_type: uploadedFile.mime || file.type || 'application/octet-stream',
+        arquivo_tamanho: uploadedFile.size || file.size || null,
       });
 
-      setSuccess('Arquivo carregado com sucesso!');
+      if (cadastroAtual.link_pendencia_id) {
+        try {
+          await refreshLinkPendingReadiness(cadastroAtual.link_pendencia_id, cadastroAtual.id);
+        } catch (readinessError) {
+          console.warn('[CadastroModal] Anexo salvo, mas a prontidão da pendência não pôde ser recalculada:', readinessError);
+        }
+      }
+
+      setSuccess(
+        cadastroAtual.link_pendencia_id
+          ? 'Arquivo anexado e preservado no histórico da solicitação!'
+          : 'Arquivo carregado com sucesso!'
+      );
       setTimeout(() => setSuccess(''), 3000);
     } finally {
       setUploadingFile(false);
@@ -748,12 +813,16 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
       return false;
     }
 
-    if (!funcionarioCadastroId) {
-      setError('CÃ³digo do usuÃ¡rio (External ID) nÃ£o configurado. Configure seu cÃ³digo na pÃ¡gina de Perfil antes de cadastrar.');
+    if (!erpFuncionarioCadastroId) {
+      setError(
+        isLinkPending
+          ? 'O vendedor de origem do link não possui código externo válido.'
+          : 'Código do usuário (External ID) não configurado. Configure seu código na página de Perfil antes de cadastrar.'
+      );
       return false;
     }
 
-    if (requireArquivo && config?.exigir_arquivo && !arquivo) {
+    if (requireArquivo && (Boolean(cadastroAtual.link_pendencia_id) || config?.exigir_arquivo) && !arquivo) {
       setError('Campo obrigatÃ³rio: Arquivo (documento)');
       return false;
     }
@@ -890,9 +959,9 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
         cadastroCompleto,
         selectedEmpresa.id,
         cadastroAtual.vendedor_codigo,
-        funcionarioCadastroId,
-        profile?.role,
-        profile?.external_id,
+        erpFuncionarioCadastroId,
+        isLinkPending ? null : profile?.role,
+        isLinkPending ? null : profile?.external_id,
         cadastroAtual.adesionista_codigo
       );
 
@@ -939,6 +1008,12 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
 
   const handleRetryWithVendedor = async (vendedorCodigo: string, vendedorNome: string) => {
     setShowParceiroInvalidoModal(false);
+
+    if (cadastroAtual.link_pendencia_id) {
+      setError('O vendedor de origem da solicitação por link não pode ser alterado. Trate o erro do ERP mantendo a atribuição original.');
+      return;
+    }
+
     setLoading(true);
     setError('');
 
@@ -1191,10 +1266,20 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
         <div className="p-6 space-y-6">
           {currentStep === 1 ? (
             <>
-              <EmpresaSearchCard
-                onEmpresaSelected={handleEmpresaSelected}
-                selectedEmpresa={selectedEmpresa}
-              />
+              {isLinkPending ? (
+                <div className="vm-cadastro-subcard rounded-2xl p-4">
+                  <p className="vm-muted-text text-xs font-medium uppercase tracking-wide">Empresa de origem</p>
+                  <p className="vm-page-title mt-1 font-semibold">
+                    {cadastroAtual.empresa_codigo} - {cadastroAtual.empresa_nome}
+                  </p>
+                  <p className="vm-muted-text mt-1 text-xs">A empresa não pode ser alterada em uma solicitação originada por link.</p>
+                </div>
+              ) : (
+                <EmpresaSearchCard
+                  onEmpresaSelected={handleEmpresaSelected}
+                  selectedEmpresa={selectedEmpresa}
+                />
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
@@ -1473,7 +1558,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
                 <DependentesSection
                   dependentes={dependentes}
                   planos={planosEmpresa}
-                  funcionarioCadastro={funcionarioCadastroId}
+                  funcionarioCadastro={erpFuncionarioCadastroId}
                   onChange={setDependentes}
                   onEditingStateChange={setDependenteEmEdicao}
                 />
@@ -1497,7 +1582,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
                     <span className="font-medium text-slate-900">Dependentes:</span> {dependentes.length}
                   </div>
                   <div className="rounded-lg bg-white px-3 py-2 border border-emerald-100">
-                    <span className="font-medium text-slate-900">Arquivo obrigatório:</span> {config?.exigir_arquivo ? 'Sim' : 'Não'}
+                    <span className="font-medium text-slate-900">Arquivo obrigatório:</span> {isLinkPending || config?.exigir_arquivo ? 'Sim' : 'Não'}
                   </div>
                   <div className="rounded-lg bg-white px-3 py-2 border border-emerald-100 md:col-span-2">
                     <span className="font-medium text-slate-900">Planos selecionados:</span> {planosSelecionadosResumo}
@@ -1510,7 +1595,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">
-                      Arquivo {config?.exigir_arquivo && <span className="text-red-500">*</span>}
+                      Arquivo {(isLinkPending || config?.exigir_arquivo) && <span className="text-red-500">*</span>}
                     </label>
                     <input
                       type="file"
@@ -1546,22 +1631,24 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
                           <p className="text-xs text-emerald-700 font-medium">
                             {arquivo.nome}
                           </p>
-                          <button
-                            onClick={async () => {
-                              try {
-                                await supabase.storage
-                                  .from('cadastros-temp-files')
-                                  .remove([arquivo.path]);
-                              } catch (err) {
-                                console.error('Erro ao remover arquivo:', err);
-                              }
-                              setArquivo(null);
-                            }}
-                            className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors"
-                            title="Remover arquivo"
-                          >
-                            <Trash className="w-4 h-4" />
-                          </button>
+                          {!cadastroAtual.link_pendencia_id && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  await supabase.storage
+                                    .from('cadastros-temp-files')
+                                    .remove([arquivo.path]);
+                                } catch (err) {
+                                  console.error('Erro ao remover arquivo:', err);
+                                }
+                                setArquivo(null);
+                              }}
+                              className="p-1 text-red-600 hover:bg-red-100 rounded transition-colors"
+                              title="Remover arquivo"
+                            >
+                              <Trash className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}
@@ -1604,7 +1691,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
           )}
 
           <div className="flex flex-col sm:flex-row gap-3 pt-4">
-            {canDelete && (profile?.role !== 'CADASTRO' || ['incompleto', 'adesoes_pendentes'].includes(cadastroAtual.status)) && (
+            {canDelete && !cadastroAtual.link_pendencia_id && (profile?.role !== 'CADASTRO' || ['incompleto', 'adesoes_pendentes'].includes(cadastroAtual.status)) && (
               <Button
                 variant="secondary"
                 onClick={handleDelete}

@@ -41,6 +41,7 @@ interface CadastroLinkRow {
   adesionista_codigo: string | null;
   link_url: string | null;
   is_active: boolean;
+  requires_authorization: boolean;
   unique_visit_count: number | null;
   unique_visits_started_at: string | null;
   used_at: string | null;
@@ -69,8 +70,14 @@ interface AssociadoResumo {
 type HistoryStatus =
   | 'Informou CPF e chegou à consulta dos dados'
   | 'Validou CPF/data e abandonou depois'
+  | 'Validou associado e abandonou inclusão de dependente'
   | 'Chegou ao contrato e não concluiu'
   | 'Concluiu a adesão'
+  | 'Concluiu adesão após nova tentativa'
+  | 'Incluiu dependente'
+  | 'Concluiu inclusão de dependente após nova tentativa'
+  | 'Finalizou solicitação — aguardando análise'
+  | 'Finalizou solicitação após nova tentativa'
   | 'Apenas abriu o link';
 
 interface LinkHistoryRow {
@@ -91,6 +98,7 @@ interface LinkHistorySummary {
   legacyClickCount: number;
   visitsStartedAt: string | null;
   identifiedAttempts: number;
+  rawAttemptCount?: number;
   anonymousDetailed: number;
   detailedAccessEvents: number;
   lastClickedAt: string | null;
@@ -173,10 +181,17 @@ const countDependentesCadastrados = (dependentes: unknown) => {
 const historyStatusClass = (status: HistoryStatus) => {
   switch (status) {
     case 'Concluiu a adesão':
+    case 'Concluiu adesão após nova tentativa':
+    case 'Incluiu dependente':
+    case 'Concluiu inclusão de dependente após nova tentativa':
       return 'bg-emerald-500/20 text-emerald-800 border-emerald-500/30 dark:bg-emerald-400/20 dark:text-emerald-100 dark:border-emerald-300/25';
+    case 'Finalizou solicitação — aguardando análise':
+    case 'Finalizou solicitação após nova tentativa':
+      return 'bg-amber-500/20 text-amber-900 border-amber-500/30 dark:bg-amber-400/20 dark:text-amber-100 dark:border-amber-300/25';
     case 'Chegou ao contrato e não concluiu':
       return 'vm-history-status-contract';
     case 'Validou CPF/data e abandonou depois':
+    case 'Validou associado e abandonou inclusão de dependente':
       return 'bg-blue-500/20 text-blue-800 border-blue-500/30 dark:bg-blue-400/20 dark:text-blue-100 dark:border-blue-300/25';
     case 'Informou CPF e chegou à consulta dos dados':
       return 'bg-violet-500/20 text-violet-800 border-violet-500/30 dark:bg-violet-400/20 dark:text-violet-100 dark:border-violet-300/25';
@@ -238,7 +253,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
     try {
       const { data, error: queryError } = await supabase
         .from('cadastro_links')
-        .select('id, created_by, team_id, empresa_codigo, empresa_nome, empresa_cnpj, empresa_raw, empresa_exige_matricula, planos_raw, vendedor_id, vendedor_nome, vendedor_codigo, adesionista_id, adesionista_nome, adesionista_codigo, link_url, is_active, unique_visit_count, unique_visits_started_at, used_at, used_cpf, created_at, updated_at')
+        .select('id, created_by, team_id, empresa_codigo, empresa_nome, empresa_cnpj, empresa_raw, empresa_exige_matricula, planos_raw, vendedor_id, vendedor_nome, vendedor_codigo, adesionista_id, adesionista_nome, adesionista_codigo, link_url, is_active, requires_authorization, unique_visit_count, unique_visits_started_at, used_at, used_cpf, created_at, updated_at')
         .eq('is_active', true)
         .order('empresa_nome', { ascending: true })
         .order('updated_at', { ascending: false });
@@ -507,6 +522,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
       'Código do vendedor': row.vendedorCodigo || '',
       Empresa: row.empresaNome,
       'Código da empresa': row.empresaCodigo,
+      'Tipo do link': selectedHistoryLink.requires_authorization ? 'Requer autorização' : 'Fluxo normal',
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(exportRows);
@@ -521,6 +537,7 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
       { wch: 18 },
       { wch: 34 },
       { wch: 18 },
+      { wch: 22 },
     ];
 
     const workbook = XLSX.utils.book_new();
@@ -702,9 +719,16 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                               )}
                             </div>
 
-                            <span className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold ${statusClasses}`}>
-                              {status}
-                            </span>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`inline-flex w-fit items-center rounded-full px-2.5 py-1 text-xs font-semibold ${statusClasses}`}>
+                                {status}
+                              </span>
+                              {link.requires_authorization && (
+                                <span className="inline-flex w-fit items-center rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700 dark:bg-red-500/20 dark:text-red-200">
+                                  Restrição
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           <div className="vm-cadastro-subcard break-all rounded-2xl p-4 text-sm text-slate-700 dark:text-slate-200">
@@ -813,6 +837,9 @@ export function LinksGeradosList({ reloadKey = 0 }: LinksGeradosListProps) {
                   {selectedHistoryLink.empresa_nome} • Codigo {selectedHistoryLink.empresa_codigo}
                 </p>
                 <p className="vm-meta-text mt-1 text-[11px] sm:text-xs">
+                  <span className="block font-semibold">
+                    Tipo do link: {selectedHistoryLink.requires_authorization ? 'Requer autorização' : 'Fluxo normal'}
+                  </span>
                   Vendedor: {selectedHistoryLink.vendedor_nome} (Código {selectedHistoryLink.vendedor_codigo})
                   {selectedHistoryLink.adesionista_id && (
                     <span className="block">Adesionista: {selectedHistoryLink.adesionista_nome || 'Não identificado'}{selectedHistoryLink.adesionista_codigo?.trim() ? ` (Código ${selectedHistoryLink.adesionista_codigo})` : ''}</span>

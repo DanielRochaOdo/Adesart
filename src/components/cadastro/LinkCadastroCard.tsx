@@ -65,6 +65,7 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
   const [generatedLink, setGeneratedLink] = useState<GeneratedLink | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
   const [showAuthorizationModal, setShowAuthorizationModal] = useState(false);
+  const [showAuthorizationWarning, setShowAuthorizationWarning] = useState(false);
   const [requiresAuthorization, setRequiresAuthorization] = useState<boolean | null>(null);
   const resolvedVendedorCodigo = profile?.external_id?.trim() || '0';
   const isGerente = profile?.role === 'GERENTE';
@@ -171,15 +172,10 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
     setSuccess('');
     setCopySuccess(false);
 
-    if (requires) {
-      setError('O QR Code não tem permissão ser gerado');
-      return;
-    }
-
     setError('');
   };
 
-  const handleGenerateLink = async () => {
+  const generateLinkNow = async () => {
     setError('');
     setSuccess('');
     setCopySuccess(false);
@@ -194,12 +190,8 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
       return;
     }
 
-    if (requiresAuthorization !== false) {
-      setError(
-        requiresAuthorization
-          ? 'O QR Code não tem permissão ser gerado'
-          : 'Informe se a empresa requer autorização antes de gerar o QR Code',
-      );
+    if (requiresAuthorization === null) {
+      setError('Informe se a empresa requer autorização antes de gerar o QR Code');
       return;
     }
 
@@ -242,6 +234,7 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
         empresa_cnpj: selectedEmpresa.cnpj || null,
         empresa_raw: selectedEmpresa.raw || selectedEmpresa,
         empresa_exige_matricula: selectedEmpresa.exigeMatricula || 0,
+        requires_authorization: requiresAuthorization,
         planos_raw: selectedEmpresa.precoPlano || [],
         vendedor_id: vendedorId,
         vendedor_codigo: vendedorCodigo,
@@ -271,6 +264,24 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGenerateLink = () => {
+    setError('');
+    setSuccess('');
+    setCopySuccess(false);
+
+    if (requiresAuthorization === null) {
+      setError('Informe se a empresa requer autorização antes de gerar o QR Code');
+      return;
+    }
+
+    if (requiresAuthorization) {
+      setShowAuthorizationWarning(true);
+      return;
+    }
+
+    void generateLinkNow();
   };
 
   const handleCopyLink = async () => {
@@ -304,6 +315,37 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
               </Button>
               <Button onClick={() => handleAuthorizationAnswer(false)}>
                 Não
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAuthorizationWarning && selectedEmpresa && (
+        <div className="vm-modal-overlay fixed inset-0 z-40 flex items-center justify-center p-4">
+          <div className="vm-glass-modal w-full max-w-lg overflow-hidden rounded-2xl">
+            <div className="vm-glass-modal-bar border-b p-6">
+              <h2 className="vm-page-title text-xl font-semibold">Empresa com autorização obrigatória</h2>
+              <p className="vm-muted-text mt-3 text-sm leading-6">
+                As solicitações iniciadas por este link, concluídas ou não, serão registradas em
+                <strong> Link Pendências</strong>. Nenhum cadastro será enviado automaticamente ao S4E.
+                A adesão somente será concluída após a análise interna, inclusão do anexo obrigatório
+                e envio manual ao ERP.
+              </p>
+            </div>
+            <div className="vm-glass-modal-bar flex justify-end gap-3 border-t p-6">
+              <Button variant="secondary" onClick={() => setShowAuthorizationWarning(false)} disabled={loading}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={() => {
+                  setShowAuthorizationWarning(false);
+                  void generateLinkNow();
+                }}
+                disabled={loading}
+              >
+                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Entendi, gerar link
               </Button>
             </div>
           </div>
@@ -374,7 +416,7 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
             </div>
           )}
 
-          {selectedEmpresa && requiresAuthorization === false && (
+          {selectedEmpresa && requiresAuthorization !== null && (
             <div className="mt-6 space-y-4">
               {isGerente && (
                 <div>
@@ -429,7 +471,7 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
               disabled={
                 loading ||
                 !selectedEmpresa ||
-                requiresAuthorization !== false ||
+                requiresAuthorization === null ||
                 (isGerente && (!selectedVendedor || loadingVendedores || Boolean(vendedorError)))
               }
             >
@@ -448,7 +490,7 @@ export function LinkCadastroCard({ onGenerated }: LinkCadastroCardProps) {
           </div>
         </div>
 
-        {generatedLink && requiresAuthorization === false && (
+        {generatedLink && (
           <div className="vm-cadastro-card rounded-3xl p-6">
             <h4 className="vm-page-title mb-2 text-base font-semibold">Link Gerado</h4>
             <p className="vm-muted-text mb-4 text-sm">

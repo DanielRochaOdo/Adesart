@@ -185,6 +185,7 @@ fun InclusaoDependenteDialog(
     val scope = rememberCoroutineScope()
     val profile = state.profile
     val isContinuacao = cadastro != null
+    val isLinkPending = !cadastro?.linkPendenciaId.isNullOrBlank()
 
     var tipoBusca by rememberSaveable { mutableStateOf(InclusaoBuscaTipo.CODIGO) }
     var valorBusca by rememberSaveable(stateSaver = textFieldValueSaver()) { mutableStateOf(TextFieldValue("")) }
@@ -203,6 +204,7 @@ fun InclusaoDependenteDialog(
     var selectedVendedorId by rememberSaveable {
         mutableStateOf(
             when {
+                isLinkPending -> cadastro?.vendedorId.orEmpty()
                 profile?.role == "VENDEDOR" -> profile.id
                 state.cadastroWorkspace.selectedVendedorId.isNotBlank() -> state.cadastroWorkspace.selectedVendedorId
                 else -> ""
@@ -210,7 +212,13 @@ fun InclusaoDependenteDialog(
         )
     }
     var selectedAdesionistaId by rememberSaveable {
-        mutableStateOf(if (profile?.role == "ADESIONISTA") profile.id else "")
+        mutableStateOf(
+            when {
+                isLinkPending -> cadastro?.adesionistaId.orEmpty()
+                profile?.role == "ADESIONISTA" -> profile.id
+                else -> ""
+            },
+        )
     }
     var selectedStatusId by rememberSaveable { mutableStateOf(cadastro?.statusAdesaoId.orEmpty()) }
     var showSelectStatusDialog by rememberSaveable { mutableStateOf(false) }
@@ -251,28 +259,64 @@ fun InclusaoDependenteDialog(
     val cpfValidationErrors = remember { mutableStateMapOf<Int, String>() }
     val consultedCpfByIndex = remember { mutableStateMapOf<Int, String>() }
 
-    suspend fun persistInclusaoDraftNow() {
-        val cadastroAtual = cadastro ?: return
-        val responsavelAtual = responsavelSelecionado ?: return
-        val vendedorAtual = if (profile?.role == "VENDEDOR") {
+    fun resolveVendedor(): TeamMemberOption? {
+        if (isLinkPending) {
+            val code = cadastro?.vendedorCodigo?.trim().orEmpty()
+            if (code.isBlank()) return null
+            return TeamMemberOption(
+                cadastro?.vendedorId.orEmpty(),
+                cadastro?.vendedorNome.orEmpty(),
+                "",
+                code,
+            )
+        }
+        return if (profile?.role == "VENDEDOR") {
             TeamMemberOption(profile.id, profile.name, profile.email, profile.externalId)
         } else {
-            state.vendedores.firstOrNull { it.id == selectedVendedorId } ?: return
+            state.vendedores.firstOrNull { it.id == selectedVendedorId }
         }
-        val adesionistaAtual = if (profile?.role == "ADESIONISTA") {
+    }
+
+    fun resolveAdesionista(): TeamMemberOption? {
+        if (isLinkPending) {
+            val code = cadastro?.adesionistaCodigo?.trim().orEmpty()
+            if (code.isBlank()) return null
+            return TeamMemberOption(
+                cadastro?.adesionistaId.orEmpty(),
+                cadastro?.adesionistaNome.orEmpty(),
+                "",
+                code,
+            )
+        }
+        return if (profile?.role == "ADESIONISTA") {
             TeamMemberOption(profile.id, profile.name, profile.email, profile.externalId)
         } else {
             state.adesionistas.firstOrNull { it.id == selectedAdesionistaId }
         }
-        val empresaCodigoAtual = when {
-            empresaCodigo > 0 -> empresaCodigo
-            responsavelAtual.codigoEmpresa != null && responsavelAtual.codigoEmpresa > 0 -> responsavelAtual.codigoEmpresa
-            else -> 0
+    }
+
+    suspend fun persistInclusaoDraftNow() {
+        val cadastroAtual = cadastro ?: return
+        val responsavelAtual = responsavelSelecionado ?: return
+        val vendedorAtual = resolveVendedor() ?: return
+        val adesionistaAtual = resolveAdesionista()
+        val empresaCodigoAtual = if (isLinkPending) {
+            cadastroAtual.empresaCodigo ?: cadastroAtual.empresaId ?: 0
+        } else {
+            when {
+                empresaCodigo > 0 -> empresaCodigo
+                responsavelAtual.codigoEmpresa != null && responsavelAtual.codigoEmpresa > 0 -> responsavelAtual.codigoEmpresa
+                else -> 0
+            }
         }
-        val empresaNomeAtual = empresaNome.takeIf { it.isNotBlank() } ?: responsavelAtual.empresa.orEmpty()
+        val empresaNomeAtual = if (isLinkPending) {
+            cadastroAtual.empresaNome.orEmpty()
+        } else {
+            empresaNome.takeIf { it.isNotBlank() } ?: responsavelAtual.empresa.orEmpty()
+        }
         val payload = buildCadastroPayload(
-            profileId = profile?.id.orEmpty(),
-            teamId = profile?.teamId,
+            profileId = if (isLinkPending) cadastro?.createdBy.orEmpty() else profile?.id.orEmpty(),
+            teamId = if (isLinkPending) cadastro?.teamId else profile?.teamId,
             responsavel = responsavelAtual,
             empresaCodigo = empresaCodigoAtual,
             empresaNome = empresaNomeAtual,
@@ -294,8 +338,11 @@ fun InclusaoDependenteDialog(
         bytes: ByteArray,
     ) {
         validateUpload(fileName, mimeType, bytes.size.toLong())
-        dependentes[index].arquivo?.path?.takeIf { it.isNotBlank() }?.let { path ->
-            runCatching { viewModel.deleteTempFile(path) }
+        val linkPendingId = cadastro?.linkPendenciaId
+        if (linkPendingId.isNullOrBlank()) {
+            dependentes[index].arquivo?.path?.takeIf { it.isNotBlank() }?.let { path ->
+                runCatching { viewModel.deleteTempFile(path) }
+            }
         }
         val cpf = dependentes[index].cpf.text.ifBlank { "0" }
         val uploaded = viewModel.uploadTempFile(
@@ -304,9 +351,27 @@ fun InclusaoDependenteDialog(
             bytes = bytes,
             prefix = if (isContinuacao) "dependentes-continuar/$cpf" else "dependentes-temp/$cpf",
         )
+        if (!linkPendingId.isNullOrBlank() && cadastro != null) {
+            viewModel.registerLinkPendenciaFile(
+                pendingId = linkPendingId,
+                cadastroId = cadastro.id,
+                file = uploaded,
+                targetCpf = dependentes[index].cpf.text,
+                targetNome = dependentes[index].nome,
+            )
+        }
         updateDependente(dependentes, index) { it.copy(arquivo = uploaded, uploading = false, saved = false) }
         runCatching { persistInclusaoDraftNow() }
-        localNotice = "Arquivo carregado com sucesso."
+        if (!linkPendingId.isNullOrBlank() && cadastro != null) {
+            runCatching {
+                viewModel.refreshLinkPendenciaReadiness(linkPendingId, cadastro.id)
+            }
+        }
+        localNotice = if (linkPendingId.isNullOrBlank()) {
+            "Arquivo carregado com sucesso."
+        } else {
+            "Arquivo anexado e preservado no historico da solicitacao."
+        }
     }
 
     suspend fun openDependenteArquivoPreview(index: Int) {
@@ -410,22 +475,6 @@ fun InclusaoDependenteDialog(
         }
     }
 
-    fun resolveVendedor(): TeamMemberOption? {
-        return if (profile?.role == "VENDEDOR") {
-            TeamMemberOption(profile.id, profile.name, profile.email, profile.externalId)
-        } else {
-            state.vendedores.firstOrNull { it.id == selectedVendedorId }
-        }
-    }
-
-    fun resolveAdesionista(): TeamMemberOption? {
-        return if (profile?.role == "ADESIONISTA") {
-            TeamMemberOption(profile.id, profile.name, profile.email, profile.externalId)
-        } else {
-            state.adesionistas.firstOrNull { it.id == selectedAdesionistaId }
-        }
-    }
-
     androidx.compose.runtime.LaunchedEffect(
         cadastro?.id,
         cadastro?.vendedorCodigo,
@@ -436,7 +485,10 @@ fun InclusaoDependenteDialog(
         profile?.role,
         profile?.id,
     ) {
-        if (profile?.role == "VENDEDOR") {
+        if (isLinkPending) {
+            selectedVendedorId = cadastro?.vendedorId.orEmpty()
+            selectedAdesionistaId = cadastro?.adesionistaId.orEmpty()
+        } else if (profile?.role == "VENDEDOR") {
             selectedVendedorId = profile.id
         } else if (selectedVendedorId.isBlank() && state.cadastroWorkspace.selectedVendedorId.isNotBlank()) {
             selectedVendedorId = state.cadastroWorkspace.selectedVendedorId
@@ -633,7 +685,7 @@ fun InclusaoDependenteDialog(
         if (!ensureStatusSelecionado()) return
         if (!ensureEmpresaIdentificada(responsavel)) return
         val vendedor = resolveVendedor()
-        if (profile?.role != "VENDEDOR" && state.vendedores.isEmpty()) {
+        if (!isLinkPending && profile?.role != "VENDEDOR" && state.vendedores.isEmpty()) {
             localError = "Nenhum vendedor disponível. Entre em contato com o administrador."
             return
         }
@@ -655,8 +707,8 @@ fun InclusaoDependenteDialog(
         }
 
         val payload = buildCadastroPayload(
-            profileId = profile?.id.orEmpty(),
-            teamId = profile?.teamId,
+            profileId = if (isLinkPending) cadastro?.createdBy.orEmpty() else profile?.id.orEmpty(),
+            teamId = if (isLinkPending) cadastro?.teamId else profile?.teamId,
             responsavel = responsavel,
             empresaCodigo = resolveEmpresaCodigo(responsavel),
             empresaNome = resolveEmpresaNome(responsavel),
@@ -671,6 +723,11 @@ fun InclusaoDependenteDialog(
 
         if (cadastro != null) {
             viewModel.updateCadastroRecord(cadastro.id, payload)
+            if (isLinkPending && !cadastro.linkPendenciaId.isNullOrBlank()) {
+                runCatching {
+                    viewModel.refreshLinkPendenciaReadiness(cadastro.linkPendenciaId, cadastro.id)
+                }
+            }
             localNotice = "Rascunho salvo com sucesso."
             onSuccess()
         } else {
@@ -688,16 +745,16 @@ fun InclusaoDependenteDialog(
         }
         if (!ensureEmpresaIdentificada(responsavel)) return
         val vendedor = resolveVendedor()
-        if (profile?.role != "VENDEDOR" && state.vendedores.isEmpty()) {
+        if (!isLinkPending && profile?.role != "VENDEDOR" && state.vendedores.isEmpty()) {
             localError = "Nenhum vendedor disponível. Entre em contato com o administrador."
             return
         }
-        val codigoParceiro = if (profile?.role == "VENDEDOR") {
-            profile.externalId?.toIntOrNull()
-        } else {
-            vendedor?.externalId?.toIntOrNull()
-        } ?: run {
-            localError = "Vendedor sem codigo externo valido."
+        val codigoParceiro = vendedor?.externalId?.toIntOrNull() ?: run {
+            localError = if (isLinkPending) {
+                "O vendedor de origem do link não possui código externo válido."
+            } else {
+                "Vendedor sem codigo externo valido."
+            }
             return
         }
 
@@ -712,11 +769,18 @@ fun InclusaoDependenteDialog(
                 return
             }
         }
+        if (!cadastro?.linkPendenciaId.isNullOrBlank()) {
+            val missingAttachment = base.indexOfFirst { it.arquivo == null || it.arquivo.path.isBlank() }
+            if (missingAttachment >= 0) {
+                localError = "Anexo obrigatorio: inclua o arquivo do Dependente ${missingAttachment + 1} antes de enviar ao ERP."
+                return
+            }
+        }
 
         val adesionista = resolveAdesionista()
         val prePayload = buildCadastroPayload(
-            profileId = profile?.id.orEmpty(),
-            teamId = profile?.teamId,
+            profileId = if (isLinkPending) cadastro?.createdBy.orEmpty() else profile?.id.orEmpty(),
+            teamId = if (isLinkPending) cadastro?.teamId else profile?.teamId,
             responsavel = responsavel,
             empresaCodigo = resolveEmpresaCodigo(responsavel),
             empresaNome = resolveEmpresaNome(responsavel),
@@ -739,7 +803,7 @@ fun InclusaoDependenteDialog(
                 responsavelCodigo = responsavel.codigo,
                 parceiroCodigo = codigoParceiro,
                 adesionistaCodigo = adesionista?.externalId?.toIntOrNull() ?: 0,
-                funcionarioCodigo = profile?.externalId?.toIntOrNull() ?: 0,
+                funcionarioCodigo = if (isLinkPending) codigoParceiro else profile?.externalId?.toIntOrNull() ?: 0,
                 dependentes = base,
             ),
             cadastroId = cadastroId,
@@ -747,14 +811,14 @@ fun InclusaoDependenteDialog(
 
         val hasAttachments = base.any { it.arquivo != null }
         val finalPayloadBase = buildCadastroPayload(
-            profileId = profile?.id.orEmpty(),
-            teamId = profile?.teamId,
+            profileId = if (isLinkPending) cadastro?.createdBy.orEmpty() else profile?.id.orEmpty(),
+            teamId = if (isLinkPending) cadastro?.teamId else profile?.teamId,
             responsavel = responsavel,
             empresaCodigo = resolveEmpresaCodigo(responsavel),
             empresaNome = resolveEmpresaNome(responsavel),
             empresaRaw = empresaRaw,
             planosRaw = empresaPlanosRaw ?: extractPlanosRawFromEmpresa(empresaRaw),
-            status = if (hasAttachments) "incompleto" else "enviado",
+            status = if (!cadastro?.linkPendenciaId.isNullOrBlank()) "enviado" else if (hasAttachments) "incompleto" else "enviado",
             statusAdesaoId = selectedStatusId.takeIf { it.isNotBlank() },
             vendedor = vendedor ?: TeamMemberOption("", "", "", null),
             adesionista = adesionista,
@@ -779,7 +843,7 @@ fun InclusaoDependenteDialog(
 
         val codes = extractDependenteCodes(response)
         val funcionario = profile?.externalId?.toIntOrNull() ?: 0
-        if (hasAttachments) {
+        if (hasAttachments && cadastro?.linkPendenciaId.isNullOrBlank()) {
             if (funcionario <= 0 || cadastroId == null) {
                 throw IllegalStateException(
                     "Dependentes criados no ERP, mas o anexo nao pode ser enfileirado. O cadastro foi mantido pendente para nova tentativa.",
@@ -803,7 +867,7 @@ fun InclusaoDependenteDialog(
             }
         }
 
-        completionHasPendingAttachments = hasAttachments
+        completionHasPendingAttachments = hasAttachments && cadastro?.linkPendenciaId.isNullOrBlank()
         cadastroId?.let { id ->
             runCatching {
                 viewModel.closeDuplicateInclusaoPendentes(
@@ -915,7 +979,27 @@ fun InclusaoDependenteDialog(
                         VendaWizardProgress(currentStep = inclusaoStep, labels = listOf("Dependentes", "Documento"))
                     }
 
-                if (profile?.role != "VENDEDOR") {
+                if (isLinkPending) {
+                    OutlinedTextField(
+                        value = listOfNotNull(
+                            cadastro?.vendedorNome?.takeIf { it.isNotBlank() },
+                            cadastro?.vendedorCodigo?.takeIf { it.isNotBlank() }?.let { "Codigo $it" },
+                        ).joinToString(" - ").ifBlank { "Vendedor de origem nao informado" },
+                        onValueChange = {},
+                        modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                        label = { Text("Vendedor de origem") },
+                        enabled = false,
+                    )
+                    if (!cadastro?.adesionistaNome.isNullOrBlank()) {
+                        OutlinedTextField(
+                            value = cadastro?.adesionistaNome.orEmpty(),
+                            onValueChange = {},
+                            modifier = Modifier.fillMaxWidth().bringIntoViewOnFocus(),
+                            label = { Text("Adesionista de origem") },
+                            enabled = false,
+                        )
+                    }
+                } else if (profile?.role != "VENDEDOR") {
                     SelectionField(
                         label = "Vendedor",
                         value = state.vendedores
@@ -1322,18 +1406,20 @@ fun InclusaoDependenteDialog(
                                                 },
                                             )
                                         }
-                                        IconButton(
-                                            onClick = {
-                                                scope.launch {
-                                                    runCatching { viewModel.deleteTempFile(dep.arquivo.path) }
-                                                    updateDependente(dependentes, index) { it.copy(arquivo = null, saved = false) }
-                                                }
-                                            },
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Rounded.Delete,
-                                                contentDescription = "Remover arquivo",
-                                            )
+                                        if (cadastro?.linkPendenciaId.isNullOrBlank()) {
+                                            IconButton(
+                                                onClick = {
+                                                    scope.launch {
+                                                        runCatching { viewModel.deleteTempFile(dep.arquivo.path) }
+                                                        updateDependente(dependentes, index) { it.copy(arquivo = null, saved = false) }
+                                                    }
+                                                },
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Rounded.Delete,
+                                                    contentDescription = "Remover arquivo",
+                                                )
+                                            }
                                         }
                                     }
                                     IconButton(

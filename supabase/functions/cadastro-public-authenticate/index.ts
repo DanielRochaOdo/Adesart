@@ -11,6 +11,7 @@ import {
   resolveLinkByToken,
   sha256,
   verifyTurnstileIfConfigured,
+  upsertLinkPendingJourney,
 } from "../_shared/public-flow.ts";
 
 const LEMMIT_COST = 0.12;
@@ -258,6 +259,8 @@ const finishAuthentication = async (
   attemptToken: string,
   person: any,
   erpEligibility: Awaited<ReturnType<typeof checkErpEligibility>>,
+  link: any,
+  cpfHash: string,
 ) => {
   const now = new Date().toISOString();
   const activeRecord = erpEligibility.activeRecord;
@@ -271,7 +274,12 @@ const finishAuthentication = async (
       updated_at: now,
     }).eq("id", attemptId);
 
-    return jsonResponse({ ok: true, state: "not_eligible", reason: "ACTIVE_DEPENDENT_IN_ERP" });
+    return jsonResponse({
+      ok: true,
+      state: "not_eligible",
+      reason: "ACTIVE_DEPENDENT_IN_ERP",
+      requiresAuthorization: link.requires_authorization === true,
+    });
   }
 
   if (activeRecord?.isResponsible) {
@@ -296,6 +304,32 @@ const finishAuthentication = async (
       updated_at: now,
     }).eq("id", attemptId);
 
+    await upsertLinkPendingJourney({
+      supabase,
+      attempt: {
+        id: attemptId,
+        link_id: link.id,
+        cpf_hash: cpfHash,
+        flow_mode: "existing_member",
+        profile_snapshot: person,
+        erp_member_snapshot: activeRecord,
+        created_at: now,
+      },
+      link,
+      snapshot: {
+        cadastro: {
+          cpf: person?.cpf || "",
+          nome: activeRecord?.nomeAssociado || person?.nome || "",
+          telefone: activeRecord?.telefone || "",
+          email: activeRecord?.email || "",
+          dependentes: [],
+        },
+        member: activeRecord,
+      },
+      stage: "identified",
+      status: "aguardando_analise",
+    });
+
     return jsonResponse({
       ok: true,
       state: "existing_member",
@@ -308,6 +342,7 @@ const finishAuthentication = async (
         email: activeRecord.email || "",
       },
       plans,
+      requiresAuthorization: link.requires_authorization === true,
     });
   }
 
@@ -323,7 +358,30 @@ const finishAuthentication = async (
     updated_at: now,
   }).eq("id", attemptId);
 
-  return jsonResponse({ ok: true, state: "authenticated", attemptToken, person });
+  await upsertLinkPendingJourney({
+    supabase,
+    attempt: {
+      id: attemptId,
+      link_id: link.id,
+      cpf_hash: cpfHash,
+      flow_mode: "new_member",
+      profile_snapshot: person,
+      erp_member_snapshot: null,
+      created_at: now,
+    },
+    link,
+    snapshot: { cadastro: person },
+    stage: "identified",
+    status: "aguardando_analise",
+  });
+
+  return jsonResponse({
+    ok: true,
+    state: "authenticated",
+    attemptToken,
+    person,
+    requiresAuthorization: link.requires_authorization === true,
+  });
 };
 
 Deno.serve(async (req: Request) => {
@@ -390,7 +448,12 @@ Deno.serve(async (req: Request) => {
       if (cachedAttempt.status === "completed") {
         return jsonResponse({
           ok: true,
-          state: cachedAttempt.flow_mode === "existing_member" ? "existing_member_completed" : "completed",
+          state: cachedAttempt.completion_kind === "pending_review"
+            ? "pending_review_completed"
+            : cachedAttempt.flow_mode === "existing_member"
+              ? "existing_member_completed"
+              : "completed",
+          requiresAuthorization: link.requires_authorization === true,
         });
       }
       const attemptToken = randomToken();
@@ -400,6 +463,8 @@ Deno.serve(async (req: Request) => {
         attemptToken,
         cachedAttempt.profile_snapshot,
         erpEligibility,
+        link,
+        cpfHash,
       );
     }
 
@@ -464,6 +529,8 @@ Deno.serve(async (req: Request) => {
         attemptToken,
         erpPerson,
         erpEligibility,
+        link,
+        cpfHash,
       );
     }
 
@@ -520,7 +587,15 @@ Deno.serve(async (req: Request) => {
     if (!matchesBirthDate) {
       return jsonResponse({ error: "CPF ou data de nascimento nao conferem", code: "IDENTIFICATION_MISMATCH" }, 401);
     }
-    return finishAuthentication(supabase, attempt.id, attemptToken, person, erpEligibility);
+    return finishAuthentication(
+      supabase,
+      attempt.id,
+      attemptToken,
+      person,
+      erpEligibility,
+      link,
+      cpfHash,
+    );
   } catch (error) {
     console.error("[cadastro-public-authenticate]", error);
     const message = error instanceof Error ? error.message : "Erro inesperado";

@@ -144,6 +144,7 @@ Deno.serve(async (req: Request) => {
         empresaNome: String(link.empresa_nome || ""),
         empresaCnpj: link.empresa_cnpj || null,
         empresaExigeMatricula: Number(link.empresa_exige_matricula || 0),
+        requiresAuthorization: link.requires_authorization === true,
         planos: plans,
         vendedorNome: String(link.vendedor_nome || ""),
         vendedorTelefone,
