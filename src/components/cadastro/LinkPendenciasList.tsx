@@ -175,13 +175,18 @@ export function LinkPendenciasList({
       const loadedItems: LinkPending[] = [];
 
       while (true) {
-        const { data, error: queryError } = await supabase
+        let query = supabase
           .from('link_pendencias')
           .select('id,link_id,cpf,nome,empresa_codigo,empresa_nome,operation_type,requires_authorization,status,flow_stage,latest_snapshot,source_attempt_ids,source_link_ids,cadastro_id,vendedor_id,first_attempt_at,last_activity_at,public_completed_at,sent_at,resolution_reason,last_error')
           .in('status', activeStatuses)
           .order('last_activity_at', { ascending: false })
           .order('id', { ascending: false })
           .range(rangeStart, rangeStart + pageSize - 1);
+
+        if (profile?.role === 'VENDEDOR') {
+          query = query.eq('vendedor_id', profile.id);
+        }
+        const { data, error: queryError } = await query;
 
         if (queryError) throw queryError;
 
