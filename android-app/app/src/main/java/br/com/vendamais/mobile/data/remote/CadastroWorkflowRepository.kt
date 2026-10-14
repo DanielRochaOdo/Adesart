@@ -1795,11 +1795,12 @@ class CadastroWorkflowRepository(
         }
 
         val cpfFromPayload = extractCpfFromErpPayload(payload)
-        val cpfFromCadastro = runCatching {
-            fetchCadastroDetalhe(session, cadastroId).cpf
-                ?.filter(Char::isDigit)
-                ?.takeIf { it.length == 11 }
+        val cadastroDetalhe = runCatching {
+            fetchCadastroDetalhe(session, cadastroId)
         }.getOrNull()
+        val cpfFromCadastro = cadastroDetalhe?.cpf
+            ?.filter(Char::isDigit)
+            ?.takeIf { it.length == 11 }
         val cpfForSync = cpfFromPayload ?: cpfFromCadastro
 
         val body = buildJsonObject {
@@ -1811,7 +1812,7 @@ class CadastroWorkflowRepository(
                 put("motivo_bloqueio", JsonNull)
             }
             cpfForSync?.let { put("cpf", it) }
-            if (cadastro.linkPendenciaId.isNullOrBlank()) {
+            if (cadastroDetalhe != null && cadastroDetalhe.linkPendenciaId.isNullOrBlank()) {
                 put("created_by", session.userId)
             }
         }
