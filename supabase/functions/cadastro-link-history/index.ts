@@ -151,7 +151,11 @@ Deno.serve(async (req: Request) => {
 
     const role = String(internalUser.profile?.role || "").toUpperCase();
     const canViewAll = FULL_ACCESS_ROLES.has(role);
-    if (!canViewAll && String(link.vendedor_id || "") !== String(internalUser.profile?.id || "")) {
+    const currentUserId = String(internalUser.profile?.id || "");
+    const ownsLink = role === "VENDEDOR"
+      ? String(link.vendedor_id || "") === currentUserId
+      : String(link.created_by || "") === currentUserId;
+    if (!canViewAll && !ownsLink) {
       return jsonResponse({ error: "Sem permissao para visualizar este historico" }, 403);
     }
 
