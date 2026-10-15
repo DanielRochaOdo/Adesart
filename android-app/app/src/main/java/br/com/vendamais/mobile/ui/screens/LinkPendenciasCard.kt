@@ -27,7 +27,8 @@ import java.time.format.DateTimeFormatter
 fun LinkPendenciasCard(
     workspace: LinkWorkspaceState,
     profileRole: String,
-    onOpenPending: (String) -> Unit,
+    onSendPending: (String) -> Unit,
+    onDownloadContract: (String) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         WebCard {
@@ -89,7 +90,8 @@ fun LinkPendenciasCard(
                 LinkPendenciaRow(
                     item = item,
                     profileRole = profileRole,
-                    onOpenPending = onOpenPending,
+                    onSendPending = onSendPending,
+                    onDownloadContract = onDownloadContract,
                 )
             }
         }
@@ -103,8 +105,8 @@ private fun LinkPendenciaRow(
     onOpenPending: (String) -> Unit,
 ) {
     val canRepairErpError = profileRole.uppercase() in setOf("ADMINISTRADOR", "CADASTRO", "GERENTE")
-    val canTreat = item.requiresAuthorization &&
-        item.status != "enviando" &&
+    val canTreat = item.requiresAuthorization && item.contractSessionId != null &&
+        item.status !in setOf("enviando", "enviado", "encerrado") &&
         (item.status != "erro_envio" || canRepairErpError)
 
     WebCard {
@@ -203,10 +205,18 @@ private fun LinkPendenciaRow(
                 )
             }
 
+            if (item.contractSessionId != null) {
+                VendaButton(
+                    label = "Baixar contrato aceito",
+                    onClick = { onDownloadContract(item.id) },
+                    style = VendaButtonStyle.SECONDARY,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             if (canTreat) {
                 VendaButton(
-                    label = "Tratar pendencia",
-                    onClick = { onOpenPending(item.id) },
+                    label = "Enviar ao ERP e concluir",
+                    onClick = { onSendPending(item.id) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             } else if (item.requiresAuthorization && item.status == "enviando") {
