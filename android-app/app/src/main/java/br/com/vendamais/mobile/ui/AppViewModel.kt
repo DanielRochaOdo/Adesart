@@ -1015,6 +1015,15 @@ class AppViewModel(
         }
     }
 
+    suspend fun pendingCompanyLinkUrl(pendingId: String): String {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val pending = _uiState.value.linkWorkspace.linkPendencias
+            .firstOrNull { it.id == pendingId }
+            ?: throw IllegalStateException("Pendencia nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        return workflowRepository.fetchPendingCompanyLinkUrl(activeSession, pending.linkId)
+    }
+
     suspend fun linkPendenciaContractUrl(pendingId: String): String {
         val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
         val activeSession = ensureFreshSession(session)

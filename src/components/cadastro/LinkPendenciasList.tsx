@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, Download, Loader2, Send, UserRound } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Download, Link2, Loader2, Send, UserRound } from 'lucide-react';
 import { Button } from '../Button';
 import { Input } from '../Input';
 import { Select } from '../Select';
@@ -147,6 +147,9 @@ const contactInfo = (item: LinkPending) => {
   return { telefone, email };
 };
 
+const PAGE_SIZE = 50;
+const FETCH_BATCH_SIZE = 500;
+
 export function LinkPendenciasList({
   reloadKey = 0,
   onCountChange,
@@ -154,6 +157,8 @@ export function LinkPendenciasList({
   const { profile } = useAuth();
   const [items, setItems] = useState<LinkPending[]>([]);
   const [sellerProfiles, setSellerProfiles] = useState<SellerProfile[]>([]);
+  const [linkUrlById, setLinkUrlById] = useState<Map<string, string>>(new Map());
+  const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -165,6 +170,7 @@ export function LinkPendenciasList({
   const [nextActionFilter, setNextActionFilter] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
+  const [page, setPage] = useState(1);
 
   const canFilterVendedor = ['ADMINISTRADOR', 'GERENTE', 'CADASTRO'].includes(profile?.role ?? '');
 
@@ -172,7 +178,6 @@ export function LinkPendenciasList({
     setLoading(true);
     setError('');
     try {
-      const pageSize = 1000;
       let rangeStart = 0;
       const loadedItems: LinkPending[] = [];
 
@@ -183,7 +188,7 @@ export function LinkPendenciasList({
           .in('status', activeStatuses)
           .order('last_activity_at', { ascending: false })
           .order('id', { ascending: false })
-          .range(rangeStart, rangeStart + pageSize - 1);
+          .range(rangeStart, rangeStart + FETCH_BATCH_SIZE - 1);
 
         if (profile?.role === 'VENDEDOR') {
           query = query.eq('vendedor_id', profile.id);
@@ -195,12 +200,14 @@ export function LinkPendenciasList({
         const pageItems = (data || []) as LinkPending[];
         loadedItems.push(...pageItems);
 
-        if (pageItems.length < pageSize) break;
-        rangeStart += pageSize;
+        if (pageItems.length < FETCH_BATCH_SIZE) break;
+        rangeStart += FETCH_BATCH_SIZE;
       }
 
       setItems(loadedItems);
       onCountChange?.(loadedItems.filter((item) => item.status !== 'enviado' && item.status !== 'encerrado').length);
+
+      setLinkUrlById(new Map());
 
       if (canFilterVendedor) {
         const sellerIds = Array.from(new Set(
@@ -210,14 +217,18 @@ export function LinkPendenciasList({
         ));
 
         if (sellerIds.length > 0) {
-          const { data: sellerData, error: sellerError } = await supabase
-            .from('profiles')
-            .select('id,name')
-            .in('id', sellerIds)
-            .order('name', { ascending: true });
-
-          if (sellerError) throw sellerError;
-          setSellerProfiles((sellerData || []) as SellerProfile[]);
+          // Evita uma unica requisicao com milhares de IDs (limite de URL/linhas).
+          const sellers: SellerProfile[] = [];
+          for (let start = 0; start < sellerIds.length; start += 100) {
+            const { data: sellerData, error: sellerError } = await supabase
+              .from('profiles')
+              .select('id,name')
+              .in('id', sellerIds.slice(start, start + 100))
+              .order('name', { ascending: true });
+            if (sellerError) throw sellerError;
+            sellers.push(...((sellerData || []) as SellerProfile[]));
+          }
+          setSellerProfiles(sellers);
         } else {
           setSellerProfiles([]);
         }
@@ -317,6 +328,49 @@ export function LinkPendenciasList({
     sellerNameById,
   ]);
 
+  // A pesquisa e os filtros consideram TODOS os registros acessiveis,
+  // independentemente da pagina visivel. A exportacao conserva esse conjunto.
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const visibleItems = useMemo(
+    () => filtered.slice(pageStart, pageStart + PAGE_SIZE),
+    [filtered, pageStart],
+  );
+
+  useEffect(() => {
+    let active = true;
+    // Busca apenas as URLs da pagina atual (50), mesmo com milhares de pendencias.
+    // O link_id identifica o link certo sem consulta ambigua por nome de empresa.
+    const ids = Array.from(new Set(visibleItems.map((item) => item.link_id).filter(Boolean)));
+    if (ids.length === 0) return;
+
+    const loadUrls = async () => {
+      const { data, error: lookupError } = await supabase
+        .from('cadastro_links')
+        .select('id,link_url')
+        .in('id', ids);
+      if (!active) return;
+      if (lookupError) {
+        console.warn('[LinkPendenciasList] erro ao consultar links para copia:', lookupError);
+        return;
+      }
+      setLinkUrlById((previous) => {
+        const updated = new Map(previous);
+        (data || []).forEach((link) => {
+          if (link.link_url) updated.set(link.id, link.link_url);
+        });
+        return updated;
+      });
+    };
+    void loadUrls();
+    return () => { active = false; };
+  }, [visibleItems]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, empresaFilter, vendedorFilter, nextActionFilter, dataInicio, dataFim]);
+
   const activeCount = items.filter((item) => item.status !== 'enviado' && item.status !== 'encerrado').length;
   const hasFilters = Boolean(
     search ||
@@ -327,6 +381,57 @@ export function LinkPendenciasList({
     dataInicio ||
     dataFim
   );
+
+  const copyCompanyLink = async (linkId: string) => {
+    const url = linkUrlById.get(linkId);
+    if (!url) {
+      setError('O link desta solicitação não está disponível para cópia.');
+      return;
+    }
+    try {
+      // No iOS o gesto do usuario precisa iniciar a copia sem await de rede.
+      // A URL ja foi buscada com a permissao do usuario durante o carregamento.
+      const legacyCopy = () => {
+        const input = document.createElement('textarea');
+        input.value = url;
+        input.setAttribute('readonly', '');
+        input.style.position = 'fixed';
+        input.style.opacity = '0';
+        document.body.appendChild(input);
+        input.focus();
+        input.select();
+        input.setSelectionRange(0, input.value.length);
+        const copied = document.execCommand('copy');
+        input.remove();
+        if (!copied) throw new Error('Falha ao copiar');
+      };
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(url);
+        } catch {
+          // Algumas versoes da WKWebView expoem Clipboard API, mas recusam escrita.
+          legacyCopy();
+        }
+      } else {
+        legacyCopy();
+      }
+      setError('');
+      setCopiedLinkId(linkId);
+    } catch (copyError) {
+      console.error('[LinkPendenciasList] falha ao copiar URL:', copyError);
+      setError('Não foi possível copiar o link. Verifique a permissão de área de transferência.');
+      setCopiedLinkId(null);
+    }
+  };
+
+  const goToPage = (nextPage: number) => {
+    setPage(Math.max(1, Math.min(totalPages, nextPage)));
+    // O usuario inicia a proxima pagina no primeiro registro, nao no rodape anterior.
+    requestAnimationFrame(() => {
+      document.getElementById('link-pendencias-cards')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
 
   const clearFilters = () => {
     setSearch('');
@@ -542,7 +647,9 @@ export function LinkPendenciasList({
 
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="vm-muted-text text-sm">
-            Mostrando {filtered.length} de {items.length} pendência(s).
+            {filtered.length === 0
+              ? `Nenhuma pendência encontrada entre ${items.length} registros.`
+              : `Mostrando ${pageStart + 1}–${pageStart + visibleItems.length} de ${filtered.length} pendência(s) filtrada(s) (${items.length} no total).`}
           </p>
           <div className="flex flex-wrap gap-2">
             {hasFilters && (
@@ -578,8 +685,8 @@ export function LinkPendenciasList({
           <p className="vm-page-title mt-3 font-semibold">Nenhum registro encontrado</p>
         </div>
       ) : (
-        <div className="grid gap-3">
-          {filtered.map((item) => {
+        <div id="link-pendencias-cards" className="grid gap-3">
+          {visibleItems.map((item) => {
             const canRepairErpError = ['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(profile?.role ?? '');
             const sellerName = item.vendedor_id ? sellerNameById.get(item.vendedor_id) : null;
             const contacts = contactInfo(item);
@@ -613,9 +720,26 @@ export function LinkPendenciasList({
                       </div>
                       <div className="min-w-0">
                         <h3 className="vm-page-title truncate font-semibold">{item.nome || 'Pessoa identificada'}</h3>
-                        <p className="vm-muted-text mt-0.5 text-sm">
-                          {item.cpf ? formatCPF(item.cpf) : 'CPF protegido'} · {item.empresa_codigo} - {item.empresa_nome}
-                        </p>
+                        <div className="vm-muted-text mt-0.5 flex flex-wrap items-center gap-1 text-sm">
+                          <span>{item.cpf ? formatCPF(item.cpf) : 'CPF protegido'} · {item.empresa_codigo} - {item.empresa_nome}</span>
+                          <button
+                            type="button"
+                            title={linkUrlById.has(item.link_id) ? 'Copiar link desta empresa' : 'Link indisponível para cópia'}
+                            aria-label={`Copiar link de ${item.empresa_nome}`}
+                            onClick={() => void copyCompanyLink(item.link_id)}
+                            disabled={!linkUrlById.has(item.link_id)}
+                            className="inline-flex size-7 items-center justify-center rounded-md text-violet-500 transition-colors hover:bg-violet-500/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {copiedLinkId === item.link_id ? (
+                              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                            ) : (
+                              <Link2 className="h-4 w-4" />
+                            )}
+                          </button>
+                          {copiedLinkId === item.link_id && (
+                            <span role="status" className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Link copiado!</span>
+                          )}
+                        </div>
                         <div className="vm-muted-text mt-1 flex flex-col gap-0.5 text-xs sm:flex-row sm:flex-wrap sm:gap-x-4">
                           <span>Telefone: {contacts.telefone ? formatPhone(contacts.telefone) : 'Não informado'}</span>
                           <span>E-mail: {contacts.email || 'Não informado'}</span>
@@ -697,6 +821,28 @@ export function LinkPendenciasList({
             );
           })}
         </div>
+      )}
+
+      {!loading && filtered.length > 0 && (
+        <nav className="vm-cadastro-card flex flex-col items-center justify-between gap-3 rounded-2xl p-3 sm:flex-row sm:p-4" aria-label="Paginação de Link Pendências">
+          <span className="vm-muted-text text-sm" aria-live="polite">
+            Página {currentPage} de {totalPages} · 50 registros por página
+          </span>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button type="button" onClick={() => goToPage(1)} disabled={currentPage === 1}>
+              Primeira
+            </Button>
+            <Button type="button" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1}>
+              Anterior
+            </Button>
+            <Button type="button" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages}>
+              Próxima
+            </Button>
+            <Button type="button" onClick={() => goToPage(totalPages)} disabled={currentPage === totalPages}>
+              Última
+            </Button>
+          </div>
+        </nav>
       )}
     </div>
   );
