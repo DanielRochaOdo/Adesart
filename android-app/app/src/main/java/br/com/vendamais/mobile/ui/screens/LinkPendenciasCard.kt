@@ -39,7 +39,8 @@ fun LinkPendenciasCard(
     profileRole: String,
     onSendPending: (String) -> Unit,
     onDownloadContract: (String) -> Unit,
- ) {
+    onPageChanged: () -> Unit,
+) {
     var page by rememberSaveable { mutableIntStateOf(1) }
     val total = workspace.linkPendencias.size
     val totalPages = ((total + LINK_PENDENCIAS_PAGE_SIZE - 1) / LINK_PENDENCIAS_PAGE_SIZE).coerceAtLeast(1)
@@ -132,7 +133,10 @@ fun LinkPendenciasCard(
                         ) {
                             VendaButton(
                                 label = "Anterior",
-                                onClick = { page = (currentPage - 1).coerceAtLeast(1) },
+                                onClick = {
+                                    page = (currentPage - 1).coerceAtLeast(1)
+                                    onPageChanged()
+                                },
                                 enabled = currentPage > 1,
                                 style = VendaButtonStyle.SECONDARY,
                                 size = VendaButtonSize.SMALL,
@@ -140,7 +144,10 @@ fun LinkPendenciasCard(
                             )
                             VendaButton(
                                 label = "Proxima",
-                                onClick = { page = (currentPage + 1).coerceAtMost(totalPages) },
+                                onClick = {
+                                    page = (currentPage + 1).coerceAtMost(totalPages)
+                                    onPageChanged()
+                                },
                                 enabled = currentPage < totalPages,
                                 style = VendaButtonStyle.SECONDARY,
                                 size = VendaButtonSize.SMALL,
@@ -160,6 +167,7 @@ private fun LinkPendenciaRow(
     profileRole: String,
     onSendPending: (String) -> Unit,
     onDownloadContract: (String) -> Unit,
+    onPageChanged: () -> Unit,
 ) {
     val canRepairErpError = profileRole.uppercase() in setOf("ADMINISTRADOR", "CADASTRO", "GERENTE")
     val canTreat = item.requiresAuthorization && item.contractSessionId != null &&
