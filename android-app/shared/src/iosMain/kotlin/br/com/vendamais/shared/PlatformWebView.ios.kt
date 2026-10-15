@@ -23,8 +23,6 @@ import platform.UIKit.UIViewController
 import platform.WebKit.WKFrameInfo
 import platform.WebKit.WKNavigationAction
 import platform.WebKit.WKNavigationActionPolicy
-import platform.WebKit.WKNavigationActionPolicyAllow
-import platform.WebKit.WKNavigationActionPolicyCancel
 import platform.WebKit.WKNavigationDelegateProtocol
 import platform.WebKit.WKUIDelegateProtocol
 import platform.WebKit.WKUserScript
@@ -53,9 +51,9 @@ private class VendaMaisContractDownloadDelegate : NSObject(), WKNavigationDelega
         val url = target?.absoluteString.orEmpty()
         if (target != null && url.contains("/storage/v1/object/sign/contracts/")) {
             UIApplication.sharedApplication.openURL(target)
-            decisionHandler(WKNavigationActionPolicyCancel)
+            decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
         } else {
-            decisionHandler(WKNavigationActionPolicyAllow)
+            decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyAllow)
         }
     }
 }
