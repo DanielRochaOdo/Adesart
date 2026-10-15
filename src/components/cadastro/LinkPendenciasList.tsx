@@ -692,7 +692,6 @@ export function LinkPendenciasList({
                       </Button>
                     )}
                   </div>
-                  )}
                 </div>
               </div>
             );
