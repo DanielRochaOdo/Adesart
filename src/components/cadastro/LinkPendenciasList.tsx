@@ -31,6 +31,7 @@ type LinkPending = {
   source_attempt_ids: string[];
   source_link_ids: string[];
   cadastro_id: string | null;
+  contract_session_id: string | null;
   vendedor_id: string | null;
   first_attempt_at: string;
   last_activity_at: string;
@@ -74,6 +75,7 @@ const activeStatuses: PendingStatus[] = [
   'pronto_erp',
   'enviando',
   'erro_envio',
+  'enviado', // manter contrato aceito disponivel depois da efetivacao
 ];
 
 const dateTime = (value: string | null) => {
@@ -147,7 +149,6 @@ const contactInfo = (item: LinkPending) => {
 
 export function LinkPendenciasList({
   reloadKey = 0,
-  onSelectCadastro,
   onCountChange,
 }: LinkPendenciasListProps) {
   const { profile } = useAuth();
@@ -155,6 +156,7 @@ export function LinkPendenciasList({
   const [sellerProfiles, setSellerProfiles] = useState<SellerProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -177,7 +179,7 @@ export function LinkPendenciasList({
       while (true) {
         let query = supabase
           .from('link_pendencias')
-          .select('id,link_id,cpf,nome,empresa_codigo,empresa_nome,operation_type,requires_authorization,status,flow_stage,latest_snapshot,source_attempt_ids,source_link_ids,cadastro_id,vendedor_id,first_attempt_at,last_activity_at,public_completed_at,sent_at,resolution_reason,last_error')
+          .select('id,link_id,cpf,nome,empresa_codigo,empresa_nome,operation_type,requires_authorization,status,flow_stage,latest_snapshot,source_attempt_ids,source_link_ids,cadastro_id,contract_session_id,vendedor_id,first_attempt_at,last_activity_at,public_completed_at,sent_at,resolution_reason,last_error')
           .in('status', activeStatuses)
           .order('last_activity_at', { ascending: false })
           .order('id', { ascending: false })
@@ -198,7 +200,7 @@ export function LinkPendenciasList({
       }
 
       setItems(loadedItems);
-      onCountChange?.(loadedItems.length);
+      onCountChange?.(loadedItems.filter((item) => item.status !== 'enviado' && item.status !== 'encerrado').length);
 
       if (canFilterVendedor) {
         const sellerIds = Array.from(new Set(
@@ -315,7 +317,7 @@ export function LinkPendenciasList({
     sellerNameById,
   ]);
 
-  const activeCount = items.length;
+  const activeCount = items.filter((item) => item.status !== 'enviado' && item.status !== 'encerrado').length;
   const hasFilters = Boolean(
     search ||
     statusFilter ||
@@ -390,51 +392,63 @@ export function LinkPendenciasList({
     XLSX.writeFile(workbook, `link-pendencias-${today}.xlsx`);
   };
 
-  const openPending = async (item: LinkPending) => {
-    if (!item.requires_authorization) return;
+  const callInternal = async (endpoint: string, pendingId: string) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) throw new Error('Sessão não encontrada.');
+    const response = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ pendingId }),
+      },
+    );
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result?.ok !== true) {
+      throw new Error(result?.error || 'Não foi possível concluir a operação.');
+    }
+    return result;
+  };
 
+  const sendPending = async (item: LinkPending) => {
+    if (!item.requires_authorization || !item.contract_session_id) return;
     setOpeningId(item.id);
     setError('');
     try {
-      if (item.cadastro_id) {
-        const { data, error: cadastroError } = await supabase
-          .from('cadastros')
-          .select('*')
-          .eq('id', item.cadastro_id)
-          .maybeSingle();
-        if (cadastroError) throw cadastroError;
-        if (data) {
-          onSelectCadastro(data as Cadastro);
-          return;
-        }
-      }
-
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error('Sessão não encontrada.');
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/cadastro-link-pending-promote`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ pendingId: item.id }),
-        },
+      await callInternal(
+        item.operation_type === 'existing_member'
+          ? 'cadastro-public-dependent-submit'
+          : 'cadastro-public-submit',
+        item.id,
       );
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || !result?.ok || !result?.cadastro) {
-        throw new Error(result?.error || 'Não foi possível abrir a pendência.');
-      }
-
-      onSelectCadastro(result.cadastro as Cadastro);
       await load();
-    } catch (openError) {
-      console.error('[LinkPendenciasList] erro ao abrir pendência:', openError);
-      setError(openError instanceof Error ? openError.message : 'Não foi possível abrir a pendência.');
+    } catch (sendError) {
+      console.error('[LinkPendenciasList] falha ao enviar:', sendError);
+      setError(sendError instanceof Error ? sendError.message : 'Falha ao enviar ao ERP.');
     } finally {
       setOpeningId(null);
+    }
+  };
+
+  const downloadContract = async (item: LinkPending) => {
+    if (!item.contract_session_id) return;
+    setDownloadingId(item.id);
+    setError('');
+    try {
+      const result = await callInternal('cadastro-link-pending-contract', item.id);
+      const anchor = document.createElement('a');
+      anchor.href = String(result.url);
+      anchor.download = `Contrato-Aceito-${item.id}.pdf`;
+      anchor.rel = 'noopener noreferrer';
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : 'Não foi possível baixar o contrato.');
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -570,7 +584,8 @@ export function LinkPendenciasList({
             const sellerName = item.vendedor_id ? sellerNameById.get(item.vendedor_id) : null;
             const contacts = contactInfo(item);
             const canTreat = item.requires_authorization &&
-              item.status !== 'enviando' &&
+              Boolean(item.contract_session_id) &&
+              !['enviado', 'enviando', 'encerrado'].includes(item.status) &&
               (item.status !== 'erro_envio' || canRepairErpError);
             return (
               <div key={item.id} className="vm-cadastro-card rounded-2xl p-4 sm:p-5">
@@ -645,20 +660,38 @@ export function LinkPendenciasList({
                     </div>
                   </div>
 
-                  {canTreat && (
-                    <Button
-                      onClick={() => void openPending(item)}
-                      disabled={openingId === item.id}
-                      className="w-full lg:w-auto"
-                    >
-                      {openingId === item.id ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="mr-2 h-4 w-4" />
-                      )}
-                      Tratar pendência
-                    </Button>
-                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {item.contract_session_id && (
+                      <Button
+                        onClick={() => void downloadContract(item)}
+                        disabled={downloadingId === item.id}
+                        variant="secondary"
+                        title="Baixar contrato aceito"
+                        className="w-full lg:w-auto"
+                      >
+                        {downloadingId === item.id ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="mr-2 h-4 w-4" />
+                        )}
+                        Baixar contrato
+                      </Button>
+                    )}
+                    {canTreat && (
+                      <Button
+                        onClick={() => void sendPending(item)}
+                        disabled={openingId === item.id}
+                        className="w-full lg:w-auto"
+                      >
+                        {openingId === item.id ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Send className="mr-2 h-4 w-4" />
+                        )}
+                        Enviar ao ERP e concluir
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
             );

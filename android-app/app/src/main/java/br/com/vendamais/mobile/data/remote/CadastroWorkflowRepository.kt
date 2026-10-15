@@ -270,13 +270,46 @@ class CadastroWorkflowRepository(
             query = {
                 parameter(
                     "select",
-                    "id,link_id,cpf,nome,empresa_codigo,empresa_nome,operation_type,requires_authorization,status,flow_stage,latest_snapshot,source_attempt_ids,source_link_ids,cadastro_id,first_attempt_at,last_activity_at,public_completed_at,sent_at,resolution_reason,last_error",
+                    "id,link_id,cpf,nome,empresa_codigo,empresa_nome,operation_type,requires_authorization,status,flow_stage,latest_snapshot,source_attempt_ids,source_link_ids,cadastro_id,contract_session_id,first_attempt_at,last_activity_at,public_completed_at,sent_at,resolution_reason,last_error",
                 )
-                parameter("status", "in.(aguardando_analise,pronto_erp,enviando,erro_envio)")
+                parameter("status", "in.(aguardando_analise,pronto_erp,enviando,erro_envio,enviado)")
                 parameter("order", "last_activity_at.desc")
                 parameter("limit", 1000)
             },
         )
+    }
+
+    suspend fun sendLinkPendencia(
+        session: SavedSession,
+        pending: LinkPendenciaItem,
+    ) {
+        val function = if (pending.operationType == "existing_member") {
+            "cadastro-public-dependent-submit"
+        } else {
+            "cadastro-public-submit"
+        }
+        val result: JsonElement = client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/$function",
+            json = json,
+            body = buildJsonObject { put("pendingId", pending.id) },
+        ) { applyAuthHeaders(session) }
+        val root = result as? JsonObject ?: throw IllegalStateException("Resposta de envio invalida.")
+        root["error"]?.jsonPrimitive?.contentOrNull?.let { throw IllegalStateException(it) }
+        if (root["ok"]?.jsonPrimitive?.booleanOrNull != true) {
+            throw IllegalStateException("Nao foi possivel enviar a pendencia ao ERP.")
+        }
+    }
+
+    suspend fun linkPendenciaContractUrl(session: SavedSession, pendingId: String): String {
+        val result: JsonElement = client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-link-pending-contract",
+            json = json,
+            body = buildJsonObject { put("pendingId", pendingId) },
+        ) { applyAuthHeaders(session) }
+        val root = result as? JsonObject ?: throw IllegalStateException("Resposta invalida para download.")
+        root["error"]?.jsonPrimitive?.contentOrNull?.let { throw IllegalStateException(it) }
+        return root["url"]?.jsonPrimitive?.contentOrNull
+            ?: throw IllegalStateException("Contrato indisponivel para download.")
     }
 
     suspend fun promoteLinkPendencia(
@@ -2472,6 +2505,26 @@ class CadastroWorkflowRepository(
                     "cadastro",
                     json.encodeToJsonElement(PublicCadastroContractPayload.serializer(), cadastro),
                 )
+            },
+        )
+    }
+
+    suspend fun acceptPublicContractForReview(
+        attemptToken: String,
+        contractToken: String,
+        acceptedTerms: Boolean,
+        acceptedData: Boolean,
+        acceptedCoverage: Boolean,
+    ): PublicCadastroSubmitResponse {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-contract-accept",
+            json = json,
+            body = buildJsonObject {
+                put("attemptToken", attemptToken.trim())
+                put("contractToken", contractToken.trim())
+                put("acceptedTerms", acceptedTerms)
+                put("acceptedData", acceptedData)
+                put("acceptedCoverage", acceptedCoverage)
             },
         )
     }

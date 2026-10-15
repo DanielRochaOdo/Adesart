@@ -1,5 +1,9 @@
 package br.com.vendamais.mobile.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -149,6 +153,7 @@ fun CadastrosScreen(
     onOpenWebApp: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
+    val contractScope = rememberCoroutineScope()
     var showInclusaoDialog by rememberSaveable { mutableStateOf(false) }
     var exportMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var showFilters by rememberSaveable { mutableStateOf(false) }
@@ -412,7 +417,21 @@ fun CadastrosScreen(
                     LinkPendenciasCard(
                         workspace = state.linkWorkspace,
                         profileRole = state.profile?.role.orEmpty(),
-                        onOpenPending = viewModel::openLinkPendencia,
+                        onSendPending = viewModel::sendLinkPendencia,
+                        onDownloadContract = { pendingId ->
+                            contractScope.launch {
+                                runCatching {
+                                    val url = viewModel.linkPendenciaContractUrl(pendingId)
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                }.onFailure { error ->
+                                    Toast.makeText(
+                                        context,
+                                        error.message ?: "Falha ao baixar contrato.",
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                            }
+                        },
                     )
                 }
             }

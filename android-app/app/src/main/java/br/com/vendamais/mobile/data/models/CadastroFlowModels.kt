@@ -447,6 +447,8 @@ data class LinkPendenciaItem(
     val sourceLinkIds: List<String> = emptyList(),
     @SerialName("cadastro_id")
     val cadastroId: String? = null,
+    @SerialName("contract_session_id")
+    val contractSessionId: String? = null,
     @SerialName("first_attempt_at")
     val firstAttemptAt: String,
     @SerialName("last_activity_at")

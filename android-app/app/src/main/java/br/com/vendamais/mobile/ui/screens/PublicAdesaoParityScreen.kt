@@ -1008,16 +1008,11 @@ fun PublicAdesaoParityScreen(
                                 ReviewLine("Telefone", formatPhone(existingPhone))
                                 ReviewLine("E-mail", existingEmail)
                                 VendaButton(
-                                    label = if (requiresAuthorization) "Finalizar" else "Revisar termos da inclusão",
+                                    label = "Revisar termos da inclusão",
                                     onClick = {
-                                        if (requiresAuthorization) {
-                                            persistPendingProgress("existing_review")
-                                            finalizeAuthorizedRequest()
-                                        } else {
-                                            emailToConfirm = existingEmail
-                                            emailDialogOpen = true
-                                            error = null
-                                        }
+                                        emailToConfirm = existingEmail
+                                        emailDialogOpen = true
+                                        error = null
                                     },
                                     modifier = Modifier.fillMaxWidth(),
                                     loading = busy,
@@ -1061,16 +1056,11 @@ fun PublicAdesaoParityScreen(
                         }
 
                         VendaButton(
-                            label = if (requiresAuthorization) "Finalizar" else "Revisar contrato",
+                            label = "Revisar contrato",
                             onClick = {
-                                if (requiresAuthorization) {
-                                    persistPendingProgress("review")
-                                    finalizeAuthorizedRequest()
-                                } else {
-                                    emailToConfirm = email?.valor.orEmpty()
-                                    emailDialogOpen = true
-                                    error = null
-                                }
+                                emailToConfirm = email?.valor.orEmpty()
+                                emailDialogOpen = true
+                                error = null
                             },
                             modifier = Modifier.fillMaxWidth(),
                             loading = busy,
@@ -1358,7 +1348,15 @@ fun PublicAdesaoParityScreen(
                                 error = null
                                 scope.launch {
                                     runCatching {
-                                        if (flowMode == "existing_member") {
+                                        if (requiresAuthorization) {
+                                            viewModel.acceptPublicContractForReview(
+                                                attemptToken = attemptToken,
+                                                contractToken = contractToken,
+                                                acceptedTerms = acceptedTerms,
+                                                acceptedData = acceptedData,
+                                                acceptedCoverage = coverageUrl.isNotBlank() && acceptedCoverage,
+                                            )
+                                        } else if (flowMode == "existing_member") {
                                             val payloadDependentes = dependentes.map { dep ->
                                                 PublicCadastroDependente(
                                                     tipo = dep.tipo,
@@ -1399,7 +1397,9 @@ fun PublicAdesaoParityScreen(
                                                 "Nao foi possivel concluir a adesao."
                                             }
                                         } else {
-                                            successMessage = if (flowMode == "existing_member") {
+                                            successMessage = if (requiresAuthorization) {
+                                                "Seu contrato foi aceito e a solicitação enviada para revisão. A adesão ainda depende de autorização e você receberá o e-mail após a efetivação."
+                                            } else if (flowMode == "existing_member") {
                                                 response.message
                                                     ?: "Dependente(s) incluído(s) com sucesso! O termo aceito será enviado para o e-mail confirmado e anexado ao ERP."
                                             } else if (response.message?.contains("processada", ignoreCase = true) == true) {
@@ -1448,7 +1448,8 @@ fun PublicAdesaoParityScreen(
                         if (flowMode == "existing_member") {
                             "O termo aceito sera enviado para este endereco e anexado ao ERP. Voce pode corrigir o e-mail antes de continuar."
                         } else {
-                            "O contrato sera enviado para este endereco. Voce pode corrigi-lo antes de continuar."
+                            if (requiresAuthorization) "Confirme seu e-mail. O contrato aceito sera enviado apenas depois da efetivacao interna."
+                            else "O contrato sera enviado para este endereco. Voce pode corrigi-lo antes de continuar."
                         },
                     )
                     OutlinedTextField(

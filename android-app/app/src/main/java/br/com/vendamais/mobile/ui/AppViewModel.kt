@@ -989,6 +989,38 @@ class AppViewModel(
         }
     }
 
+    fun sendLinkPendencia(pendingId: String) {
+        val session = currentSession ?: return
+        val pending = _uiState.value.linkWorkspace.linkPendencias.firstOrNull { it.id == pendingId } ?: return
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    linkWorkspace = it.linkWorkspace.copy(operationLoading = true),
+                    errorMessage = null,
+                )
+            }
+            runCatching {
+                val activeSession = ensureFreshSession(session)
+                workflowRepository.sendLinkPendencia(activeSession, pending)
+            }.onSuccess {
+                loadLinkPendencias()
+            }.onFailure { error ->
+                _uiState.update {
+                    it.copy(errorMessage = error.message ?: "Falha ao enviar ao ERP.")
+                }
+            }
+            _uiState.update {
+                it.copy(linkWorkspace = it.linkWorkspace.copy(operationLoading = false))
+            }
+        }
+    }
+
+    suspend fun linkPendenciaContractUrl(pendingId: String): String {
+        val session = currentSession ?: throw IllegalStateException("Sessao nao encontrada.")
+        val activeSession = ensureFreshSession(session)
+        return workflowRepository.linkPendenciaContractUrl(activeSession, pendingId)
+    }
+
     fun openLinkPendencia(pendingId: String) {
         val session = currentSession ?: return
         if (pendingId.isBlank()) return
@@ -2690,6 +2722,18 @@ class AppViewModel(
         cadastro: PublicCadastroContractPayload,
     ): PublicCadastroContractPrepareResponse {
         return workflowRepository.preparePublicContract(attemptToken, confirmedEmail, cadastro)
+    }
+
+    suspend fun acceptPublicContractForReview(
+        attemptToken: String,
+        contractToken: String,
+        acceptedTerms: Boolean,
+        acceptedData: Boolean,
+        acceptedCoverage: Boolean,
+    ): PublicCadastroSubmitResponse {
+        return workflowRepository.acceptPublicContractForReview(
+            attemptToken, contractToken, acceptedTerms, acceptedData, acceptedCoverage,
+        )
     }
 
     suspend fun submitPublicCadastroSecure(
