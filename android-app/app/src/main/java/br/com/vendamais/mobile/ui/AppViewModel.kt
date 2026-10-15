@@ -2692,6 +2692,18 @@ class AppViewModel(
         return workflowRepository.preparePublicContract(attemptToken, confirmedEmail, cadastro)
     }
 
+    suspend fun acceptPublicContractForReview(
+        attemptToken: String,
+        contractToken: String,
+        acceptedTerms: Boolean,
+        acceptedData: Boolean,
+        acceptedCoverage: Boolean,
+    ): PublicCadastroSubmitResponse {
+        return workflowRepository.acceptPublicContractForReview(
+            attemptToken, contractToken, acceptedTerms, acceptedData, acceptedCoverage,
+        )
+    }
+
     suspend fun submitPublicCadastroSecure(
         attemptToken: String,
         contractToken: String,
