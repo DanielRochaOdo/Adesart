@@ -2476,6 +2476,26 @@ class CadastroWorkflowRepository(
         )
     }
 
+    suspend fun acceptPublicContractForReview(
+        attemptToken: String,
+        contractToken: String,
+        acceptedTerms: Boolean,
+        acceptedData: Boolean,
+        acceptedCoverage: Boolean,
+    ): PublicCadastroSubmitResponse {
+        return client.safePost(
+            url = "${AppConfig.supabaseUrl}/functions/v1/cadastro-public-contract-accept",
+            json = json,
+            body = buildJsonObject {
+                put("attemptToken", attemptToken.trim())
+                put("contractToken", contractToken.trim())
+                put("acceptedTerms", acceptedTerms)
+                put("acceptedData", acceptedData)
+                put("acceptedCoverage", acceptedCoverage)
+            },
+        )
+    }
+
     suspend fun submitPublicCadastroSecure(
         attemptToken: String,
         contractToken: String,
