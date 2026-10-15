@@ -207,25 +207,7 @@ export function LinkPendenciasList({
       setItems(loadedItems);
       onCountChange?.(loadedItems.filter((item) => item.status !== 'enviado' && item.status !== 'encerrado').length);
 
-      // Busca pelo identificador original da pendencia, nunca por empresa.
-      // Lotes pequenos evitam URL excessivamente longa; o RLS do cadastro_links
-      // continua determinando quais URLs o usuario pode consultar.
-      const linkIds = Array.from(new Set(loadedItems.map((item) => item.link_id).filter(Boolean)));
-      const urls = new Map<string, string>();
-      for (let start = 0; start < linkIds.length; start += 100) {
-        const { data: linkRows, error: linkError } = await supabase
-          .from('cadastro_links')
-          .select('id,link_url')
-          .in('id', linkIds.slice(start, start + 100));
-        if (linkError) {
-          console.warn('[LinkPendenciasList] links indisponiveis para copia:', linkError);
-          break;
-        }
-        (linkRows || []).forEach((link) => {
-          if (link.link_url) urls.set(link.id, link.link_url);
-        });
-      }
-      setLinkUrlById(urls);
+      setLinkUrlById(new Map());
 
       if (canFilterVendedor) {
         const sellerIds = Array.from(new Set(
@@ -351,7 +333,39 @@ export function LinkPendenciasList({
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const pageStart = (currentPage - 1) * PAGE_SIZE;
-  const visibleItems = filtered.slice(pageStart, pageStart + PAGE_SIZE);
+  const visibleItems = useMemo(
+    () => filtered.slice(pageStart, pageStart + PAGE_SIZE),
+    [filtered, pageStart],
+  );
+
+  useEffect(() => {
+    let active = true;
+    // Busca apenas as URLs da pagina atual (50), mesmo com milhares de pendencias.
+    // O link_id identifica o link certo sem consulta ambigua por nome de empresa.
+    const ids = Array.from(new Set(visibleItems.map((item) => item.link_id).filter(Boolean)));
+    if (ids.length === 0) return;
+
+    const loadUrls = async () => {
+      const { data, error: lookupError } = await supabase
+        .from('cadastro_links')
+        .select('id,link_url')
+        .in('id', ids);
+      if (!active) return;
+      if (lookupError) {
+        console.warn('[LinkPendenciasList] erro ao consultar links para copia:', lookupError);
+        return;
+      }
+      setLinkUrlById((previous) => {
+        const updated = new Map(previous);
+        (data || []).forEach((link) => {
+          if (link.link_url) updated.set(link.id, link.link_url);
+        });
+        return updated;
+      });
+    };
+    void loadUrls();
+    return () => { active = false; };
+  }, [visibleItems]);
 
   useEffect(() => {
     setPage(1);
