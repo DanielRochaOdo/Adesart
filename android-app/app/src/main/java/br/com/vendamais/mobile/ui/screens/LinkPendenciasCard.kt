@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -209,6 +212,7 @@ private fun LinkPendenciaRow(
             if (item.contractSessionId != null) {
                 VendaButton(
                     label = "Baixar contrato aceito",
+                    leadingIcon = Icons.Rounded.Download,
                     onClick = { onDownloadContract(item.id) },
                     style = VendaButtonStyle.SECONDARY,
                     modifier = Modifier.fillMaxWidth(),
@@ -217,6 +221,7 @@ private fun LinkPendenciaRow(
             if (canTreat) {
                 VendaButton(
                     label = "Enviar ao ERP e concluir",
+                    leadingIcon = Icons.Rounded.Send,
                     onClick = { onSendPending(item.id) },
                     modifier = Modifier.fillMaxWidth(),
                 )
