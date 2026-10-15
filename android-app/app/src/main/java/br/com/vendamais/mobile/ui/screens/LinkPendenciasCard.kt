@@ -132,6 +132,17 @@ fun LinkPendenciasCard(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             VendaButton(
+                                label = "Primeira",
+                                onClick = {
+                                    page = 1
+                                    onPageChanged()
+                                },
+                                enabled = currentPage > 1,
+                                style = VendaButtonStyle.SECONDARY,
+                                size = VendaButtonSize.SMALL,
+                                modifier = Modifier.weight(1f),
+                            )
+                            VendaButton(
                                 label = "Anterior",
                                 onClick = {
                                     page = (currentPage - 1).coerceAtLeast(1)
@@ -142,10 +153,27 @@ fun LinkPendenciasCard(
                                 size = VendaButtonSize.SMALL,
                                 modifier = Modifier.weight(1f),
                             )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             VendaButton(
                                 label = "Proxima",
                                 onClick = {
                                     page = (currentPage + 1).coerceAtMost(totalPages)
+                                    onPageChanged()
+                                },
+                                enabled = currentPage < totalPages,
+                                style = VendaButtonStyle.SECONDARY,
+                                size = VendaButtonSize.SMALL,
+                                modifier = Modifier.weight(1f),
+                            )
+                            VendaButton(
+                                label = "Ultima",
+                                onClick = {
+                                    page = totalPages
                                     onPageChanged()
                                 },
                                 enabled = currentPage < totalPages,
