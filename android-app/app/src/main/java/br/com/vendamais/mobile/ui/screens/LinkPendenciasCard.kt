@@ -13,6 +13,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -20,11 +24,14 @@ import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.data.models.LinkPendenciaItem
 import br.com.vendamais.mobile.ui.LinkWorkspaceState
 import br.com.vendamais.mobile.ui.components.VendaButton
+import br.com.vendamais.mobile.ui.components.VendaButtonSize
 import br.com.vendamais.mobile.ui.components.VendaButtonStyle
 import br.com.vendamais.mobile.ui.components.VendaEmptyState
 import br.com.vendamais.mobile.ui.components.WebCard
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
+
+private const val LINK_PENDENCIAS_PAGE_SIZE = 50
 
 @Composable
 fun LinkPendenciasCard(
@@ -32,7 +39,13 @@ fun LinkPendenciasCard(
     profileRole: String,
     onSendPending: (String) -> Unit,
     onDownloadContract: (String) -> Unit,
-) {
+ ) {
+    var page by rememberSaveable { mutableIntStateOf(1) }
+    val total = workspace.linkPendencias.size
+    val totalPages = ((total + LINK_PENDENCIAS_PAGE_SIZE - 1) / LINK_PENDENCIAS_PAGE_SIZE).coerceAtLeast(1)
+    val currentPage = page.coerceIn(1, totalPages)
+    val firstIndex = (currentPage - 1) * LINK_PENDENCIAS_PAGE_SIZE
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         WebCard {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -89,13 +102,53 @@ fun LinkPendenciasCard(
                 )
             }
 
-            else -> workspace.linkPendencias.forEach { item ->
-                LinkPendenciaRow(
-                    item = item,
-                    profileRole = profileRole,
-                    onSendPending = onSendPending,
-                    onDownloadContract = onDownloadContract,
+            else -> {
+                Text(
+                    text = "Mostrando ${firstIndex + 1}–${minOf(firstIndex + LINK_PENDENCIAS_PAGE_SIZE, total)} de $total pendencias",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+
+                workspace.linkPendencias.drop(firstIndex).take(LINK_PENDENCIAS_PAGE_SIZE).forEach { item ->
+                    LinkPendenciaRow(
+                        item = item,
+                        profileRole = profileRole,
+                        onSendPending = onSendPending,
+                        onDownloadContract = onDownloadContract,
+                    )
+                }
+
+                WebCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = "Pagina $currentPage de $totalPages · 50 registros por pagina",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            VendaButton(
+                                label = "Anterior",
+                                onClick = { page = (currentPage - 1).coerceAtLeast(1) },
+                                enabled = currentPage > 1,
+                                style = VendaButtonStyle.SECONDARY,
+                                size = VendaButtonSize.SMALL,
+                                modifier = Modifier.weight(1f),
+                            )
+                            VendaButton(
+                                label = "Proxima",
+                                onClick = { page = (currentPage + 1).coerceAtMost(totalPages) },
+                                enabled = currentPage < totalPages,
+                                style = VendaButtonStyle.SECONDARY,
+                                size = VendaButtonSize.SMALL,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
             }
         }
     }
