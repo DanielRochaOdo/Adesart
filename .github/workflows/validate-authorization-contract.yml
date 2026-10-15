@@ -27,7 +27,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run typecheck
+      - run: npx tsc --noEmit -p tsconfig.link-web.json
       - run: npm run build
 
   functions:
