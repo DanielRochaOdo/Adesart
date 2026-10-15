@@ -21,6 +21,11 @@ import platform.UIKit.UIAlertControllerStyleAlert
 import platform.UIKit.UIApplication
 import platform.UIKit.UIViewController
 import platform.WebKit.WKFrameInfo
+import platform.WebKit.WKNavigationAction
+import platform.WebKit.WKNavigationActionPolicy
+import platform.WebKit.WKNavigationActionPolicyAllow
+import platform.WebKit.WKNavigationActionPolicyCancel
+import platform.WebKit.WKNavigationDelegateProtocol
 import platform.WebKit.WKUIDelegateProtocol
 import platform.WebKit.WKUserScript
 import platform.WebKit.WKUserScriptInjectionTime
@@ -34,6 +39,25 @@ private fun topViewController(): UIViewController? {
         controller = controller?.presentedViewController
     }
     return controller
+}
+
+// Abre PDFs protegidos no Safari para permitir salvar/compartilhar pelo iOS.
+// A autorizacao continua sendo feita pelo endpoint que emite o link assinado.
+private class VendaMaisContractDownloadDelegate : NSObject(), WKNavigationDelegateProtocol {
+    override fun webView(
+        webView: WKWebView,
+        decidePolicyForNavigationAction: WKNavigationAction,
+        decisionHandler: (WKNavigationActionPolicy) -> Unit,
+    ) {
+        val target = decidePolicyForNavigationAction.request.URL
+        val url = target?.absoluteString.orEmpty()
+        if (target != null && url.contains("/storage/v1/object/sign/contracts/")) {
+            UIApplication.sharedApplication.openURL(target)
+            decisionHandler(WKNavigationActionPolicyCancel)
+        } else {
+            decisionHandler(WKNavigationActionPolicyAllow)
+        }
+    }
 }
 
 private class VendaMaisWebViewUiDelegate : NSObject(), WKUIDelegateProtocol {
@@ -501,6 +525,7 @@ private fun iosMobileNavigationScript(appVersion: String, buildNumber: String): 
 @Composable
 actual fun PlatformWebView(url: String, modifier: Modifier) {
     val uiDelegate = remember { VendaMaisWebViewUiDelegate() }
+    val downloadDelegate = remember { VendaMaisContractDownloadDelegate() }
 
     UIKitView(
         modifier = modifier,
@@ -530,6 +555,7 @@ actual fun PlatformWebView(url: String, modifier: Modifier) {
                 configuration = configuration,
             ).apply {
                 UIDelegate = uiDelegate
+                navigationDelegate = downloadDelegate
                 allowsBackForwardNavigationGestures = true
                 val nsUrl = NSURL(string = url)
                 if (nsUrl != null) {
