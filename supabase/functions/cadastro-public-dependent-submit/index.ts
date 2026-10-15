@@ -300,6 +300,7 @@ Deno.serve(async (req: Request) => {
       }
       const role = String(actor.profile.role || "").toUpperCase();
       if ((role === "VENDEDOR" && String(pending.vendedor_id) !== String(actor.profile.id)) ||
+          (role === "SUPERVISOR" && String(pending.team_id || "") !== String(actor.profile.team_id || "")) ||
           (pending.status === "erro_envio" && !["ADMINISTRADOR", "CADASTRO", "GERENTE"].includes(role))) {
         return jsonResponse({ error: "Sem permissao para esta solicitacao" }, 403);
       }
