@@ -5,10 +5,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -39,6 +43,7 @@ fun LinkPendenciasCard(
     profileRole: String,
     onSendPending: (String) -> Unit,
     onDownloadContract: (String) -> Unit,
+    onCopyCompanyLink: (String) -> Unit,
     onPageChanged: () -> Unit,
 ) {
     var page by rememberSaveable { mutableIntStateOf(1) }
@@ -116,6 +121,7 @@ fun LinkPendenciasCard(
                         profileRole = profileRole,
                         onSendPending = onSendPending,
                         onDownloadContract = onDownloadContract,
+                        onCopyCompanyLink = onCopyCompanyLink,
                     )
                 }
 
@@ -195,6 +201,7 @@ private fun LinkPendenciaRow(
     profileRole: String,
     onSendPending: (String) -> Unit,
     onDownloadContract: (String) -> Unit,
+    onCopyCompanyLink: (String) -> Unit,
 ) {
     val canRepairErpError = profileRole.uppercase() in setOf("ADMINISTRADOR", "CADASTRO", "GERENTE")
     val canTreat = item.requiresAuthorization && item.contractSessionId != null &&
@@ -214,25 +221,42 @@ private fun LinkPendenciaRow(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
-                    Text(
-                        text = buildString {
-                            val cpf = item.cpf?.filter(Char::isDigit).orEmpty()
-                            if (cpf.length == 11) {
-                                append(
-                                    cpf.replace(
-                                        Regex("(\\d{3})(\\d{3})(\\d{3})(\\d{2})"),
-                                        "$1.$2.$3-$4",
-                                    ),
-                                )
-                                append(" · ")
-                            }
-                            append(item.empresaCodigo)
-                            append(" - ")
-                            append(item.empresaNome)
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(
+                            text = buildString {
+                                val cpf = item.cpf?.filter(Char::isDigit).orEmpty()
+                                if (cpf.length == 11) {
+                                    append(
+                                        cpf.replace(
+                                            Regex("(\\d{3})(\\d{3})(\\d{3})(\\d{2})"),
+                                            "$1.$2.$3-$4",
+                                        ),
+                                    )
+                                    append(" · ")
+                                }
+                                append(item.empresaCodigo)
+                                append(" - ")
+                                append(item.empresaNome)
+                            },
+                            modifier = Modifier.weight(1f, fill = false),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        IconButton(
+                            onClick = { onCopyCompanyLink(item.id) },
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Link,
+                                contentDescription = "Copiar link de ${item.empresaNome}",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
                 }
                 Text(
                     text = statusLabel(item.status),
