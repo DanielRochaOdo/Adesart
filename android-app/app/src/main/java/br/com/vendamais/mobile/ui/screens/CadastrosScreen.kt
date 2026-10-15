@@ -1,6 +1,9 @@
 package br.com.vendamais.mobile.ui.screens
 
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.net.Uri
 import android.widget.Toast
 
@@ -421,6 +424,22 @@ fun CadastrosScreen(
                         workspace = state.linkWorkspace,
                         profileRole = state.profile?.role.orEmpty(),
                         onSendPending = viewModel::sendLinkPendencia,
+                        onCopyCompanyLink = { pendingId ->
+                            contractScope.launch {
+                                runCatching {
+                                    val url = viewModel.pendingCompanyLinkUrl(pendingId)
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Link da empresa", url))
+                                    Toast.makeText(context, "Link copiado!", Toast.LENGTH_SHORT).show()
+                                }.onFailure { error ->
+                                    Toast.makeText(
+                                        context,
+                                        error.message ?: "Nao foi possivel copiar o link.",
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                            }
+                        },
                         onPageChanged = {
                             contractScope.launch { cadastrosListState.animateScrollToItem(2) }
                         },
