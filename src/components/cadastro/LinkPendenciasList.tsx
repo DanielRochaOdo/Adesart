@@ -213,14 +213,18 @@ export function LinkPendenciasList({
         ));
 
         if (sellerIds.length > 0) {
-          const { data: sellerData, error: sellerError } = await supabase
-            .from('profiles')
-            .select('id,name')
-            .in('id', sellerIds)
-            .order('name', { ascending: true });
-
-          if (sellerError) throw sellerError;
-          setSellerProfiles((sellerData || []) as SellerProfile[]);
+          // Evita uma unica requisicao com milhares de IDs (limite de URL/linhas).
+          const sellers: SellerProfile[] = [];
+          for (let start = 0; start < sellerIds.length; start += 100) {
+            const { data: sellerData, error: sellerError } = await supabase
+              .from('profiles')
+              .select('id,name')
+              .in('id', sellerIds.slice(start, start + 100))
+              .order('name', { ascending: true });
+            if (sellerError) throw sellerError;
+            sellers.push(...((sellerData || []) as SellerProfile[]));
+          }
+          setSellerProfiles(sellers);
         } else {
           setSellerProfiles([]);
         }
@@ -341,6 +345,15 @@ export function LinkPendenciasList({
     dataInicio ||
     dataFim
   );
+
+  const goToPage = (nextPage: number) => {
+    setPage(Math.max(1, Math.min(totalPages, nextPage)));
+    // O usuario inicia a proxima pagina no primeiro registro, nao no rodape anterior.
+    requestAnimationFrame(() => {
+      document.getElementById('link-pendencias-cards')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
 
   const clearFilters = () => {
     setSearch('');
@@ -594,7 +607,7 @@ export function LinkPendenciasList({
           <p className="vm-page-title mt-3 font-semibold">Nenhum registro encontrado</p>
         </div>
       ) : (
-        <div className="grid gap-3">
+        <div id="link-pendencias-cards" className="grid gap-3">
           {visibleItems.map((item) => {
             const canRepairErpError = ['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(profile?.role ?? '');
             const sellerName = item.vendedor_id ? sellerNameById.get(item.vendedor_id) : null;
@@ -721,16 +734,16 @@ export function LinkPendenciasList({
             Página {currentPage} de {totalPages} · 50 registros por página
           </span>
           <div className="flex flex-wrap items-center justify-center gap-2">
-            <Button type="button" onClick={() => setPage(1)} disabled={currentPage === 1}>
+            <Button type="button" onClick={() => goToPage(1)} disabled={currentPage === 1}>
               Primeira
             </Button>
-            <Button type="button" onClick={() => setPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1}>
+            <Button type="button" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1}>
               Anterior
             </Button>
-            <Button type="button" onClick={() => setPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages}>
+            <Button type="button" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages}>
               Próxima
             </Button>
-            <Button type="button" onClick={() => setPage(totalPages)} disabled={currentPage === totalPages}>
+            <Button type="button" onClick={() => goToPage(totalPages)} disabled={currentPage === totalPages}>
               Última
             </Button>
           </div>
