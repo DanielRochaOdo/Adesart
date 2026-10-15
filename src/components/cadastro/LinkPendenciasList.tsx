@@ -391,19 +391,29 @@ export function LinkPendenciasList({
     try {
       // No iOS o gesto do usuario precisa iniciar a copia sem await de rede.
       // A URL ja foi buscada com a permissao do usuario durante o carregamento.
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(url);
-      } else {
+      const legacyCopy = () => {
         const input = document.createElement('textarea');
         input.value = url;
         input.setAttribute('readonly', '');
         input.style.position = 'fixed';
         input.style.opacity = '0';
         document.body.appendChild(input);
+        input.focus();
         input.select();
+        input.setSelectionRange(0, input.value.length);
         const copied = document.execCommand('copy');
         input.remove();
         if (!copied) throw new Error('Falha ao copiar');
+      };
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(url);
+        } catch {
+          // Algumas versoes da WKWebView expoem Clipboard API, mas recusam escrita.
+          legacyCopy();
+        }
+      } else {
+        legacyCopy();
       }
       setError('');
       setCopiedLinkId(linkId);
