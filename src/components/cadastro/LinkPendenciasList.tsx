@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, Download, Loader2, Send, UserRound } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Download, Link2, Loader2, Send, UserRound } from 'lucide-react';
 import { Button } from '../Button';
 import { Input } from '../Input';
 import { Select } from '../Select';
@@ -157,6 +157,8 @@ export function LinkPendenciasList({
   const { profile } = useAuth();
   const [items, setItems] = useState<LinkPending[]>([]);
   const [sellerProfiles, setSellerProfiles] = useState<SellerProfile[]>([]);
+  const [linkUrlById, setLinkUrlById] = useState<Map<string, string>>(new Map());
+  const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -204,6 +206,26 @@ export function LinkPendenciasList({
 
       setItems(loadedItems);
       onCountChange?.(loadedItems.filter((item) => item.status !== 'enviado' && item.status !== 'encerrado').length);
+
+      // Busca pelo identificador original da pendencia, nunca por empresa.
+      // Lotes pequenos evitam URL excessivamente longa; o RLS do cadastro_links
+      // continua determinando quais URLs o usuario pode consultar.
+      const linkIds = Array.from(new Set(loadedItems.map((item) => item.link_id).filter(Boolean)));
+      const urls = new Map<string, string>();
+      for (let start = 0; start < linkIds.length; start += 100) {
+        const { data: linkRows, error: linkError } = await supabase
+          .from('cadastro_links')
+          .select('id,link_url')
+          .in('id', linkIds.slice(start, start + 100));
+        if (linkError) {
+          console.warn('[LinkPendenciasList] links indisponiveis para copia:', linkError);
+          break;
+        }
+        (linkRows || []).forEach((link) => {
+          if (link.link_url) urls.set(link.id, link.link_url);
+        });
+      }
+      setLinkUrlById(urls);
 
       if (canFilterVendedor) {
         const sellerIds = Array.from(new Set(
@@ -345,6 +367,38 @@ export function LinkPendenciasList({
     dataInicio ||
     dataFim
   );
+
+  const copyCompanyLink = async (linkId: string) => {
+    const url = linkUrlById.get(linkId);
+    if (!url) {
+      setError('O link desta solicitação não está disponível para cópia.');
+      return;
+    }
+    try {
+      // No iOS o gesto do usuario precisa iniciar a copia sem await de rede.
+      // A URL ja foi buscada com a permissao do usuario durante o carregamento.
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        const input = document.createElement('textarea');
+        input.value = url;
+        input.setAttribute('readonly', '');
+        input.style.position = 'fixed';
+        input.style.opacity = '0';
+        document.body.appendChild(input);
+        input.select();
+        const copied = document.execCommand('copy');
+        input.remove();
+        if (!copied) throw new Error('Falha ao copiar');
+      }
+      setError('');
+      setCopiedLinkId(linkId);
+    } catch (copyError) {
+      console.error('[LinkPendenciasList] falha ao copiar URL:', copyError);
+      setError('Não foi possível copiar o link. Verifique a permissão de área de transferência.');
+      setCopiedLinkId(null);
+    }
+  };
 
   const goToPage = (nextPage: number) => {
     setPage(Math.max(1, Math.min(totalPages, nextPage)));
@@ -642,9 +696,26 @@ export function LinkPendenciasList({
                       </div>
                       <div className="min-w-0">
                         <h3 className="vm-page-title truncate font-semibold">{item.nome || 'Pessoa identificada'}</h3>
-                        <p className="vm-muted-text mt-0.5 text-sm">
-                          {item.cpf ? formatCPF(item.cpf) : 'CPF protegido'} · {item.empresa_codigo} - {item.empresa_nome}
-                        </p>
+                        <div className="vm-muted-text mt-0.5 flex flex-wrap items-center gap-1 text-sm">
+                          <span>{item.cpf ? formatCPF(item.cpf) : 'CPF protegido'} · {item.empresa_codigo} - {item.empresa_nome}</span>
+                          <button
+                            type="button"
+                            title={linkUrlById.has(item.link_id) ? 'Copiar link desta empresa' : 'Link indisponível para cópia'}
+                            aria-label={`Copiar link de ${item.empresa_nome}`}
+                            onClick={() => void copyCompanyLink(item.link_id)}
+                            disabled={!linkUrlById.has(item.link_id)}
+                            className="inline-flex size-7 items-center justify-center rounded-md text-violet-500 transition-colors hover:bg-violet-500/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {copiedLinkId === item.link_id ? (
+                              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                            ) : (
+                              <Link2 className="h-4 w-4" />
+                            )}
+                          </button>
+                          {copiedLinkId === item.link_id && (
+                            <span role="status" className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Link copiado!</span>
+                          )}
+                        </div>
                         <div className="vm-muted-text mt-1 flex flex-col gap-0.5 text-xs sm:flex-row sm:flex-wrap sm:gap-x-4">
                           <span>Telefone: {contacts.telefone ? formatPhone(contacts.telefone) : 'Não informado'}</span>
                           <span>E-mail: {contacts.email || 'Não informado'}</span>
