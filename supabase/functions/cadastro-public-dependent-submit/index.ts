@@ -9,6 +9,7 @@ import {
   normalizeDate,
   normalizeDigits,
   resolveAttempt,
+  requireInternalUser,
   sanitizePlan,
   sha256,
   stableStringify,
@@ -273,7 +274,8 @@ Deno.serve(async (req: Request) => {
   let erpCommitted = false;
 
   try {
-    const body = await req.json() as {
+    let body = await req.json().catch(() => ({})) as {
+      pendingId?: string;
       attemptToken?: string;
       contractToken?: string;
       acceptedTerms?: boolean;
@@ -283,64 +285,96 @@ Deno.serve(async (req: Request) => {
       confirmedEmail?: string;
       dependents?: DepInput[];
     };
+    let internalPending: any = null;
+    let attempt: any = null;
+    let initialContractSession: any = null;
+    if (body.pendingId) {
+      const actor = await requireInternalUser(req, supabase);
+      if (!actor) return jsonResponse({ error: "Autenticacao obrigatoria" }, 401);
+      const { data: pending, error: pendingError } = await supabase.from("link_pendencias")
+        .select("*").eq("id", body.pendingId).maybeSingle();
+      if (pendingError) throw pendingError;
+      if (!pending || pending.operation_type !== "existing_member" ||
+          pending.requires_authorization !== true || !pending.contract_session_id) {
+        return jsonResponse({ error: "Solicitacao contratual indisponivel" }, 404);
+      }
+      const role = String(actor.profile.role || "").toUpperCase();
+      if ((role === "VENDEDOR" && String(pending.vendedor_id) !== String(actor.profile.id)) ||
+          (pending.status === "erro_envio" && !["ADMINISTRADOR", "CADASTRO", "GERENTE"].includes(role))) {
+        return jsonResponse({ error: "Sem permissao para esta solicitacao" }, 403);
+      }
+      const { data: savedSession, error: savedError } = await supabase.from("public_contract_sessions")
+        .select("*").eq("id", pending.contract_session_id).maybeSingle();
+      if (savedError) throw savedError;
+      if (!savedSession || !savedSession.accepted_terms || !savedSession.accepted_data ||
+          !savedSession.accepted_at || !savedSession.pdf_storage_path) {
+        return jsonResponse({ error: "Termo aceito nao disponivel" }, 409);
+      }
+      const { data: savedAttempt, error: attemptError } = await supabase.from("public_adesao_attempts")
+        .select("*").eq("id", savedSession.attempt_id).maybeSingle();
+      if (attemptError) throw attemptError;
+      if (!savedAttempt || String(savedAttempt.link_id) !== String(pending.link_id) ||
+          String(savedAttempt.link_pendencia_id) !== String(pending.id)) {
+        return jsonResponse({ error: "Vinculo da solicitacao invalido" }, 409);
+      }
+      const prepared = savedSession.snapshot?.cadastro || {};
+      const contacts = Array.isArray(prepared.contatos) ? prepared.contatos : [];
+      const primaryPhone = contacts
+        .filter((item: any) => ["whatsapp", "celular", "fixo"].includes(String(item?.tipo)))
+        .map((item: any) => normalizeDigits(item.valor))
+        .find((phone: string) => phone.length >= 10) || "";
+      body = {
+        ...body, acceptedTerms: true, acceptedData: true,
+        acceptedCoverage: true, confirmedPhone: primaryPhone,
+        confirmedEmail: String(savedSession.confirmed_email || ""),
+        dependents: Array.isArray(prepared.dependentes) ? prepared.dependentes : [],
+      };
+      attempt = savedAttempt;
+      initialContractSession = savedSession;
+      internalPending = pending;
+    } else {
+      attempt = await resolveAttempt(supabase, String(body.attemptToken || ""));
+    }
     const attemptToken = String(body.attemptToken || "").trim();
     const contractToken = String(body.contractToken || "").trim();
     const phone = normalizeDigits(body.confirmedPhone).slice(0, 13);
     const email = String(body.confirmedEmail || "").trim().toLowerCase();
     const deps = Array.isArray(body.dependents) ? body.dependents : [];
 
-    if (!attemptToken) return jsonResponse({ error: "Sessao obrigatoria" }, 401);
-    if (!contractToken || body.acceptedTerms !== true || body.acceptedData !== true) {
-      return jsonResponse({
-        error: "Leia e aceite os termos da inclusao e confirme os dados antes de concluir.",
-        code: "CONTRACT_ACCEPTANCE_REQUIRED",
-      }, 400);
+    if (!internalPending && !attemptToken) return jsonResponse({ error: "Sessao obrigatoria" }, 401);
+    if (!internalPending && (!contractToken || body.acceptedTerms !== true || body.acceptedData !== true)) {
+      return jsonResponse({ error: "Aceite do contrato obrigatorio", code: "CONTRACT_ACCEPTANCE_REQUIRED" }, 400);
     }
     if (phone.length < 10) return jsonResponse({ error: "Informe um telefone valido" }, 400);
     if (!emailRegex.test(email)) return jsonResponse({ error: "Informe um e-mail valido" }, 400);
     if (!deps.length) return jsonResponse({ error: "Adicione ao menos um dependente" }, 400);
 
-    const attempt = await resolveAttempt(supabase, attemptToken);
-    if (attempt?.status === "completed") {
+    if (!internalPending && attempt?.status === "completed") {
       const { data: done } = await supabase.from("public_dependent_submissions")
         .select("cadastro_id").eq("attempt_id", attempt.id).eq("status", "succeeded").maybeSingle();
-      return jsonResponse({
-        ok: true,
-        state: "completed",
-        cadastroId: done?.cadastro_id || null,
-        message: "Dependente(s) ja incluido(s) com sucesso.",
-      });
+      return jsonResponse({ ok: true, state: "completed", cadastroId: done?.cadastro_id || null });
     }
-    if (!attempt || attempt.status !== "authenticated") {
-      return jsonResponse({ error: "Sessao expirada. Inicie novamente.", code: "SESSION_EXPIRED" }, 401);
+    if (!attempt || (internalPending ? attempt.status !== "completed" : attempt.status !== "authenticated")) {
+      return jsonResponse({ error: "Sessao expirada", code: "SESSION_EXPIRED" }, 401);
     }
     if (attempt.flow_mode !== "existing_member" || !attempt.erp_member_snapshot) {
       return jsonResponse({ error: "Esta sessao nao permite inclusao de dependentes", code: "INVALID_FLOW_MODE" }, 409);
     }
-
-    const { data: currentLink, error: currentLinkError } = await supabase
-      .from("cadastro_links")
-      .select("id,requires_authorization")
-      .eq("id", attempt.link_id)
-      .maybeSingle();
+    const { data: currentLink, error: currentLinkError } = await supabase.from("cadastro_links")
+      .select("id,requires_authorization").eq("id", attempt.link_id).maybeSingle();
     if (currentLinkError) throw currentLinkError;
     if (!currentLink) return jsonResponse({ error: "Link indisponivel", code: "LINK_UNAVAILABLE" }, 410);
-    if (currentLink.requires_authorization === true) {
-      return jsonResponse({
-        error: "Esta solicitacao deve ser finalizada para analise interna, sem termos publicos.",
-        code: "AUTHORIZATION_REVIEW_REQUIRED",
-      }, 409);
+    if (Boolean(currentLink.requires_authorization) !== Boolean(internalPending)) {
+      return jsonResponse({ error: "Fluxo de autorizacao inconsistente" }, 409);
     }
-
-    const tokenHash = await sha256(contractToken);
-    const { data: initialContractSession, error: contractSessionError } = await supabase
-      .from("public_contract_sessions")
-      .select("*")
-      .eq("attempt_id", attempt.id)
-      .eq("contract_token_hash", tokenHash)
-      .maybeSingle();
-    if (contractSessionError || !initialContractSession) {
-      return jsonResponse({ error: "Termos nao encontrados ou expirados. Revise novamente antes de concluir." }, 404);
+    if (!internalPending) {
+      const { data: savedSession, error: contractError } = await supabase
+        .from("public_contract_sessions").select("*").eq("attempt_id", attempt.id)
+        .eq("contract_token_hash", await sha256(contractToken)).maybeSingle();
+      if (contractError || !savedSession) {
+        return jsonResponse({ error: "Termos nao encontrados ou expirados" }, 404);
+      }
+      initialContractSession = savedSession;
     }
     if (initialContractSession.snapshot?.flowMode !== "existing_member") {
       return jsonResponse({ error: "Os termos apresentados nao pertencem a esta inclusao.", code: "INVALID_CONTRACT_FLOW" }, 409);
@@ -382,7 +416,7 @@ Deno.serve(async (req: Request) => {
         message: "Sua solicitacao ja esta sendo processada.",
       }, 202);
     }
-    if (!["prepared", "erp_failed"].includes(initialContractSession.status)) {
+    if (!(internalPending ? ["pending_review", "erp_failed"] : ["prepared", "erp_failed"]).includes(initialContractSession.status)) {
       return jsonResponse({ error: "Estes termos nao podem mais ser utilizados. Revise a solicitacao novamente." }, 409);
     }
 
@@ -391,7 +425,7 @@ Deno.serve(async (req: Request) => {
       (preparedCadastro?.coberturaDisponivel == null &&
         Array.isArray(preparedCadastro?.coberturaPlanoArquivos) &&
         preparedCadastro.coberturaPlanoArquivos.length > 0);
-    if (requiresCoverageConsent && body.acceptedCoverage !== true) {
+    if (!internalPending && requiresCoverageConsent && body.acceptedCoverage !== true) {
       return jsonResponse({ error: "Leia e aceite a cobertura disponibilizada antes de concluir." }, 400);
     }
 
@@ -497,7 +531,7 @@ Deno.serve(async (req: Request) => {
         updated_at: now,
       })
       .eq("id", initialContractSession.id)
-      .in("status", ["prepared", "erp_failed"])
+      .in("status", internalPending ? ["pending_review", "erp_failed"] : ["prepared", "erp_failed"])
       .select("*")
       .maybeSingle();
     if (claimContractError) throw claimContractError;
@@ -772,14 +806,17 @@ Deno.serve(async (req: Request) => {
       hourCycle: "h23",
     }).format(new Date(acceptedSession.accepted_at || new Date().toISOString())).replace(",", "");
 
-    const pdf = await makeAcceptedPdf(String(acceptedSession.contract_text || ""), acceptedAt);
-    const pdfHash = await sha256(pdf);
+    const pdf = acceptedSession.pdf_storage_path
+      ? null : await makeAcceptedPdf(String(acceptedSession.contract_text || ""), acceptedAt);
+    const pdfHash = acceptedSession.pdf_hash || (pdf ? await sha256(pdf) : null);
     const storageOwner = cadastroId || submissionId || acceptedSession.id;
-    const storagePath = `${new Date().getUTCFullYear()}/${storageOwner}/contrato-${acceptedSession.id}.pdf`;
-    const { error: uploadError } = await supabase.storage.from("contracts").upload(storagePath, pdf, {
-      contentType: "application/pdf",
-      upsert: true,
-    });
+    const storagePath = acceptedSession.pdf_storage_path ||
+      `${new Date().getUTCFullYear()}/${storageOwner}/contrato-${acceptedSession.id}.pdf`;
+    const uploadError = pdf
+      ? (await supabase.storage.from("contracts").upload(storagePath, pdf, {
+          contentType: "application/pdf", upsert: true,
+        })).error
+      : null;
 
     if (uploadError) {
       await supabase.from("public_contract_sessions").update({
