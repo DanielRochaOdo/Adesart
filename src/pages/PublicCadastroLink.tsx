@@ -817,50 +817,6 @@ export function PublicCadastroLink() {
     }
   };
 
-  const finalizePendingReview = async (forceAuthorization = false) => {
-    if (!forceAuthorization && !authorizationRequired) return;
-
-    const pending = flowMode === 'existing_member'
-      ? [
-          ...dependentErrors(),
-          dependents.length === 0 && 'Adicione ao menos um dependente.',
-          normalizePhone(form.telefone).length < 10 && 'Telefone / WhatsApp: informe um número válido com DDD.',
-          !isEmail(form.email) && 'E-mail: informe um endereço válido.',
-        ].filter(Boolean) as string[]
-      : [...detailsErrors(), ...dependentErrors()];
-
-    if (pending.length) {
-      setValidationErrors(pending);
-      setError('');
-      return;
-    }
-
-    setBusy(true);
-    setError('');
-    try {
-      const response = await fetch(apiUrl('cadastro-public-pending-finalize'), {
-        method: 'POST',
-        headers: publicHeaders(),
-        body: JSON.stringify({
-          attemptToken,
-          snapshot: currentPendingSnapshot(),
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok || !result.ok) {
-        const fields = Array.isArray(result.fields) ? result.fields.join(' ') : '';
-        throw new Error(fields || result.error || 'Não foi possível finalizar a solicitação.');
-      }
-      setSuccessMessage('Seus dados foram enviados para análise. Em caso de dúvidas você pode entrar em contato com seu consultor.');
-      sessionStorage.removeItem('adesart-public-attempt-token');
-      setStage('success');
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : 'Não foi possível finalizar a solicitação.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const prepareContract = async () => {
     if (!isEmail(emailToConfirm)) { setError('Confirme um e-mail válido.'); return; }
     setBusy(true);
