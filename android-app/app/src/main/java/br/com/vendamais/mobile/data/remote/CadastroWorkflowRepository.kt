@@ -264,19 +264,31 @@ class CadastroWorkflowRepository(
     }
 
     suspend fun fetchLinkPendencias(session: SavedSession): List<LinkPendenciaItem> {
-        return getList(
-            path = "link_pendencias",
-            session = session,
-            query = {
-                parameter(
-                    "select",
-                    "id,link_id,cpf,nome,empresa_codigo,empresa_nome,operation_type,requires_authorization,status,flow_stage,latest_snapshot,source_attempt_ids,source_link_ids,cadastro_id,contract_session_id,first_attempt_at,last_activity_at,public_completed_at,sent_at,resolution_reason,last_error",
-                )
-                parameter("status", "in.(aguardando_analise,pronto_erp,enviando,erro_envio,enviado)")
-                parameter("order", "last_activity_at.desc")
-                parameter("limit", 1000)
-            },
-        )
+        // PostgREST limita o numero de linhas por resposta. Percorrer todos os
+        // lotes evita truncar o historico em 1.000 pendencias.
+        val batchSize = 500
+        val all = mutableListOf<LinkPendenciaItem>()
+        var offset = 0
+        while (true) {
+            val batch = getList<LinkPendenciaItem>(
+                path = "link_pendencias",
+                session = session,
+                query = {
+                    parameter(
+                        "select",
+                        "id,link_id,cpf,nome,empresa_codigo,empresa_nome,operation_type,requires_authorization,status,flow_stage,latest_snapshot,source_attempt_ids,source_link_ids,cadastro_id,contract_session_id,first_attempt_at,last_activity_at,public_completed_at,sent_at,resolution_reason,last_error",
+                    )
+                    parameter("status", "in.(aguardando_analise,pronto_erp,enviando,erro_envio,enviado)")
+                    parameter("order", "last_activity_at.desc,id.desc")
+                    parameter("limit", batchSize)
+                    parameter("offset", offset)
+                },
+            )
+            all.addAll(batch)
+            if (batch.size < batchSize) break
+            offset += batchSize
+        }
+        return all
     }
 
     suspend fun sendLinkPendencia(
