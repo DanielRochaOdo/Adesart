@@ -8,6 +8,7 @@ import {
   jsonResponse,
   normalizeDigits,
   resolveAttempt,
+  requireInternalUser,
   sha256,
   upsertLinkPendingJourney,
 } from "../_shared/public-flow.ts";
@@ -541,49 +542,80 @@ Deno.serve(async (req: Request) => {
   let stage = "request";
 
   try {
-    const body = await req.json() as {
+    const body = await req.json().catch(() => ({})) as {
+      pendingId?: string;
       attemptToken?: string;
       contractToken?: string;
       acceptedTerms?: boolean;
       acceptedData?: boolean;
       acceptedCoverage?: boolean;
     };
-
-    if (!body.attemptToken || !body.contractToken || body.acceptedTerms !== true || body.acceptedData !== true) {
-      return jsonResponse({ error: "O aceite do contrato e a confirmacao dos dados sao obrigatorios" }, 400);
+    // A chamada interna nao recebe dados do associado: usa exclusivamente o
+    // snapshot, o contrato e o aceite preservados na sessao vinculada a pendencia.
+    let internalPending: any = null;
+    let internalActor: any = null;
+    let attempt: any = null;
+    let initialSession: any = null;
+    if (body.pendingId) {
+      internalActor = await requireInternalUser(req, supabase);
+      if (!internalActor) return jsonResponse({ error: "Autenticacao obrigatoria" }, 401);
+      const { data: pending, error: pendingError } = await supabase.from("link_pendencias")
+        .select("*").eq("id", body.pendingId).maybeSingle();
+      if (pendingError) throw pendingError;
+      if (!pending || pending.operation_type !== "new_member" ||
+          pending.requires_authorization !== true || !pending.contract_session_id) {
+        return jsonResponse({ error: "Solicitacao contratual indisponivel" }, 404);
+      }
+      const role = String(internalActor.profile.role || "").toUpperCase();
+      if ((role === "VENDEDOR" && String(pending.vendedor_id) !== String(internalActor.profile.id)) ||
+          (pending.status === "erro_envio" && !["ADMINISTRADOR", "CADASTRO", "GERENTE"].includes(role))) {
+        return jsonResponse({ error: "Sem permissao para enviar esta solicitacao" }, 403);
+      }
+      const { data: savedSession, error: savedError } = await supabase.from("public_contract_sessions")
+        .select("*").eq("id", pending.contract_session_id).maybeSingle();
+      if (savedError) throw savedError;
+      if (!savedSession || !savedSession.accepted_terms || !savedSession.accepted_data ||
+          !savedSession.accepted_at || !savedSession.pdf_storage_path) {
+        return jsonResponse({ error: "Contrato aceito nao disponivel" }, 409);
+      }
+      const { data: savedAttempt, error: attemptError } = await supabase.from("public_adesao_attempts")
+        .select("*").eq("id", savedSession.attempt_id).maybeSingle();
+      if (attemptError) throw attemptError;
+      if (!savedAttempt || String(savedAttempt.link_id) !== String(pending.link_id) ||
+          String(savedAttempt.link_pendencia_id) !== String(pending.id)) {
+        return jsonResponse({ error: "Vinculo da solicitacao invalido" }, 409);
+      }
+      attempt = savedAttempt;
+      initialSession = savedSession;
+      internalPending = pending;
+    } else {
+      if (!body.attemptToken || !body.contractToken ||
+          body.acceptedTerms !== true || body.acceptedData !== true) {
+        return jsonResponse({ error: "O aceite do contrato e a confirmacao dos dados sao obrigatorios" }, 400);
+      }
+      attempt = await resolveAttempt(supabase, body.attemptToken);
+      if (!attempt || attempt.status !== "authenticated") {
+        return jsonResponse({ error: "Sessao expirada" }, 401);
+      }
+      const { data: savedSession, error: sessionError } = await supabase
+        .from("public_contract_sessions").select("*").eq("attempt_id", attempt.id)
+        .eq("contract_token_hash", await sha256(body.contractToken.trim())).maybeSingle();
+      if (sessionError || !savedSession) {
+        return jsonResponse({ error: "Contrato nao encontrado ou expirado" }, 404);
+      }
+      initialSession = savedSession;
     }
-
-    stage = "resolve_attempt";
-    const attempt = await resolveAttempt(supabase, body.attemptToken);
-    if (!attempt || attempt.status !== "authenticated") return jsonResponse({ error: "Sessao expirada" }, 401);
     if ((attempt.flow_mode || "new_member") !== "new_member") {
       return jsonResponse({ error: "Esta sessao nao permite concluir uma nova adesao.", code: "INVALID_FLOW_MODE" }, 409);
     }
-
     const { data: currentLink, error: currentLinkError } = await supabase
-      .from("cadastro_links")
-      .select("id,requires_authorization")
-      .eq("id", attempt.link_id)
-      .maybeSingle();
+      .from("cadastro_links").select("id,requires_authorization")
+      .eq("id", attempt.link_id).maybeSingle();
     if (currentLinkError) throw currentLinkError;
     if (!currentLink) return jsonResponse({ error: "Link indisponivel", code: "LINK_UNAVAILABLE" }, 410);
-    if (currentLink.requires_authorization === true) {
-      return jsonResponse({
-        error: "Esta solicitacao deve ser finalizada para analise interna, sem contrato publico.",
-        code: "AUTHORIZATION_REVIEW_REQUIRED",
-      }, 409);
+    if (Boolean(currentLink.requires_authorization) !== Boolean(internalPending)) {
+      return jsonResponse({ error: "Fluxo de autorizacao inconsistente" }, 409);
     }
-
-    stage = "load_contract_session";
-    const tokenHash = await sha256(body.contractToken.trim());
-    const { data: initialSession, error: sessionError } = await supabase
-      .from("public_contract_sessions")
-      .select("*")
-      .eq("attempt_id", attempt.id)
-      .eq("contract_token_hash", tokenHash)
-      .maybeSingle();
-
-    if (sessionError || !initialSession) return jsonResponse({ error: "Contrato nao encontrado ou expirado" }, 404);
 
     let session = initialSession;
     if (["erp_registered", "deliveries_pending", "completed"].includes(session.status)) {
@@ -623,7 +655,7 @@ Deno.serve(async (req: Request) => {
       session = recovered;
     }
 
-    if (!["prepared", "erp_failed"].includes(session.status)) {
+    if (!(internalPending ? ["pending_review", "erp_failed"] : ["prepared", "erp_failed"]).includes(session.status)) {
       return jsonResponse({ error: "Este contrato nao pode mais ser utilizado" }, 409);
     }
 
@@ -634,13 +666,13 @@ Deno.serve(async (req: Request) => {
       (preparedCadastro?.coberturaDisponivel == null &&
         Array.isArray(preparedCadastro?.coberturaPlanoArquivos) &&
         preparedCadastro.coberturaPlanoArquivos.length > 0);
-    if (requiresCoverageConsent && body.acceptedCoverage !== true) {
+    if (!internalPending && requiresCoverageConsent && body.acceptedCoverage !== true) {
       return jsonResponse({ error: "Leia e aceite a cobertura disponibilizada antes de concluir." }, 400);
     }
 
     const previousStatus = session.status;
     const now = new Date().toISOString();
-    const ipHash = await hashSensitiveValue(getRequestIp(req));
+    const ipHash = internalPending ? session.accepted_ip_hash : await hashSensitiveValue(getRequestIp(req));
 
     stage = "claim_session";
     const { data: claimed, error: claimError } = await supabase
@@ -655,7 +687,7 @@ Deno.serve(async (req: Request) => {
         updated_at: now,
       })
       .eq("id", session.id)
-      .in("status", ["prepared", "erp_failed"])
+      .in("status", internalPending ? ["pending_review", "erp_failed"] : ["prepared", "erp_failed"])
       .select("*")
       .maybeSingle();
 
@@ -866,13 +898,15 @@ Deno.serve(async (req: Request) => {
     }).format(new Date(claimed.accepted_at || now)).replace(",", "");
 
     stage = "generate_contract_pdf";
-    const pdf = await makePdf(claimed.contract_text, { acceptedAt });
-    const pdfHash = await sha256(pdf);
-    const path = `${new Date().getUTCFullYear()}/${cadastroId}/contrato-${claimed.id}.pdf`;
-    const { error: uploadError } = await supabase.storage.from("contracts").upload(path, pdf, {
-      contentType: "application/pdf",
-      upsert: true,
-    });
+    const pdf = claimed.pdf_storage_path ? null : await makePdf(claimed.contract_text, { acceptedAt });
+    const pdfHash = claimed.pdf_hash || (pdf ? await sha256(pdf) : null);
+    const path = claimed.pdf_storage_path ||
+      `${new Date().getUTCFullYear()}/${cadastroId}/contrato-${claimed.id}.pdf`;
+    const uploadError = pdf
+      ? (await supabase.storage.from("contracts").upload(path, pdf, {
+          contentType: "application/pdf", upsert: true,
+        })).error
+      : null;
 
     if (uploadError) {
       await supabase.from("public_contract_sessions").update({
@@ -989,13 +1023,14 @@ Deno.serve(async (req: Request) => {
         created_by: l.createdBy,
         vendedor_id: l.vendedorId,
         team_id: l.teamId,
-        requires_authorization: false,
+        requires_authorization: Boolean(internalPending),
       },
       snapshot,
       stage: "completed",
       status: "enviado",
       publicCompletedAt: completedAt,
       cadastroId,
+      sentBy: internalActor?.profile?.id || null,
       erpResponse: erpResult,
     });
 
