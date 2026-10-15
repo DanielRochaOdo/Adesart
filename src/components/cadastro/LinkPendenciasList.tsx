@@ -147,6 +147,9 @@ const contactInfo = (item: LinkPending) => {
   return { telefone, email };
 };
 
+const PAGE_SIZE = 50;
+const FETCH_BATCH_SIZE = 500;
+
 export function LinkPendenciasList({
   reloadKey = 0,
   onCountChange,
@@ -165,6 +168,7 @@ export function LinkPendenciasList({
   const [nextActionFilter, setNextActionFilter] = useState('');
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
+  const [page, setPage] = useState(1);
 
   const canFilterVendedor = ['ADMINISTRADOR', 'GERENTE', 'CADASTRO'].includes(profile?.role ?? '');
 
@@ -172,7 +176,6 @@ export function LinkPendenciasList({
     setLoading(true);
     setError('');
     try {
-      const pageSize = 1000;
       let rangeStart = 0;
       const loadedItems: LinkPending[] = [];
 
@@ -183,7 +186,7 @@ export function LinkPendenciasList({
           .in('status', activeStatuses)
           .order('last_activity_at', { ascending: false })
           .order('id', { ascending: false })
-          .range(rangeStart, rangeStart + pageSize - 1);
+          .range(rangeStart, rangeStart + FETCH_BATCH_SIZE - 1);
 
         if (profile?.role === 'VENDEDOR') {
           query = query.eq('vendedor_id', profile.id);
@@ -195,8 +198,8 @@ export function LinkPendenciasList({
         const pageItems = (data || []) as LinkPending[];
         loadedItems.push(...pageItems);
 
-        if (pageItems.length < pageSize) break;
-        rangeStart += pageSize;
+        if (pageItems.length < FETCH_BATCH_SIZE) break;
+        rangeStart += FETCH_BATCH_SIZE;
       }
 
       setItems(loadedItems);
@@ -316,6 +319,17 @@ export function LinkPendenciasList({
     canFilterVendedor,
     sellerNameById,
   ]);
+
+  // A pesquisa e os filtros consideram TODOS os registros acessiveis,
+  // independentemente da pagina visivel. A exportacao conserva esse conjunto.
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const visibleItems = filtered.slice(pageStart, pageStart + PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, empresaFilter, vendedorFilter, nextActionFilter, dataInicio, dataFim]);
 
   const activeCount = items.filter((item) => item.status !== 'enviado' && item.status !== 'encerrado').length;
   const hasFilters = Boolean(
@@ -542,7 +556,9 @@ export function LinkPendenciasList({
 
         <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="vm-muted-text text-sm">
-            Mostrando {filtered.length} de {items.length} pendência(s).
+            {filtered.length === 0
+              ? `Nenhuma pendência encontrada entre ${items.length} registros.`
+              : `Mostrando ${pageStart + 1}–${pageStart + visibleItems.length} de ${filtered.length} pendência(s) filtrada(s) (${items.length} no total).`}
           </p>
           <div className="flex flex-wrap gap-2">
             {hasFilters && (
@@ -579,7 +595,7 @@ export function LinkPendenciasList({
         </div>
       ) : (
         <div className="grid gap-3">
-          {filtered.map((item) => {
+          {visibleItems.map((item) => {
             const canRepairErpError = ['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(profile?.role ?? '');
             const sellerName = item.vendedor_id ? sellerNameById.get(item.vendedor_id) : null;
             const contacts = contactInfo(item);
@@ -697,6 +713,28 @@ export function LinkPendenciasList({
             );
           })}
         </div>
+      )}
+
+      {!loading && filtered.length > 0 && (
+        <nav className="vm-cadastro-card flex flex-col items-center justify-between gap-3 rounded-2xl p-3 sm:flex-row sm:p-4" aria-label="Paginação de Link Pendências">
+          <span className="vm-muted-text text-sm" aria-live="polite">
+            Página {currentPage} de {totalPages} · 50 registros por página
+          </span>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <Button type="button" onClick={() => setPage(1)} disabled={currentPage === 1}>
+              Primeira
+            </Button>
+            <Button type="button" onClick={() => setPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1}>
+              Anterior
+            </Button>
+            <Button type="button" onClick={() => setPage(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages}>
+              Próxima
+            </Button>
+            <Button type="button" onClick={() => setPage(totalPages)} disabled={currentPage === totalPages}>
+              Última
+            </Button>
+          </div>
+        </nav>
       )}
     </div>
   );
