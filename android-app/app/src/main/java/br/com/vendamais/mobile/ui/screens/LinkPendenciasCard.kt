@@ -102,7 +102,8 @@ fun LinkPendenciasCard(
 private fun LinkPendenciaRow(
     item: LinkPendenciaItem,
     profileRole: String,
-    onOpenPending: (String) -> Unit,
+    onSendPending: (String) -> Unit,
+    onDownloadContract: (String) -> Unit,
 ) {
     val canRepairErpError = profileRole.uppercase() in setOf("ADMINISTRADOR", "CADASTRO", "GERENTE")
     val canTreat = item.requiresAuthorization && item.contractSessionId != null &&
