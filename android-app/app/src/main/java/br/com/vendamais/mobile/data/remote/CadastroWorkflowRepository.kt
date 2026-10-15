@@ -263,6 +263,29 @@ class CadastroWorkflowRepository(
         }
     }
 
+    @kotlinx.serialization.Serializable
+    private data class LinkForClipboard(
+        @kotlinx.serialization.SerialName("link_url")
+        val linkUrl: String? = null,
+    )
+
+    suspend fun fetchPendingCompanyLinkUrl(session: SavedSession, linkId: String): String {
+        val link = getList<LinkForClipboard>(
+            path = "cadastro_links",
+            session = session,
+            query = {
+                parameter("select", "link_url")
+                parameter("id", "eq.$linkId")
+                parameter("limit", 1)
+            },
+        ).firstOrNull()
+        val url = link?.linkUrl?.trim().orEmpty()
+        if (!(url.startsWith("https://") || url.startsWith("http://"))) {
+            throw IllegalStateException("O link desta solicitacao nao esta disponivel para copia.")
+        }
+        return url
+    }
+
     suspend fun fetchLinkPendencias(session: SavedSession): List<LinkPendenciaItem> {
         // PostgREST limita o numero de linhas por resposta. Percorrer todos os
         // lotes evita truncar o historico em 1.000 pendencias.
