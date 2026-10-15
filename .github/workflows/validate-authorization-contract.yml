@@ -1,0 +1,47 @@
+name: Validate deferred contract authorization
+
+on:
+  push:
+    branches:
+      - feat/authorization-contract-acceptance-three-platforms-20261015
+  pull_request:
+    paths:
+      - 'src/pages/PublicCadastroLink.tsx'
+      - 'src/components/cadastro/LinkPendenciasList.tsx'
+      - 'supabase/functions/cadastro-public-contract-accept/**'
+      - 'supabase/functions/cadastro-link-pending-contract/**'
+      - 'supabase/functions/cadastro-public-contract-prepare/**'
+      - 'supabase/functions/cadastro-public-submit/**'
+      - 'supabase/functions/cadastro-public-dependent-submit/**'
+      - 'supabase/functions/cadastro-public-pending-finalize/**'
+      - 'supabase/migrations/20261015103000_deferred_contract_acceptance_v1.sql'
+      - '.github/workflows/validate-authorization-contract.yml'
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+
+  functions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: |
+          deno check --node-modules-dir=auto \
+            supabase/functions/cadastro-public-contract-prepare/index.ts \
+            supabase/functions/cadastro-public-contract-accept/index.ts \
+            supabase/functions/cadastro-link-pending-contract/index.ts \
+            supabase/functions/cadastro-public-pending-finalize/index.ts \
+            supabase/functions/cadastro-public-submit/index.ts \
+            supabase/functions/cadastro-public-dependent-submit/index.ts
