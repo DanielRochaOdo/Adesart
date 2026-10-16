@@ -423,6 +423,7 @@ fun CadastrosScreen(
                     LinkPendenciasCard(
                         workspace = state.linkWorkspace,
                         profileRole = state.profile?.role.orEmpty(),
+                        sellers = state.vendedores.map { it.id to it.name },
                         onSendPending = viewModel::sendLinkPendencia,
                         onCopyCompanyLink = { pendingId ->
                             contractScope.launch {
@@ -1566,20 +1567,16 @@ private fun firstDayOfCurrentMonthIso(): String {
 }
 
 private fun searchInDependentes(cadastro: CadastroResumo, nome: String, cpfDigits: String): Boolean {
-    val deps = runCatching { cadastro.dependentes?.jsonArray }.getOrNull() ?: return false
-    return deps.any { dep ->
-        val obj = runCatching { dep.jsonObject }.getOrNull() ?: return@any false
-        val depNome = obj["nome"]?.jsonPrimitive?.contentOrNull.orEmpty()
-        val depCpf = obj["cpf"]?.jsonPrimitive?.contentOrNull.orEmpty().filter(Char::isDigit)
-        val matchNome = nome.isBlank() || depNome.contains(nome, ignoreCase = true)
-        val matchCpf = cpfDigits.isBlank() || depCpf.contains(cpfDigits)
+    return cadastro.dependentesBusca.any { dependente ->
+        val matchNome = nome.isBlank() || dependente.nome.contains(nome, ignoreCase = true)
+        val matchCpf = cpfDigits.isBlank() || dependente.cpf.contains(cpfDigits)
         matchNome && matchCpf
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DateFilterField(
+internal fun DateFilterField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,

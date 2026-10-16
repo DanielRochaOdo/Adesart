@@ -1,12 +1,12 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase, Profile } from '../lib/supabase';
+import { setRememberConnectedPreference, supabase, Profile } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string, rememberConnected: boolean) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -154,8 +154,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string, rememberConnected: boolean) => {
     setLoading(true);
+    setRememberConnectedPreference(rememberConnected);
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,

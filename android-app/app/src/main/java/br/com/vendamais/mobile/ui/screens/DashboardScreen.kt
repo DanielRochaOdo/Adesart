@@ -2,11 +2,13 @@ package br.com.vendamais.mobile.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -39,7 +41,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -161,7 +169,7 @@ fun DashboardScreen(
     }
 
     val profileRole = state.profile?.role.orEmpty()
-    val isManagerial = profileRole in setOf("ADMINISTRADOR", "GERENTE")
+    val isManagerial = profileRole in setOf("ADMINISTRADOR", "GERENTE", "CADASTRO")
     val supervisorTeamId = state.profile?.teamId?.takeIf { profileRole == "SUPERVISOR" }
     val teamNames = state.adminTeams.associate { it.id to it.name }
 
@@ -299,7 +307,7 @@ fun DashboardScreen(
     val companyGroups = dashboardGroups(currentCadastros, ::dashboardCompanyKey) {
         dashboardCompanyLabel(it)
     }
-    val planRanking = dashboardPlanRanking(currentRecords, state.planosMap)
+    val planRanking = dashboardPlanRanking(currentRecords, state.planosMap).filter { it.second > 0 }
     val statusCounts = listOf(
         "Enviado ao ERP" to currentCadastros.count { it.status == "enviado" },
         "Incompleto" to currentCadastros.count { it.status == "incompleto" },
@@ -520,7 +528,7 @@ fun DashboardScreen(
 
             item {
                 WebCard(title = "Evolucao de cadastros no periodo") {
-                    DashboardBars(
+                    DashboardEvolutionChart(
                         entries = evolution.takeLast(31),
                         emptyMessage = "Sem cadastros para montar a evolucao.",
                     )
@@ -647,15 +655,25 @@ private fun IndicatorGrid(indicators: List<DashboardIndicator>) {
 private fun IndicatorCard(indicator: DashboardIndicator, modifier: Modifier = Modifier) {
     val variation = if (indicator.previous == 0) null
     else (indicator.current - indicator.previous).toDouble() / indicator.previous.toDouble()
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        color = if (dark) Color(0xA60F172A) else Color(0xCCEFF6F2),
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (dark) Color.White.copy(alpha = 0.075f) else Color(0xFF1E293B).copy(alpha = 0.12f),
+        ),
     ) {
         Column(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color.White.copy(alpha = if (dark) 0.025f else 0.24f), Color.Transparent),
+                    ),
+                )
+                .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Surface(
@@ -717,26 +735,106 @@ private fun DashboardBars(entries: List<Pair<String, Int>>, emptyMessage: String
 }
 
 @Composable
+private fun DashboardEvolutionChart(entries: List<Pair<String, Int>>, emptyMessage: String) {
+    if (entries.isEmpty() || entries.all { it.second == 0 }) {
+        Text(emptyMessage, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        return
+    }
+    val maxValue = entries.maxOf { it.second }.coerceAtLeast(1)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(176.dp)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f), RoundedCornerShape(14.dp))
+                .padding(10.dp),
+        ) {
+            Canvas(Modifier.fillMaxSize()) {
+                val left = 4.dp.toPx()
+                val right = size.width - 4.dp.toPx()
+                val top = 8.dp.toPx()
+                val bottom = size.height - 8.dp.toPx()
+                repeat(4) { index ->
+                    val y = top + (bottom - top) * index / 3f
+                    drawLine(Color.White.copy(alpha = 0.10f), Offset(left, y), Offset(right, y), strokeWidth = 1.dp.toPx())
+                }
+                val points = entries.mapIndexed { index, entry ->
+                    val x = if (entries.size == 1) (left + right) / 2f
+                    else left + (right - left) * index / (entries.size - 1).toFloat()
+                    val y = bottom - (bottom - top) * entry.second / maxValue.toFloat()
+                    Offset(x, y)
+                }
+                val path = Path().apply {
+                    points.forEachIndexed { index, point ->
+                        if (index == 0) moveTo(point.x, point.y) else lineTo(point.x, point.y)
+                    }
+                }
+                drawPath(path, color = Emerald, style = Stroke(width = 2.5.dp.toPx()))
+                points.forEach { drawCircle(Emerald, radius = 3.dp.toPx(), center = it) }
+            }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(entries.first().first, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Pico: $maxValue", style = MaterialTheme.typography.labelSmall, color = Emerald)
+            Text(entries.last().first, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+@Composable
 private fun DashboardDistribution(entries: List<Pair<String, Int>>) {
     val total = entries.sumOf { it.second }
     if (total == 0) {
         Text("Sem registros para esta distribuicao.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         return
     }
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        entries.forEach { (label, value) ->
+    val colors = listOf(Emerald, Blue500, Amber500, Red500)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Canvas(modifier = Modifier.size(132.dp)) {
+                var startAngle = -90f
+                val stroke = Stroke(width = 24.dp.toPx(), cap = StrokeCap.Butt)
+                entries.forEachIndexed { index, entry ->
+                    val sweep = 360f * entry.second.toFloat() / total.toFloat()
+                    drawArc(
+                        color = colors[index % colors.size],
+                        startAngle = startAngle,
+                        sweepAngle = sweep,
+                        useCenter = false,
+                        style = stroke,
+                    )
+                    startAngle += sweep
+                }
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(inteiroDashboard(total), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("registros", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            entries.forEachIndexed { index, (label, value) ->
             val percentage = value.toDouble() / total.toDouble()
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(label, style = MaterialTheme.typography.bodySmall)
-                Text(
-                    "$value · ${String.format(Locale("pt", "BR"), "%.1f", percentage * 100)}%",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Row(modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(8.dp).background(colors[index % colors.size], RoundedCornerShape(99.dp)))
+                        Text(label, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Text(
+                        "$value · ${String.format(Locale("pt", "BR"), "%.1f", percentage * 100)}%",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
             }
         }
     }
 }
+
+private fun inteiroDashboard(value: Int): String = String.format(Locale("pt", "BR"), "%,d", value)
 
 @Composable
 private fun DashboardGroupList(groups: List<DashboardGroup>, showRate: Boolean) {
@@ -744,29 +842,37 @@ private fun DashboardGroupList(groups: List<DashboardGroup>, showRate: Boolean) 
         Text("Sem dados para este agrupamento.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         return
     }
-    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val maxTotal = groups.maxOf { it.total }.coerceAtLeast(1)
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
         groups.take(15).forEach { group ->
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-            ) {
-                Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(group.name, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(
-                        "Total ${group.total} · Enviados ${group.enviados} · Pendentes ${group.pendentes}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (showRate) {
-                        val rate = if (group.total == 0) 0.0 else group.enviados.toDouble() / group.total.toDouble()
-                        Text(
-                            "Taxa de envio: ${String.format(Locale("pt", "BR"), "%.1f", rate * 100)}%",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Emerald,
-                        )
-                    }
+            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(group.name, modifier = Modifier.weight(1f), fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${group.total}", modifier = Modifier.padding(start = 8.dp), fontWeight = FontWeight.Bold)
                 }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f), RoundedCornerShape(999.dp)),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(group.total.toFloat() / maxTotal.toFloat())
+                            .height(8.dp)
+                            .background(Brush.horizontalGradient(listOf(Emerald, Color(0xFF34D399))), RoundedCornerShape(999.dp)),
+                    )
+                }
+                val rate = if (group.total == 0) 0.0 else group.enviados.toDouble() / group.total.toDouble()
+                Text(
+                    "${group.enviados} enviados · ${group.pendentes} pendentes" + if (showRate) " · ${String.format(Locale("pt", "BR"), "%.1f", rate * 100)}%" else "",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
@@ -830,7 +936,13 @@ private fun dashboardRange(period: DashboardPeriod, customStart: String, customE
 }
 
 private fun DashboardCadastro.dashboardDate(): LocalDate {
-    return runCatching { OffsetDateTime.parse(createdAt).toLocalDate() }
+    // Keep the calendar day in the same timezone used to build the Dashboard range.
+    // Web parses created_at as an instant and renders it in the browser's local zone.
+    return runCatching {
+        OffsetDateTime.parse(createdAt)
+            .atZoneSameInstant(ZoneId.systemDefault())
+            .toLocalDate()
+    }
         .getOrElse { LocalDate.MIN }
 }
 
@@ -878,17 +990,21 @@ private fun dashboardPlanRanking(
     records: List<DashboardCadastro>,
     planos: List<PlanoMap>,
 ): List<Pair<String, Int>> {
-    val names = planos.associate { it.planoId to it.nomeExibicao }
-    val counts = mutableMapOf<Int, Int>()
+    // Web starts with the complete catalog (including plans with zero production)
+    // and counts only plan codes present in that catalog.
+    val catalog = planos.distinctBy { it.planoId }.associate { it.planoId to it.nomeExibicao }
+    val counts = catalog.keys.associateWith { 0 }.toMutableMap()
     records.filter { it.status == "enviado" }.forEach { cadastro ->
         val lives = runCatching { cadastro.dependentes?.jsonArray }.getOrNull().orEmpty()
         lives.forEach { life ->
-            dashboardPlanCode(life)?.let { code -> counts[code] = (counts[code] ?: 0) + 1 }
+            dashboardPlanCode(life)?.takeIf(catalog::containsKey)?.let { code ->
+                counts[code] = (counts[code] ?: 0) + 1
+            }
         }
     }
     return counts.entries
-        .map { (code, total) -> (names[code] ?: "Plano $code") to total }
-        .sortedByDescending { it.second }
+        .map { (code, total) -> (catalog[code] ?: "Plano $code") to total }
+        .sortedWith(compareByDescending<Pair<String, Int>> { it.second }.thenBy { it.first.lowercase(Locale("pt", "BR")) })
 }
 
 private fun dashboardPlanCode(element: JsonElement): Int? {

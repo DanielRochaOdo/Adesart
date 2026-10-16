@@ -2,6 +2,7 @@ package br.com.vendamais.mobile.data.models
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 import kotlinx.serialization.json.JsonElement
 
 @Serializable
@@ -193,12 +194,19 @@ data class CadastroResumo(
     @SerialName("link_pendencia_id")
     val linkPendenciaId: String? = null,
     val dependentes: JsonElement? = null,
+    @Transient
+    val dependentesBusca: List<CadastroDependenteBusca> = emptyList(),
     @SerialName("data_envio")
     val dataEnvio: String? = null,
     @SerialName("created_at")
     val createdAt: String,
     @SerialName("updated_at")
     val updatedAt: String,
+)
+
+data class CadastroDependenteBusca(
+    val nome: String,
+    val cpf: String,
 )
 
 @Serializable

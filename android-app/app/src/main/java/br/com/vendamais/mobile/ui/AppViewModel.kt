@@ -3988,7 +3988,10 @@ class AppViewModel(
                     )
                 }
                 prefetchCadastroSupport(session, critical.profile, force = true)
-                if (_uiState.value.activeTab == MainTab.CADASTROS || _uiState.value.cadastrosLoaded) {
+                // The Dashboard refresh has its own date-scoped canonical RPC. Do not
+                // refresh the entire cadastro collection in the background just because
+                // it was loaded earlier; that request pages through thousands of large rows.
+                if (_uiState.value.activeTab == MainTab.CADASTROS) {
                     ensureCadastroResourcesLoaded(force = true)
                 }
                 if (

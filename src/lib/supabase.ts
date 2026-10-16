@@ -7,7 +7,41 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const rememberConnectedKey = 'venda-plus-remember-connected';
+
+function shouldRememberConnected() {
+  return window.localStorage.getItem(rememberConnectedKey) !== 'false';
+}
+
+const sessionStorageAdapter = {
+  getItem: async (key: string) => {
+    const storage = shouldRememberConnected() ? window.localStorage : window.sessionStorage;
+    return storage.getItem(key);
+  },
+  setItem: async (key: string, value: string) => {
+    const persistent = shouldRememberConnected();
+    const destination = persistent ? window.localStorage : window.sessionStorage;
+    const other = persistent ? window.sessionStorage : window.localStorage;
+    destination.setItem(key, value);
+    other.removeItem(key);
+  },
+  removeItem: async (key: string) => {
+    window.localStorage.removeItem(key);
+    window.sessionStorage.removeItem(key);
+  },
+};
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: { storage: sessionStorageAdapter },
+});
+
+export function setRememberConnectedPreference(enabled: boolean) {
+  window.localStorage.setItem(rememberConnectedKey, String(enabled));
+}
+
+export function getRememberConnectedPreference() {
+  return shouldRememberConnected();
+}
 
 export type Profile = {
   id: string;

@@ -183,21 +183,21 @@ export function Cadastro() {
 
   return (
     <Layout>
-      <div className="space-y-3 sm:space-y-4 md:space-y-6">
-        <header className="vm-cadastro-hero flex flex-col gap-4 rounded-3xl p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+      <div className="min-w-0 w-full max-w-full space-y-3 overflow-x-clip sm:space-y-4 md:space-y-6">
+        <header className="vm-cadastro-hero flex min-w-0 flex-col gap-4 rounded-3xl p-5 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-start gap-4">
-            <div className="vm-dashboard-icon flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+            <div className="vm-dashboard-icon hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 sm:flex">
               <ClipboardList className="h-6 w-6" />
             </div>
             <div>
-              <div className="mb-2 inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300">
+              <div className="mb-2 hidden items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-300 sm:inline-flex">
                 Operação comercial
               </div>
-              <h1 className="vm-page-title text-2xl font-bold tracking-tight sm:text-3xl">Cadastro</h1>
-              <p className="vm-muted-text mt-1 text-sm">
+              <h1 className="vm-page-title text-3xl font-bold tracking-tight sm:text-3xl">Cadastros</h1>
+              <p className="vm-muted-text mt-1 text-base sm:text-sm">
                 Consulte CPF, gere adesões e acompanhe todo o fluxo de cadastro.
               </p>
-              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              <div className="mt-3 hidden flex-wrap gap-2 text-xs sm:flex">
                 <span className="vm-dashboard-pill rounded-full px-2.5 py-1">
                   {stats.cadastro_incompletos + stats.inclusao_incompletos} pendente(s)
                 </span>
@@ -212,6 +212,7 @@ export function Cadastro() {
         <div className="vm-cadastro-tabs -mx-1 flex overflow-x-auto rounded-2xl p-1 sm:mx-0">
           <button
             onClick={() => handleTabChange('novo')}
+            data-cadastro-action="novo"
             className={`vm-cadastro-tab flex-1 sm:flex-none flex items-center justify-center rounded-xl px-4 py-2.5 text-xs font-semibold sm:px-4 sm:py-3 sm:text-sm whitespace-nowrap ${
               activeTab === 'novo' ? 'vm-cadastro-tab-active' : ''
             }`}
@@ -222,6 +223,7 @@ export function Cadastro() {
           </button>
           <button
             onClick={() => handleTabChange('link')}
+            data-cadastro-action="link"
             className={`vm-cadastro-tab flex-1 sm:flex-none flex items-center justify-center rounded-xl px-4 py-2.5 text-xs font-semibold sm:px-4 sm:py-3 sm:text-sm whitespace-nowrap ${
               activeTab === 'link' ? 'vm-cadastro-tab-active' : ''
             }`}
@@ -234,6 +236,7 @@ export function Cadastro() {
               handleTabChange('dependente');
               setShowInclusaoDependente(true);
             }}
+            data-cadastro-action="dependente"
             className={`vm-cadastro-tab flex-1 sm:flex-none flex items-center justify-center rounded-xl px-4 py-2.5 text-xs font-semibold sm:px-4 sm:py-3 sm:text-sm whitespace-nowrap ${
               activeTab === 'dependente' ? 'vm-cadastro-tab-active' : ''
             }`}
@@ -244,6 +247,7 @@ export function Cadastro() {
           </button>
           <button
             onClick={() => handleTabChange('incompletos')}
+            data-cadastro-action="pendentes"
             className={`vm-cadastro-tab flex-1 sm:flex-none flex items-center justify-center rounded-xl px-4 py-2.5 text-xs font-semibold sm:px-4 sm:py-3 sm:text-sm whitespace-nowrap ${
               activeTab === 'incompletos' ? 'vm-cadastro-tab-active' : ''
             }`}
@@ -259,6 +263,7 @@ export function Cadastro() {
           </button>
           <button
             onClick={() => handleTabChange('completos')}
+            data-cadastro-action="cadastradas"
             className={`vm-cadastro-tab flex-1 sm:flex-none flex items-center justify-center rounded-xl px-4 py-2.5 text-xs font-semibold sm:px-4 sm:py-3 sm:text-sm whitespace-nowrap ${
               activeTab === 'completos' ? 'vm-cadastro-tab-active' : ''
             }`}
@@ -274,6 +279,7 @@ export function Cadastro() {
           </button>
           <button
             onClick={() => handleTabChange('link_pendencias')}
+            data-cadastro-action="link-pendencias"
             className={`vm-cadastro-tab flex-1 sm:flex-none flex items-center justify-center rounded-xl px-4 py-2.5 text-xs font-semibold sm:px-4 sm:py-3 sm:text-sm whitespace-nowrap ${
               activeTab === 'link_pendencias' ? 'vm-cadastro-tab-active' : ''
             }`}
