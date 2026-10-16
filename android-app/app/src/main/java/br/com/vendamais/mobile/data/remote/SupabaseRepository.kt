@@ -10,6 +10,7 @@ import br.com.vendamais.mobile.data.models.ApiLogSearchResponse
 import br.com.vendamais.mobile.data.models.AuditLemmitResponse
 import br.com.vendamais.mobile.data.models.CadastroExcluidoItem
 import br.com.vendamais.mobile.data.models.CadastroConfig
+import br.com.vendamais.mobile.data.models.CadastroDependenteBusca
 import br.com.vendamais.mobile.data.models.CadastroDetalhe
 import br.com.vendamais.mobile.data.models.CadastroResumo
 import br.com.vendamais.mobile.data.models.CadastroStats
@@ -50,6 +51,10 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
 class SupabaseRepository(
@@ -260,7 +265,8 @@ class SupabaseRepository(
     suspend fun fetchCadastros(session: SavedSession): List<CadastroResumo> {
         val allCadastros = mutableListOf<CadastroResumo>()
         var offset = 0
-        val pageSize = 1000
+        // Smaller pages cap peak response/decoder memory on lower-end Android devices.
+        val pageSize = 250
 
         while (true) {
             val chunk = getList<CadastroResumo>(
@@ -277,7 +283,20 @@ class SupabaseRepository(
                 },
             )
 
-            allCadastros += chunk
+            // The full dependent JSON is needed by the editor, but the list only needs
+            // name/CPF search. Keep a compact search index instead of retaining every
+            // dependent object's entire ERP payload for every loaded cadastro.
+            allCadastros += chunk.map { cadastro ->
+                val dependentesBusca = runCatching {
+                    cadastro.dependentes?.jsonArray.orEmpty().mapNotNull { dependente ->
+                        val obj = dependente.jsonObject
+                        val nome = obj["nome"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                        val cpf = obj["cpf"]?.jsonPrimitive?.contentOrNull.orEmpty().filter(Char::isDigit)
+                        if (nome.isBlank() && cpf.isBlank()) null else CadastroDependenteBusca(nome, cpf)
+                    }
+                }.getOrDefault(emptyList())
+                cadastro.copy(dependentes = null, dependentesBusca = dependentesBusca)
+            }
             if (chunk.size < pageSize) break
             offset += pageSize
         }

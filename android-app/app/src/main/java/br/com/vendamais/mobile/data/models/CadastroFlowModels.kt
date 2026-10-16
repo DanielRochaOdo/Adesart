@@ -453,6 +453,8 @@ data class LinkPendenciaItem(
     val firstAttemptAt: String,
     @SerialName("last_activity_at")
     val lastActivityAt: String,
+    @SerialName("vendedor_id")
+    val vendedorId: String? = null,
     @SerialName("public_completed_at")
     val publicCompletedAt: String? = null,
     @SerialName("sent_at")

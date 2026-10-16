@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, Download, Link2, Loader2, Send, UserRound } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Copy, Download, Loader2, Send } from 'lucide-react';
 import { Button } from '../Button';
 import { Input } from '../Input';
 import { Select } from '../Select';
@@ -559,7 +559,7 @@ export function LinkPendenciasList({
 
   return (
     <div className="space-y-4">
-      <div className="vm-cadastro-card rounded-3xl p-5 sm:p-6">
+      <div className="vm-cadastro-card min-w-0 rounded-3xl p-5 sm:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="vm-page-title text-xl font-bold">Link Pendências</h2>
@@ -685,7 +685,7 @@ export function LinkPendenciasList({
           <p className="vm-page-title mt-3 font-semibold">Nenhum registro encontrado</p>
         </div>
       ) : (
-        <div id="link-pendencias-cards" className="grid gap-3">
+        <div id="link-pendencias-cards" className="grid min-w-0 gap-3">
           {visibleItems.map((item) => {
             const canRepairErpError = ['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(profile?.role ?? '');
             const sellerName = item.vendedor_id ? sellerNameById.get(item.vendedor_id) : null;
@@ -695,7 +695,7 @@ export function LinkPendenciasList({
               !['enviado', 'enviando', 'encerrado'].includes(item.status) &&
               (item.status !== 'erro_envio' || canRepairErpError);
             return (
-              <div key={item.id} className="vm-cadastro-card rounded-2xl p-4 sm:p-5">
+              <div key={item.id} className="vm-cadastro-card min-w-0 rounded-2xl p-4 sm:p-5">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -714,73 +714,69 @@ export function LinkPendenciasList({
                       </span>
                     </div>
 
-                    <div className="mt-3 flex items-start gap-3">
-                      <div className="vm-dashboard-icon mt-0.5 rounded-xl p-2">
-                        <UserRound className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="vm-page-title truncate font-semibold">{item.nome || 'Pessoa identificada'}</h3>
-                        <div className="vm-muted-text mt-0.5 flex flex-wrap items-center gap-1 text-sm">
-                          <span>{item.cpf ? formatCPF(item.cpf) : 'CPF protegido'} · {item.empresa_codigo} - {item.empresa_nome}</span>
-                          <button
-                            type="button"
-                            title={linkUrlById.has(item.link_id) ? 'Copiar link desta empresa' : 'Link indisponível para cópia'}
-                            aria-label={`Copiar link de ${item.empresa_nome}`}
-                            onClick={() => void copyCompanyLink(item.link_id)}
-                            disabled={!linkUrlById.has(item.link_id)}
-                            className="inline-flex size-7 items-center justify-center rounded-md text-violet-500 transition-colors hover:bg-violet-500/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-500 disabled:cursor-not-allowed disabled:opacity-40"
-                          >
-                            {copiedLinkId === item.link_id ? (
-                              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                            ) : (
-                              <Link2 className="h-4 w-4" />
-                            )}
-                          </button>
-                          {copiedLinkId === item.link_id && (
-                            <span role="status" className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Link copiado!</span>
+                    <div className="mt-3 min-w-0">
+                      <h3 className="vm-page-title break-words font-semibold leading-6">{item.nome || 'Pessoa identificada'}</h3>
+                      <div className="vm-muted-text mt-0.5 min-w-0 text-sm [overflow-wrap:anywhere]">
+                        {item.cpf ? formatCPF(item.cpf) : 'CPF protegido'} · {item.empresa_codigo} - {item.empresa_nome}
+                        <button
+                          type="button"
+                          title={linkUrlById.has(item.link_id) ? 'Copiar link desta empresa' : 'Link indisponível para cópia'}
+                          aria-label={`Copiar link de ${item.empresa_nome}`}
+                          onClick={() => void copyCompanyLink(item.link_id)}
+                          disabled={!linkUrlById.has(item.link_id)}
+                          className="ml-1 inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-emerald-700/25 bg-emerald-700/10 align-middle text-emerald-800 transition-colors hover:bg-emerald-700/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-700 disabled:cursor-not-allowed disabled:text-slate-500 disabled:opacity-75 dark:border-emerald-300/25 dark:bg-emerald-300/10 dark:text-emerald-300 dark:hover:bg-emerald-300/15 dark:disabled:text-slate-400"
+                        >
+                          {copiedLinkId === item.link_id ? (
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-300" />
+                          ) : (
+                            <Copy className="h-4 w-4" />
                           )}
-                        </div>
-                        <div className="vm-muted-text mt-1 flex flex-col gap-0.5 text-xs sm:flex-row sm:flex-wrap sm:gap-x-4">
-                          <span>Telefone: {contacts.telefone ? formatPhone(contacts.telefone) : 'Não informado'}</span>
-                          <span>E-mail: {contacts.email || 'Não informado'}</span>
-                        </div>
-                        {sellerName && (
-                          <p className="vm-muted-text mt-1 text-xs">
-                            Vendedor: {sellerName}
-                          </p>
-                        )}
-                        <p className="vm-meta-text mt-1 text-xs">
-                          Primeira tentativa: {dateTime(item.first_attempt_at)} · Última atividade: {dateTime(item.last_activity_at)}
-                        </p>
-                        {item.source_attempt_ids?.length > 1 && (
-                          <p className="mt-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                            {item.source_attempt_ids.length} tentativas consolidadas nesta jornada
-                          </p>
-                        )}
-                        {!item.requires_authorization && !['enviado', 'encerrado'].includes(item.status) && (
-                          <div className="mt-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
-                            <p className="flex items-center gap-1.5 font-semibold">
-                              <Clock3 className="h-3.5 w-3.5" />
-                              Próxima ação: cliente
-                            </p>
-                            <p className="mt-1">
-                              O cliente precisa voltar ao link e finalizar. A equipe não precisa analisar esta solicitação agora.
-                            </p>
-                          </div>
-                        )}
-                        {item.status === 'erro_envio' && !canRepairErpError && (
-                          <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300">
-                            <AlertCircle className="h-3.5 w-3.5" />
-                            Tratativa de erro ERP restrita a Administrador, Cadastro e Gerente.
-                          </p>
-                        )}
-                        {item.last_error && (
-                          <p className="mt-2 flex items-center gap-1.5 text-xs text-red-700 dark:text-red-300">
-                            <AlertCircle className="h-3.5 w-3.5" />
-                            {item.last_error}
-                          </p>
+                        </button>
+                        {copiedLinkId === item.link_id && (
+                          <span role="status" className="ml-1 text-xs font-medium text-emerald-800 dark:text-emerald-300">Link copiado!</span>
                         )}
                       </div>
+                      <div className="vm-muted-text mt-1 flex min-w-0 flex-col gap-0.5 text-xs sm:flex-row sm:flex-wrap sm:gap-x-4">
+                        <span className="min-w-0 break-words [overflow-wrap:anywhere]">Telefone: {contacts.telefone ? formatPhone(contacts.telefone) : 'Não informado'}</span>
+                        <span className="min-w-0 break-words [overflow-wrap:anywhere]">E-mail: {contacts.email || 'Não informado'}</span>
+                      </div>
+                      {sellerName && (
+                        <p className="vm-muted-text mt-1 break-words text-xs [overflow-wrap:anywhere]">
+                          Vendedor: {sellerName}
+                        </p>
+                      )}
+                      <div className="vm-meta-text mt-1 flex min-w-0 flex-col gap-0.5 text-xs">
+                        <span className="break-words">Primeira tentativa: {dateTime(item.first_attempt_at)}</span>
+                        <span className="break-words">Última atividade: {dateTime(item.last_activity_at)}</span>
+                      </div>
+                      {item.source_attempt_ids?.length > 1 && (
+                        <p className="mt-1 break-words text-xs font-medium text-emerald-800 dark:text-emerald-300">
+                          {item.source_attempt_ids.length} tentativas consolidadas nesta jornada
+                        </p>
+                      )}
+                      {!item.requires_authorization && !['enviado', 'encerrado'].includes(item.status) && (
+                        <div className="mt-2 min-w-0 rounded-xl border border-amber-700/30 bg-amber-50 px-3 py-2 text-xs text-amber-950 dark:border-amber-300/30 dark:bg-amber-500/10 dark:text-amber-100">
+                          <p className="flex min-w-0 items-start gap-1.5 font-semibold">
+                            <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            Próxima ação: cliente
+                          </p>
+                          <p className="mt-1 break-words [overflow-wrap:anywhere]">
+                            O cliente precisa voltar ao link e finalizar. A equipe não precisa analisar esta solicitação agora.
+                          </p>
+                        </div>
+                      )}
+                      {item.status === 'erro_envio' && !canRepairErpError && (
+                        <p className="mt-2 flex min-w-0 items-start gap-1.5 break-words text-xs text-amber-900 dark:text-amber-200">
+                          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          Tratativa de erro ERP restrita a Administrador, Cadastro e Gerente.
+                        </p>
+                      )}
+                      {item.last_error && (
+                        <p className="mt-2 flex min-w-0 items-start gap-1.5 break-words text-xs text-red-800 dark:text-red-300 [overflow-wrap:anywhere]">
+                          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          {item.last_error}
+                        </p>
+                      )}
                     </div>
                   </div>
 

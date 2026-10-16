@@ -25,7 +25,7 @@ export function ProtectedRoute({ children, allowedRoles }: ProtectedRouteProps) 
     return <Navigate to="/login" replace />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(profile.role)) {
+  if (allowedRoles && !allowedRoles.includes(profile.role.toUpperCase())) {
     return <Navigate to="/dashboard" replace />;
   }
 
