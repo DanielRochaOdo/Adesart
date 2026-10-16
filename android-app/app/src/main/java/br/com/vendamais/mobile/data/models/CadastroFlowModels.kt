@@ -447,10 +447,14 @@ data class LinkPendenciaItem(
     val sourceLinkIds: List<String> = emptyList(),
     @SerialName("cadastro_id")
     val cadastroId: String? = null,
+    @SerialName("contract_session_id")
+    val contractSessionId: String? = null,
     @SerialName("first_attempt_at")
     val firstAttemptAt: String,
     @SerialName("last_activity_at")
     val lastActivityAt: String,
+    @SerialName("vendedor_id")
+    val vendedorId: String? = null,
     @SerialName("public_completed_at")
     val publicCompletedAt: String? = null,
     @SerialName("sent_at")

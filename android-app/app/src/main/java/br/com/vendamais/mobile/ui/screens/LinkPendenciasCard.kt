@@ -5,11 +5,26 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Link
+import androidx.compose.material.icons.rounded.Send
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -17,18 +32,90 @@ import androidx.compose.ui.unit.dp
 import br.com.vendamais.mobile.data.models.LinkPendenciaItem
 import br.com.vendamais.mobile.ui.LinkWorkspaceState
 import br.com.vendamais.mobile.ui.components.VendaButton
+import br.com.vendamais.mobile.ui.components.VendaButtonSize
 import br.com.vendamais.mobile.ui.components.VendaButtonStyle
 import br.com.vendamais.mobile.ui.components.VendaEmptyState
 import br.com.vendamais.mobile.ui.components.WebCard
 import java.time.OffsetDateTime
+import java.time.LocalDate
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
+
+private const val LINK_PENDENCIAS_PAGE_SIZE = 50
 
 @Composable
 fun LinkPendenciasCard(
     workspace: LinkWorkspaceState,
     profileRole: String,
-    onOpenPending: (String) -> Unit,
+    sellers: List<Pair<String, String>>,
+    onSendPending: (String) -> Unit,
+    onDownloadContract: (String) -> Unit,
+    onCopyCompanyLink: (String) -> Unit,
+    onPageChanged: () -> Unit,
 ) {
+    var page by rememberSaveable { mutableIntStateOf(1) }
+    var showFilters by rememberSaveable { mutableStateOf(false) }
+    var search by rememberSaveable { mutableStateOf("") }
+    var statusFilter by rememberSaveable { mutableStateOf("") }
+    var companyFilter by rememberSaveable { mutableStateOf("") }
+    var nextActionFilter by rememberSaveable { mutableStateOf("") }
+    var sellerFilter by rememberSaveable { mutableStateOf("") }
+    var startDate by rememberSaveable { mutableStateOf("") }
+    var endDate by rememberSaveable { mutableStateOf("") }
+    val role = profileRole.uppercase()
+    val canFilterSeller = role in setOf("ADMINISTRADOR", "CADASTRO", "GERENTE")
+    val allItems = workspace.linkPendencias
+    val sellerNameById = remember(sellers) { sellers.toMap() }
+    val companyOptions = remember(allItems) {
+        allItems.map { it.empresaCodigo.toString() to "${it.empresaCodigo} - ${it.empresaNome}" }
+            .distinctBy { it.first }
+            .sortedBy { it.second.lowercase(Locale("pt", "BR")) }
+    }
+    val sellerOptions = remember(allItems, sellers) {
+        val sellersInItems = allItems.mapNotNull { it.vendedorId }.toSet()
+        sellers.filter { it.first in sellersInItems }.sortedBy { it.second.lowercase(Locale("pt", "BR")) }
+    }
+    val filtered = remember(allItems, search, statusFilter, companyFilter, nextActionFilter, sellerFilter, startDate, endDate, sellerNameById, canFilterSeller) {
+        val term = search.trim().lowercase(Locale("pt", "BR"))
+        val digits = term.filter(Char::isDigit)
+        val from = startDate.takeIf(String::isNotBlank)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        val through = endDate.takeIf(String::isNotBlank)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+        allItems.filter { item ->
+            val haystack = listOf(
+                item.nome,
+                item.cpf,
+                item.empresaNome,
+                item.empresaCodigo.toString(),
+                if (item.operationType == "existing_member") "inclusao dependente" else "nova adesao",
+                statusLabel(item.status),
+                item.latestSnapshot?.toString(),
+                if (item.requiresAuthorization) "equipe precisa continuar" else "cliente precisa concluir",
+                item.vendedorId?.let(sellerNameById::get),
+            ).joinToString(" ").lowercase(Locale("pt", "BR"))
+            val matchSearch = term.isBlank() || haystack.contains(term) ||
+                (digits.isNotBlank() && item.cpf.orEmpty().filter(Char::isDigit).contains(digits))
+            val date = linkPendingLocalDate(item.firstAttemptAt)
+            matchSearch &&
+                (statusFilter.isBlank() || item.status == statusFilter) &&
+                (companyFilter.isBlank() || item.empresaCodigo.toString() == companyFilter) &&
+                (nextActionFilter.isBlank() ||
+                    (nextActionFilter == "cliente" && !item.requiresAuthorization) ||
+                    (nextActionFilter == "equipe" && item.requiresAuthorization)) &&
+                (!canFilterSeller || sellerFilter.isBlank() || item.vendedorId == sellerFilter) &&
+                (from == null || date?.let { !it.isBefore(from) } == true) &&
+                (through == null || date?.let { !it.isAfter(through) } == true)
+        }
+    }
+    val total = filtered.size
+    val totalPages = ((total + LINK_PENDENCIAS_PAGE_SIZE - 1) / LINK_PENDENCIAS_PAGE_SIZE).coerceAtLeast(1)
+    val currentPage = page.coerceIn(1, totalPages)
+    val firstIndex = (currentPage - 1) * LINK_PENDENCIAS_PAGE_SIZE
+    val activeCount = allItems.count { it.status !in setOf("enviado", "encerrado") }
+    val hasFilters = search.isNotBlank() || statusFilter.isNotBlank() || companyFilter.isNotBlank() ||
+        nextActionFilter.isNotBlank() || (canFilterSeller && sellerFilter.isNotBlank()) ||
+        startDate.isNotBlank() || endDate.isNotBlank()
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         WebCard {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -42,9 +129,6 @@ fun LinkPendenciasCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                val activeCount = workspace.linkPendencias.count {
-                    it.status !in setOf("enviado", "encerrado")
-                }
                 Text(
                     text = "$activeCount pendencia(s) ativa(s)",
                     style = MaterialTheme.typography.labelLarge,
@@ -67,6 +151,41 @@ fun LinkPendenciasCard(
             }
         }
 
+        LinkPendenciasFilterPanel(
+            expanded = showFilters,
+            onToggleExpanded = { showFilters = !showFilters },
+            search = search,
+            onSearchChange = { search = it; page = 1 },
+            statusFilter = statusFilter,
+            onStatusChange = { statusFilter = it; page = 1 },
+            companyFilter = companyFilter,
+            companyOptions = companyOptions,
+            onCompanyChange = { companyFilter = it; page = 1 },
+            nextActionFilter = nextActionFilter,
+            onNextActionChange = { nextActionFilter = it; page = 1 },
+            sellerFilter = sellerFilter,
+            sellerOptions = sellerOptions,
+            canFilterSeller = canFilterSeller,
+            onSellerChange = { sellerFilter = it; page = 1 },
+            startDate = startDate,
+            endDate = endDate,
+            onStartDateChange = { startDate = it; page = 1 },
+            onEndDateChange = { endDate = it; page = 1 },
+            filteredCount = filtered.size,
+            totalCount = allItems.size,
+            hasFilters = hasFilters,
+            onClearFilters = {
+                search = ""
+                statusFilter = ""
+                companyFilter = ""
+                nextActionFilter = ""
+                sellerFilter = ""
+                startDate = ""
+                endDate = ""
+                page = 1
+            },
+        )
+
         when {
             workspace.linkPendenciasLoading -> {
                 Row(
@@ -78,19 +197,210 @@ fun LinkPendenciasCard(
                 }
             }
 
-            workspace.linkPendencias.isEmpty() -> {
+            allItems.isEmpty() -> {
                 VendaEmptyState(
                     title = "Nenhum registro encontrado",
                     message = "As solicitacoes identificadas por links aparecerao aqui.",
                 )
             }
 
-            else -> workspace.linkPendencias.forEach { item ->
-                LinkPendenciaRow(
-                    item = item,
-                    profileRole = profileRole,
-                    onOpenPending = onOpenPending,
+            filtered.isEmpty() -> {
+                VendaEmptyState(
+                    title = "Nenhuma pendencia encontrada",
+                    message = "Altere ou limpe os filtros para ver outros registros.",
                 )
+            }
+
+            else -> {
+                Text(
+                    text = "Mostrando ${firstIndex + 1}–${minOf(firstIndex + LINK_PENDENCIAS_PAGE_SIZE, total)} de $total pendencias filtradas (${allItems.size} no total)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+
+                filtered.drop(firstIndex).take(LINK_PENDENCIAS_PAGE_SIZE).forEach { item ->
+                    LinkPendenciaRow(
+                        item = item,
+                        profileRole = profileRole,
+                        onSendPending = onSendPending,
+                        onDownloadContract = onDownloadContract,
+                        onCopyCompanyLink = onCopyCompanyLink,
+                    )
+                }
+
+                WebCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = "Pagina $currentPage de $totalPages · 50 registros por pagina",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            VendaButton(
+                                label = "Primeira",
+                                onClick = {
+                                    page = 1
+                                    onPageChanged()
+                                },
+                                enabled = currentPage > 1,
+                                style = VendaButtonStyle.SECONDARY,
+                                size = VendaButtonSize.SMALL,
+                                modifier = Modifier.weight(1f),
+                            )
+                            VendaButton(
+                                label = "Anterior",
+                                onClick = {
+                                    page = (currentPage - 1).coerceAtLeast(1)
+                                    onPageChanged()
+                                },
+                                enabled = currentPage > 1,
+                                style = VendaButtonStyle.SECONDARY,
+                                size = VendaButtonSize.SMALL,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            VendaButton(
+                                label = "Proxima",
+                                onClick = {
+                                    page = (currentPage + 1).coerceAtMost(totalPages)
+                                    onPageChanged()
+                                },
+                                enabled = currentPage < totalPages,
+                                style = VendaButtonStyle.SECONDARY,
+                                size = VendaButtonSize.SMALL,
+                                modifier = Modifier.weight(1f),
+                            )
+                            VendaButton(
+                                label = "Ultima",
+                                onClick = {
+                                    page = totalPages
+                                    onPageChanged()
+                                },
+                                enabled = currentPage < totalPages,
+                                style = VendaButtonStyle.SECONDARY,
+                                size = VendaButtonSize.SMALL,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LinkPendenciasFilterPanel(
+    expanded: Boolean,
+    onToggleExpanded: () -> Unit,
+    search: String,
+    onSearchChange: (String) -> Unit,
+    statusFilter: String,
+    onStatusChange: (String) -> Unit,
+    companyFilter: String,
+    companyOptions: List<Pair<String, String>>,
+    onCompanyChange: (String) -> Unit,
+    nextActionFilter: String,
+    onNextActionChange: (String) -> Unit,
+    sellerFilter: String,
+    sellerOptions: List<Pair<String, String>>,
+    canFilterSeller: Boolean,
+    onSellerChange: (String) -> Unit,
+    startDate: String,
+    endDate: String,
+    onStartDateChange: (String) -> Unit,
+    onEndDateChange: (String) -> Unit,
+    filteredCount: Int,
+    totalCount: Int,
+    hasFilters: Boolean,
+    onClearFilters: () -> Unit,
+) {
+    val statuses = listOf(
+        "aguardando_analise" to statusLabel("aguardando_analise"),
+        "pronto_erp" to statusLabel("pronto_erp"),
+        "enviando" to statusLabel("enviando"),
+        "erro_envio" to statusLabel("erro_envio"),
+        "enviado" to statusLabel("enviado"),
+    )
+    WebCard {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column {
+                    Text("Filtros de busca", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Mostrando $filteredCount de $totalCount pendencias",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onClearFilters, enabled = hasFilters, modifier = Modifier.weight(1f)) {
+                        Text("Limpar", maxLines = 1)
+                    }
+                    OutlinedButton(onClick = onToggleExpanded, modifier = Modifier.weight(1f)) {
+                        Text(if (expanded) "Ocultar" else "Filtrar", maxLines = 1)
+                    }
+                }
+            }
+            if (expanded) {
+                OutlinedTextField(
+                    value = search,
+                    onValueChange = onSearchChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Buscar por nome, CPF ou empresa") },
+                    singleLine = true,
+                )
+                SelectionField(
+                    label = "Status",
+                    value = statuses.firstOrNull { it.first == statusFilter }?.second ?: "Todos os status",
+                    options = listOf("" to "Todos os status") + statuses,
+                    onSelected = onStatusChange,
+                )
+                SelectionField(
+                    label = "Empresa",
+                    value = companyOptions.firstOrNull { it.first == companyFilter }?.second ?: "Todas as empresas",
+                    options = listOf("" to "Todas as empresas") + companyOptions,
+                    onSelected = onCompanyChange,
+                )
+                SelectionField(
+                    label = "Proxima acao",
+                    value = when (nextActionFilter) {
+                        "cliente" -> "Cliente precisa concluir"
+                        "equipe" -> "Equipe precisa continuar"
+                        else -> "Todas"
+                    },
+                    options = listOf(
+                        "" to "Todas",
+                        "cliente" to "Cliente precisa concluir",
+                        "equipe" to "Equipe precisa continuar",
+                    ),
+                    onSelected = onNextActionChange,
+                )
+                if (canFilterSeller) {
+                    SelectionField(
+                        label = "Vendedor",
+                        value = sellerOptions.firstOrNull { it.first == sellerFilter }?.second ?: "Todos os vendedores",
+                        options = listOf("" to "Todos os vendedores") + sellerOptions,
+                        onSelected = onSellerChange,
+                    )
+                }
+                DateFilterField(label = "Data inicial", value = startDate, onValueChange = onStartDateChange)
+                DateFilterField(label = "Data final", value = endDate, onValueChange = onEndDateChange)
+                Text(
+                    "Os filtros são aplicados à lista completa, antes da paginação.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                VendaButton(label = "Aplicar filtros", onClick = onToggleExpanded, modifier = Modifier.fillMaxWidth())
             }
         }
     }
@@ -100,11 +410,13 @@ fun LinkPendenciasCard(
 private fun LinkPendenciaRow(
     item: LinkPendenciaItem,
     profileRole: String,
-    onOpenPending: (String) -> Unit,
+    onSendPending: (String) -> Unit,
+    onDownloadContract: (String) -> Unit,
+    onCopyCompanyLink: (String) -> Unit,
 ) {
     val canRepairErpError = profileRole.uppercase() in setOf("ADMINISTRADOR", "CADASTRO", "GERENTE")
-    val canTreat = item.requiresAuthorization &&
-        item.status != "enviando" &&
+    val canTreat = item.requiresAuthorization && item.contractSessionId != null &&
+        item.status !in setOf("enviando", "enviado", "encerrado") &&
         (item.status != "erro_envio" || canRepairErpError)
 
     WebCard {
@@ -120,25 +432,42 @@ private fun LinkPendenciaRow(
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
-                    Text(
-                        text = buildString {
-                            val cpf = item.cpf?.filter(Char::isDigit).orEmpty()
-                            if (cpf.length == 11) {
-                                append(
-                                    cpf.replace(
-                                        Regex("(\\d{3})(\\d{3})(\\d{3})(\\d{2})"),
-                                        "$1.$2.$3-$4",
-                                    ),
-                                )
-                                append(" · ")
-                            }
-                            append(item.empresaCodigo)
-                            append(" - ")
-                            append(item.empresaNome)
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(
+                            text = buildString {
+                                val cpf = item.cpf?.filter(Char::isDigit).orEmpty()
+                                if (cpf.length == 11) {
+                                    append(
+                                        cpf.replace(
+                                            Regex("(\\d{3})(\\d{3})(\\d{3})(\\d{2})"),
+                                            "$1.$2.$3-$4",
+                                        ),
+                                    )
+                                    append(" · ")
+                                }
+                                append(item.empresaCodigo)
+                                append(" - ")
+                                append(item.empresaNome)
+                            },
+                            modifier = Modifier.weight(1f, fill = false),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        IconButton(
+                            onClick = { onCopyCompanyLink(item.id) },
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Link,
+                                contentDescription = "Copiar link de ${item.empresaNome}",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
                 }
                 Text(
                     text = statusLabel(item.status),
@@ -203,10 +532,20 @@ private fun LinkPendenciaRow(
                 )
             }
 
+            if (item.contractSessionId != null) {
+                VendaButton(
+                    label = "Baixar contrato aceito",
+                    leadingIcon = Icons.Rounded.Download,
+                    onClick = { onDownloadContract(item.id) },
+                    style = VendaButtonStyle.SECONDARY,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
             if (canTreat) {
                 VendaButton(
-                    label = "Tratar pendencia",
-                    onClick = { onOpenPending(item.id) },
+                    label = "Enviar ao ERP e concluir",
+                    leadingIcon = Icons.Rounded.Send,
+                    onClick = { onSendPending(item.id) },
                     modifier = Modifier.fillMaxWidth(),
                 )
             } else if (item.requiresAuthorization && item.status == "enviando") {
@@ -231,6 +570,10 @@ private fun statusLabel(status: String): String = when (status) {
     "encerrado" -> "Encerrado"
     else -> status.replace('_', ' ')
 }
+
+private fun linkPendingLocalDate(value: String): LocalDate? = runCatching {
+    OffsetDateTime.parse(value).atZoneSameInstant(ZoneId.systemDefault()).toLocalDate()
+}.getOrNull()
 
 private fun formatPendingDate(value: String): String {
     return runCatching {

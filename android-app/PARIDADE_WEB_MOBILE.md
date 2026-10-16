@@ -54,6 +54,16 @@ canônica antes de ser considerada parte definitiva do produto.
 Exemplo já corrigido nesta consolidação: o Android não transforma mais uma frase de
 erro contendo "já cadastrado e ativo" em estado `DependenteAtivo` por conta própria.
 
+## Contrato de login
+
+- Os três clientes oferecem a ação acessível para mostrar/ocultar a senha durante a digitação.
+- “Manter conectado neste dispositivo” vem marcado por padrão e, quando selecionado, restaura a sessão após fechar e reabrir o aplicativo/navegador.
+- Desmarcado, a sessão vale somente enquanto a sessão atual do aplicativo/navegador estiver ativa; tokens não são gravados como sessão persistente.
+- A senha nunca é armazenada. O controle de visibilidade não altera a credencial enviada no login.
+- Web é a referência visual; iOS consome essa mesma tela via WKWebView. Android mantém componentes nativos com as mesmas cores, conteúdo, hierarquia, dimensões e estados visuais do login Web.
+- O link da Política de Privacidade e o aviso de acesso restrito aparecem abaixo do formulário em todos os clientes.
+- Alterações nessa tela devem atualizar este contrato e ser conferidas nas três entidades.
+
 ## CI
 
 O workflow `Verificar paridade Android` impede:

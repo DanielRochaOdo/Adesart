@@ -411,13 +411,6 @@ Deno.serve(async (req: Request) => {
 
     const { data: link, error: linkError } = await supabase.from("cadastro_links").select("*").eq("id", attempt.link_id).maybeSingle();
     if (linkError || !link || !link.is_active) return jsonResponse({ error: "Link indisponivel" }, 410);
-    if (link.requires_authorization === true) {
-      return jsonResponse({
-        error: "Esta solicitacao deve ser finalizada para analise interna, sem contrato publico.",
-        code: "AUTHORIZATION_REVIEW_REQUIRED",
-      }, 409);
-    }
-
     if (flowMode === "existing_member") {
       return await prepareExistingMemberContract(
         supabase,

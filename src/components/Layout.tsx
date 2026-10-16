@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { LogOut, Users, Briefcase, User as UserIcon, LayoutDashboard, Menu, X, FileText, Settings, Activity, Upload, ChevronDown, Trash2, Sun, Moon } from 'lucide-react';
+import { LogOut, Users, Briefcase, User as UserIcon, LayoutDashboard, FileText, Settings, Activity, Upload, ChevronDown, Trash2, Sun, Moon, type LucideIcon } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 
@@ -8,14 +8,26 @@ interface LayoutProps {
   children: ReactNode;
 }
 
+interface MobileNavigationItem {
+  path: string;
+  label: string;
+  icon: LucideIcon;
+}
+
+interface MobileNavigationGroup {
+  key: string;
+  label: string;
+  icon: LucideIcon;
+  items: MobileNavigationItem[];
+}
+
 export function Layout({ children }: LayoutProps) {
   const { profile, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileMenuGroup, setMobileMenuGroup] = useState<string | null>(null);
   const [configDropdownOpen, setConfigDropdownOpen] = useState(false);
-  const [mobileConfigOpen, setMobileConfigOpen] = useState(false);
   const configDropdownRef = useRef<HTMLDivElement>(null);
   const configButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -57,18 +69,14 @@ export function Layout({ children }: LayoutProps) {
     }
   };
 
-  const handleNavigate = (path: string) => {
-    navigate(path);
-    setMobileMenuOpen(false);
-    setMobileConfigOpen(false);
-    setConfigDropdownOpen(false);
-  };
-
-  const canViewUsers = profile?.role && ['ADMINISTRADOR', 'GERENTE', 'SUPERVISOR', 'CADASTRO'].includes(profile.role);
-  const canViewTeams = profile?.role && ['ADMINISTRADOR', 'GERENTE', 'CADASTRO', 'SUPERVISOR', 'VENDEDOR', 'ADESIONISTA'].includes(profile.role);
-  const canViewConfig = profile?.role === 'ADMINISTRADOR';
-  const canViewAudit = profile?.role === 'ADMINISTRADOR';
-  const canViewUploadQueue = ['ADMINISTRADOR', 'CADASTRO', 'GERENTE'].includes(profile?.role ?? '');
+  const role = profile?.role?.toUpperCase() ?? '';
+  const isAdministrator = ['ADMINISTRADOR', 'ADMIN'].includes(role);
+  const canViewUsers = ['ADMINISTRADOR', 'ADMIN', 'GERENTE', 'SUPERVISOR', 'CADASTRO'].includes(role);
+  const canViewTeams = ['ADMINISTRADOR', 'ADMIN', 'GERENTE', 'CADASTRO', 'SUPERVISOR', 'VENDEDOR', 'ADESIONISTA'].includes(role);
+  const canViewConfig = isAdministrator;
+  const canViewAudit = isAdministrator;
+  const canViewUploadQueue = ['ADMINISTRADOR', 'ADMIN', 'CADASTRO', 'GERENTE'].includes(role);
+  const canViewDeleted = isAdministrator;
 
   const mainMenuItems = [
     { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, show: true },
@@ -82,29 +90,56 @@ export function Layout({ children }: LayoutProps) {
     { path: '/configuracoes', label: 'Configurações', icon: Settings, show: canViewConfig },
     { path: '/auditoria-lemmit', label: 'Auditoria Lemmit', icon: Activity, show: canViewAudit },
     { path: '/fila-upload-erp', label: 'Fila Upload ERP', icon: Upload, show: canViewUploadQueue },
-    { path: '/adesoes-excluidas', label: 'Adesões Excluídas', icon: Trash2, show: canViewAudit },
+    { path: '/adesoes-excluidas', label: 'Adesões Excluídas', icon: Trash2, show: canViewDeleted },
   ];
 
   const hasAnyConfigMenu = configMenuItems.some(item => item.show);
   const isConfigActive = configMenuItems.some(item => item.show && location.pathname === item.path);
+  const mobileNavigationGroups: MobileNavigationGroup[] = [
+    {
+      key: 'inicio',
+      label: 'Início',
+      icon: LayoutDashboard,
+      items: [{ path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard }],
+    },
+    {
+      key: 'cadastros',
+      label: 'Cadastros',
+      icon: FileText,
+      items: [{ path: '/cadastro', label: 'Cadastros', icon: FileText }],
+    },
+    ...(mainMenuItems.some(item => item.show && ['/users', '/teams'].includes(item.path))
+      ? [{
+          key: 'pessoas',
+          label: 'Pessoas',
+          icon: Users,
+          items: mainMenuItems
+            .filter(item => item.show && ['/users', '/teams'].includes(item.path))
+            .map(({ path, label, icon }) => ({ path, label, icon })),
+        }]
+      : []),
+    ...(hasAnyConfigMenu
+      ? [{
+          key: 'admin',
+          label: 'Admin',
+          icon: Settings,
+          items: configMenuItems.filter(item => item.show).map(({ path, label, icon }) => ({ path, label, icon })),
+        }]
+      : []),
+    {
+      key: 'conta',
+      label: 'Conta',
+      icon: UserIcon,
+      items: [{ path: '/profile', label: 'Meu Perfil', icon: UserIcon }],
+    },
+  ];
 
   return (
-    <div className="vm-app-bg min-h-screen text-slate-800">
+    <div className="vm-app-bg min-h-screen w-full min-w-0 max-w-full overflow-x-clip text-slate-800">
       <nav className="vm-glass-nav sticky top-0 z-40 border-b">
         <div className="mx-auto px-3 sm:px-6 lg:px-8">
           <div className="flex justify-between h-14 sm:h-16">
             <div className="flex items-center space-x-2 sm:space-x-4 md:space-x-8">
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="vm-glass-nav-item rounded-lg p-1.5 md:hidden"
-                aria-label="Menu"
-              >
-                {mobileMenuOpen ? (
-                  <X className="w-5 h-5" />
-                ) : (
-                  <Menu className="w-5 h-5" />
-                )}
-              </button>
               <button
                 type="button"
                 onClick={() => navigate('/dashboard')}
@@ -186,7 +221,7 @@ export function Layout({ children }: LayoutProps) {
               <button
                 type="button"
                 onClick={toggleTheme}
-                className="vm-glass-nav-item rounded-lg p-2"
+                className="vm-glass-nav-item hidden rounded-lg p-2 md:flex"
                 aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
                 title={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
               >
@@ -194,7 +229,7 @@ export function Layout({ children }: LayoutProps) {
               </button>
               <button
                 onClick={handleSignOut}
-                className="vm-glass-nav-item flex items-center rounded-lg px-2 py-1.5 text-sm font-medium sm:px-3 sm:py-2"
+                className="vm-glass-nav-item hidden items-center rounded-lg px-2 py-1.5 text-sm font-medium sm:px-3 sm:py-2 md:flex"
                 aria-label="Sair"
               >
                 <LogOut className="w-4 h-4 sm:mr-1.5" />
@@ -204,80 +239,144 @@ export function Layout({ children }: LayoutProps) {
           </div>
         </div>
 
-        {mobileMenuOpen && (
-          <div className="vm-glass-panel md:hidden border-t">
-            <div className="px-3 py-2 space-y-1 max-h-[calc(100vh-3.5rem)] overflow-y-auto">
-              <div className="mb-1 border-b border-slate-200/70 px-3 py-2 dark:border-white/10">
-                <div className="vm-page-title truncate text-sm font-semibold">{profile?.name}</div>
-                <div className="text-xs text-slate-500">{profile?.role}</div>
-              </div>
-
-              {mainMenuItems.map((item) => item.show && (
-                <button
-                  key={item.path}
-                  onClick={() => handleNavigate(item.path)}
-                  className={`w-full flex items-center px-3 py-2.5 rounded-lg text-sm font-medium transition-colors active:scale-95 ${
-                    location.pathname === item.path
-                      ? 'vm-glass-nav-item-active'
-                      : 'vm-glass-nav-item'
-                  }`}
-                >
-                  <item.icon className="w-5 h-5 mr-3 flex-shrink-0" />
-                  {item.label}
-                </button>
-              ))}
-
-              {hasAnyConfigMenu && (
-                <div className="space-y-1">
-                  <button
-                    type="button"
-                    aria-expanded={mobileConfigOpen}
-                    aria-controls="configuracoes-submenu-mobile"
-                    onClick={() => setMobileConfigOpen((open) => !open)}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-colors active:scale-95 ${
-                      isConfigActive
-                        ? 'vm-glass-nav-item-active'
-                        : 'vm-glass-nav-item'
-                    }`}
-                  >
-                    <div className="flex items-center">
-                      <Settings className="w-5 h-5 mr-3 flex-shrink-0" />
-                      Configurações
-                    </div>
-                    <ChevronDown
-                      className={`w-4 h-4 transition-transform ${
-                        mobileConfigOpen ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </button>
-
-                  {mobileConfigOpen && (
-                    <div id="configuracoes-submenu-mobile" className="ml-4 space-y-1 border-l border-slate-200/70 pl-2 dark:border-white/10">
-                      {configMenuItems.map((item) => item.show && (
-                        <button
-                          key={item.path}
-                          onClick={() => handleNavigate(item.path)}
-                          className={`w-full flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors active:scale-95 ${
-                            location.pathname === item.path
-                              ? 'vm-glass-nav-item-active'
-                              : 'vm-glass-nav-item'
-                          }`}
-                        >
-                          <item.icon className="w-4 h-4 mr-3 flex-shrink-0" />
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
       </nav>
-      <main className="relative mx-auto max-w-7xl px-3 py-5 sm:px-4 sm:py-7 lg:px-8">
+      <main className="relative mx-auto min-w-0 w-full max-w-7xl px-3 py-5 pb-28 sm:px-4 sm:py-7 md:pb-7 lg:px-8">
         {children}
       </main>
+      <MobileBottomNavigation
+        groups={mobileNavigationGroups}
+        pathname={location.pathname}
+        openGroup={mobileMenuGroup}
+        onOpenGroup={setMobileMenuGroup}
+        onNavigate={(path) => {
+          navigate(path);
+          setMobileMenuGroup(null);
+          setConfigDropdownOpen(false);
+        }}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onSignOut={handleSignOut}
+      />
     </div>
+  );
+}
+
+function MobileBottomNavigation({
+  groups,
+  pathname,
+  openGroup,
+  onOpenGroup,
+  onNavigate,
+  theme,
+  onToggleTheme,
+  onSignOut,
+}: {
+  groups: MobileNavigationGroup[];
+  pathname: string;
+  openGroup: string | null;
+  onOpenGroup: (group: string | null) => void;
+  onNavigate: (path: string) => void;
+  theme: 'light' | 'dark';
+  onToggleTheme: () => void;
+  onSignOut: () => void | Promise<void>;
+}) {
+  useEffect(() => {
+    onOpenGroup(null);
+  }, [pathname, onOpenGroup]);
+
+  const selectedGroup = groups.find(group => group.key === openGroup);
+  const isActive = (path: string) => pathname === path || pathname.startsWith(`${path}/`);
+
+  return (
+    <>
+      <nav
+        aria-label="Navegação principal"
+        className="vm-mobile-bottom-nav fixed inset-x-0 bottom-0 z-40 grid md:hidden"
+        style={{ gridTemplateColumns: `repeat(${groups.length}, minmax(0, 1fr))` }}
+      >
+        {groups.map((group) => {
+          const active = group.items.some(item => isActive(item.path));
+          const Icon = group.icon;
+          return (
+            <button
+              key={group.key}
+              type="button"
+              aria-label={group.label}
+              aria-current={active ? 'page' : undefined}
+              aria-expanded={group.items.length > 1 || group.key === 'conta' ? openGroup === group.key : undefined}
+              onClick={() => {
+                if (group.items.length === 1 && group.key !== 'conta') onNavigate(group.items[0].path);
+                else onOpenGroup(openGroup === group.key ? null : group.key);
+              }}
+              className={`vm-mobile-bottom-nav-item ${active ? 'is-active' : ''}`}
+            >
+              <span className="vm-mobile-bottom-nav-icon">
+                <Icon aria-hidden="true" />
+              </span>
+              <span className="vm-mobile-bottom-nav-label">{group.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {selectedGroup && (selectedGroup.items.length > 1 || selectedGroup.key === 'conta') && (
+        <div
+          className="fixed inset-0 z-50 flex items-end bg-slate-950/45 backdrop-blur-[2px] md:hidden"
+          onClick={() => onOpenGroup(null)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') onOpenGroup(null);
+          }}
+          role="presentation"
+        >
+          <section
+            aria-label={selectedGroup.label}
+            className="vm-mobile-nav-sheet w-full rounded-t-3xl border-t p-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 className="vm-page-title mb-3 px-2 text-lg font-semibold">{selectedGroup.label}</h2>
+            <div className="space-y-2">
+              {selectedGroup.items.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.path);
+                return (
+                  <button
+                    key={item.path}
+                    type="button"
+                    onClick={() => onNavigate(item.path)}
+                    className={`vm-mobile-nav-sheet-item ${active ? 'is-active' : ''}`}
+                  >
+                    <Icon aria-hidden="true" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {selectedGroup.key === 'conta' && (
+              <div className="mt-4 space-y-2 border-t border-slate-200/70 pt-4 dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={onToggleTheme}
+                  className="vm-mobile-nav-sheet-item"
+                >
+                  {theme === 'dark' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+                  <span>{theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenGroup(null);
+                    void onSignOut();
+                  }}
+                  className="vm-mobile-nav-sheet-item"
+                >
+                  <LogOut aria-hidden="true" />
+                  <span>Sair</span>
+                </button>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+    </>
   );
 }

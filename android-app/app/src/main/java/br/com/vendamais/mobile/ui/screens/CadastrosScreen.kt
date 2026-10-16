@@ -1,5 +1,12 @@
 package br.com.vendamais.mobile.ui.screens
 
+import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.net.Uri
+import android.widget.Toast
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -13,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -149,6 +157,8 @@ fun CadastrosScreen(
     onOpenWebApp: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
+    val contractScope = rememberCoroutineScope()
+    val cadastrosListState = rememberLazyListState()
     var showInclusaoDialog by rememberSaveable { mutableStateOf(false) }
     var exportMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var showFilters by rememberSaveable { mutableStateOf(false) }
@@ -307,6 +317,7 @@ fun CadastrosScreen(
     val exportCadastros = if (useSupervisorGroupedView || useGerenteGroupedView) baseCadastros else filteredCadastros
 
     LazyColumn(
+        state = cadastrosListState,
         modifier = Modifier
             .imePadding()
             .padding(horizontal = 16.dp, vertical = 20.dp),
@@ -412,7 +423,41 @@ fun CadastrosScreen(
                     LinkPendenciasCard(
                         workspace = state.linkWorkspace,
                         profileRole = state.profile?.role.orEmpty(),
-                        onOpenPending = viewModel::openLinkPendencia,
+                        sellers = state.vendedores.map { it.id to it.name },
+                        onSendPending = viewModel::sendLinkPendencia,
+                        onCopyCompanyLink = { pendingId ->
+                            contractScope.launch {
+                                runCatching {
+                                    val url = viewModel.pendingCompanyLinkUrl(pendingId)
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Link da empresa", url))
+                                    Toast.makeText(context, "Link copiado!", Toast.LENGTH_SHORT).show()
+                                }.onFailure { error ->
+                                    Toast.makeText(
+                                        context,
+                                        error.message ?: "Nao foi possivel copiar o link.",
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                            }
+                        },
+                        onPageChanged = {
+                            contractScope.launch { cadastrosListState.animateScrollToItem(2) }
+                        },
+                        onDownloadContract = { pendingId ->
+                            contractScope.launch {
+                                runCatching {
+                                    val url = viewModel.linkPendenciaContractUrl(pendingId)
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                                }.onFailure { error ->
+                                    Toast.makeText(
+                                        context,
+                                        error.message ?: "Falha ao baixar contrato.",
+                                        Toast.LENGTH_LONG,
+                                    ).show()
+                                }
+                            }
+                        },
                     )
                 }
             }
@@ -1522,20 +1567,16 @@ private fun firstDayOfCurrentMonthIso(): String {
 }
 
 private fun searchInDependentes(cadastro: CadastroResumo, nome: String, cpfDigits: String): Boolean {
-    val deps = runCatching { cadastro.dependentes?.jsonArray }.getOrNull() ?: return false
-    return deps.any { dep ->
-        val obj = runCatching { dep.jsonObject }.getOrNull() ?: return@any false
-        val depNome = obj["nome"]?.jsonPrimitive?.contentOrNull.orEmpty()
-        val depCpf = obj["cpf"]?.jsonPrimitive?.contentOrNull.orEmpty().filter(Char::isDigit)
-        val matchNome = nome.isBlank() || depNome.contains(nome, ignoreCase = true)
-        val matchCpf = cpfDigits.isBlank() || depCpf.contains(cpfDigits)
+    return cadastro.dependentesBusca.any { dependente ->
+        val matchNome = nome.isBlank() || dependente.nome.contains(nome, ignoreCase = true)
+        val matchCpf = cpfDigits.isBlank() || dependente.cpf.contains(cpfDigits)
         matchNome && matchCpf
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DateFilterField(
+internal fun DateFilterField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
