@@ -116,7 +116,7 @@ class CadastroPayloadBuilderTest {
                 plano = 468945133,
                 planoValor = "13,00",
                 nomeMae = "Mae Teste",
-                carenciaAtendimento = 0,
+                carenciaAtendimento = 1,
                 funcionarioCadastro = 123,
             ),
         )

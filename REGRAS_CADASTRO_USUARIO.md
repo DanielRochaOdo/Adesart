@@ -297,7 +297,7 @@ Ao abrir o modal de edição de um cadastro incompleto:
         "plano": 39,
         "planoValor": "6,90",
         "nomeMae": "Nome da Mãe",
-        "carenciaAtendimento": 0,
+        "carenciaAtendimento": 1,
         "funcionarioCadastro": 15921
       }
     ]

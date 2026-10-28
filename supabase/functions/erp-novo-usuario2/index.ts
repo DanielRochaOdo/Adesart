@@ -810,7 +810,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    const requestedDependents = Array.isArray(requestBody?.dados?.dependente)
+    const requestedDependentsRaw = Array.isArray(requestBody?.dados?.dependente)
       ? requestBody.dados.dependente
       : [];
     if (idempotencyKey) {
@@ -836,6 +836,12 @@ Deno.serve(async (req: Request) => {
         });
       }
     }
+
+    const requestedDependents = requestedDependentsRaw.map((dependent: any) => ({
+      ...dependent,
+      carenciaAtendimento: 1,
+    }));
+    requestBody.dados.dependente = requestedDependents;
 
     const duplicateCpf = findDuplicateParticipantCpf(
       responsavel?.cpf ?? requestBody?.dados?.responsavelFinanceiro?.cpf,

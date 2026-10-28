@@ -347,7 +347,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
             plano: Number.isFinite(plano) ? plano : 0,
             planoValor: String(dep?.planoValor ?? dep?.valorPlano ?? dep?.plano_valor ?? '0,00'),
             nomeMae: dep?.nomeMae ?? dep?.nome_mae ?? '',
-            carenciaAtendimento: Number(dep?.carenciaAtendimento ?? 0) || 0,
+            carenciaAtendimento: 1,
             funcionarioCadastro: Number(dep?.funcionarioCadastro ?? erpFuncionarioCadastroId ?? 0) || 0,
           } as Dependente;
         });
@@ -505,7 +505,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
           plano: 0,
           planoValor: '0,00',
           nomeMae: formData.nomeMae || '',
-          carenciaAtendimento: 0,
+          carenciaAtendimento: 1,
           funcionarioCadastro: erpFuncionarioCadastroId || 0,
         };
 

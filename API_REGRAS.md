@@ -72,7 +72,7 @@ Este documento descreve todas as regras, validações e integrações implementa
         "plano": 123,
         "planoValor": "100.00",
         "nomeMae": "Ana Silva",
-        "carenciaAtendimento": 30,
+        "carenciaAtendimento": 1,
         "funcionarioCadastro": 123
       }
     ]

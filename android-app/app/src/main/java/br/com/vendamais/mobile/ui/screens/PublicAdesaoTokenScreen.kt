@@ -716,7 +716,7 @@ fun PublicAdesaoTokenScreen(
                                 plano = planoCodigo,
                                 planoValor = "0,00",
                                 nomeMae = nomeMae.trim(),
-                                carenciaAtendimento = 0,
+                                carenciaAtendimento = 1,
                                 funcionarioCadastro = 0,
                             ),
                         )

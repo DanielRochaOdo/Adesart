@@ -250,7 +250,7 @@ internal object CadastroPayloadBuilder {
                 plano = cadastro.planoCodigo ?: 0,
                 planoValor = "0,00",
                 nomeMae = cadastro.nomeMae.orEmpty(),
-                carenciaAtendimento = 0,
+                carenciaAtendimento = 1,
                 funcionarioCadastro = funcionarioCadastro,
             ),
         )
@@ -286,7 +286,7 @@ internal object CadastroPayloadBuilder {
             plano = 0,
             planoValor = "0,00",
             nomeMae = base.nomeMae.orEmpty(),
-            carenciaAtendimento = 0,
+            carenciaAtendimento = 1,
             funcionarioCadastro = funcionarioCadastro,
         )
     }
@@ -382,7 +382,7 @@ internal object CadastroPayloadBuilder {
                             put("plano", dependente.plano)
                             put("planoValor", dependente.planoValor)
                             put("nomeMae", dependente.nomeMae)
-                            put("carenciaAtendimento", dependente.carenciaAtendimento)
+                            put("carenciaAtendimento", 1)
                             put("funcionarioCadastro", funcionarioCadastroCode)
                         })
                     }
@@ -570,7 +570,7 @@ internal object CadastroPayloadBuilder {
                 plano = obj.readInt("plano", "plano_codigo", "planoCodigo") ?: 0,
                 planoValor = obj.readString("planoValor", "plano_valor").orEmpty().ifBlank { "0,00" },
                 nomeMae = obj.readString("nomeMae", "nome_mae").orEmpty(),
-                carenciaAtendimento = obj.readInt("carenciaAtendimento", "carencia_atendimento") ?: 0,
+                carenciaAtendimento = obj.readInt("carenciaAtendimento", "carencia_atendimento") ?: 1,
                 funcionarioCadastro = obj.readInt("funcionarioCadastro", "funcionario_cadastro") ?: 0,
             )
         }

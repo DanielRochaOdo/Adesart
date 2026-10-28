@@ -41,7 +41,7 @@ Adicionada contabilização de dependentes na função `get_cadastros_stats`. Ag
     "planoValor": "15.9",
     "sexoDescricao": "Masculino",
     "dataNascimento": "1986-09-17",
-    "carenciaAtendimento": 0,
+    "carenciaAtendimento": 1,
     "funcionarioCadastro": 14923
   },
   {
@@ -54,7 +54,7 @@ Adicionada contabilização de dependentes na função `get_cadastros_stats`. Ag
     "planoValor": "15.9",
     "sexoDescricao": "Feminino",
     "dataNascimento": "1990-05-10",
-    "carenciaAtendimento": 0,
+    "carenciaAtendimento": 1,
     "funcionarioCadastro": 14923
   }
 ]

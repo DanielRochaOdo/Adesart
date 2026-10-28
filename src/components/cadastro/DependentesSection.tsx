@@ -361,7 +361,7 @@ export function DependentesSection({
       plano: planoId,
       planoValor: formatarValorPlano(valorPlanoSelecionado),
       nomeMae: formData.nomeMae,
-      carenciaAtendimento: 0,
+      carenciaAtendimento: 1,
       funcionarioCadastro: funcionarioCadastro || 0,
     };
 

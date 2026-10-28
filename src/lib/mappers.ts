@@ -318,7 +318,7 @@ export function buildERPPayload(
           plano: dep.plano,
           planoValor: dep.planoValor,
           nomeMae: dep.nomeMae,
-          carenciaAtendimento: dep.carenciaAtendimento,
+          carenciaAtendimento: 1,
           funcionarioCadastro: funcionarioCadastroCode,
         })),
       ],

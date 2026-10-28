@@ -141,7 +141,7 @@ async function buildErpPayload(supabase: any, snapshot: any) {
     plano: c.titularPlano,
     planoValor: moneyFmt(c.titularPlanoValor),
     nomeMae: c.nomeMae,
-    carenciaAtendimento: 0,
+    carenciaAtendimento: 1,
     funcionarioCadastro: vendedor,
   };
 
@@ -155,7 +155,7 @@ async function buildErpPayload(supabase: any, snapshot: any) {
     plano: d.plano,
     planoValor: moneyFmt(d.planoValor),
     nomeMae: d.nomeMae,
-    carenciaAtendimento: 0,
+    carenciaAtendimento: 1,
     funcionarioCadastro: vendedor,
   }));
 
@@ -771,7 +771,7 @@ Deno.serve(async (req: Request) => {
           plano: c.titularPlano,
           planoValor: moneyFmt(c.titularPlanoValor),
           nomeMae: c.nomeMae,
-          carenciaAtendimento: 0,
+          carenciaAtendimento: 1,
           funcionarioCadastro: vendedor,
         },
         ...(c.dependentes || []).map((d: any) => ({
@@ -784,7 +784,7 @@ Deno.serve(async (req: Request) => {
           plano: d.plano,
           planoValor: moneyFmt(d.planoValor),
           nomeMae: d.nomeMae,
-          carenciaAtendimento: 0,
+          carenciaAtendimento: 1,
           funcionarioCadastro: vendedor,
         })),
       ];

@@ -455,7 +455,7 @@ export function NovoCadastroCard({ onSuccess }: NovoCadastroCardProps) {
         plano: 0,
         planoValor: '0,00',
         nomeMae: cadastroData.nomeMae || '',
-        carenciaAtendimento: 0,
+        carenciaAtendimento: 1,
         funcionarioCadastro: 0,
       }];
 
@@ -590,7 +590,7 @@ export function NovoCadastroCard({ onSuccess }: NovoCadastroCardProps) {
         plano: 0,
         planoValor: '0,00',
         nomeMae: cadastroData.nomeMae || '',
-        carenciaAtendimento: 0,
+        carenciaAtendimento: 1,
         funcionarioCadastro: 0,
       }];
 
@@ -710,7 +710,7 @@ export function NovoCadastroCard({ onSuccess }: NovoCadastroCardProps) {
         plano: 0,
         planoValor: '0,00',
         nomeMae: cadastroData.nomeMae || '',
-        carenciaAtendimento: 0,
+        carenciaAtendimento: 1,
         funcionarioCadastro: 0,
       }];
 

@@ -709,7 +709,7 @@ Validar todos os dados e enviar cadastro completo ao ERP.
 │            plano: 123,                                    │
 │            planoValor: "100.00",                          │
 │            nomeMae: "...",                                │
-│            carenciaAtendimento: 0,                        │
+│            carenciaAtendimento: 1,                        │
 │            funcionarioCadastro: externalId                │
 │          }                                                 │
 │        ]                                                    │

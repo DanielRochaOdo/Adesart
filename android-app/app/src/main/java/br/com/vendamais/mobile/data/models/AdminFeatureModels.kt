@@ -645,7 +645,7 @@ data class PublicCadastroDependente(
     @SerialName("nomeMae")
     val nomeMae: String,
     @SerialName("carenciaAtendimento")
-    val carenciaAtendimento: Int = 0,
+    val carenciaAtendimento: Int = 1,
     @SerialName("funcionarioCadastro")
     val funcionarioCadastro: Int = 0,
 )

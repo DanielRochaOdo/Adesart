@@ -180,7 +180,7 @@ Deno.serve(async (req: Request) => {
           plano: titularPlanCode,
           planoValor: Number(titularPlan?.ValorTitular || 0).toFixed(2),
           nomeMae: String(cadastro?.nomeMae || "").trim(),
-          carenciaAtendimento: 0,
+          carenciaAtendimento: 1,
           funcionarioCadastro: Number(link.vendedor_codigo || 0),
         },
         ...deps.map((dep: any) => {
@@ -195,7 +195,7 @@ Deno.serve(async (req: Request) => {
             plano: Number(dep?.plano || 0),
             planoValor: Number(depPlan?.ValorDependente || 0).toFixed(2),
             nomeMae: String(dep?.nomeMae || "").trim(),
-            carenciaAtendimento: 0,
+            carenciaAtendimento: 1,
             funcionarioCadastro: Number(link.vendedor_codigo || 0),
           };
         }),

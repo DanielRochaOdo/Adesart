@@ -153,7 +153,7 @@ private data class CadastroDependenteFormState(
     val planoNome: String = "",
     val tipoPlano: String = "",
     val nomeMae: String = "",
-    val carenciaAtendimento: Int = 0,
+    val carenciaAtendimento: Int = 1,
 )
 
 private data class CadastroPlanoOption(
@@ -689,7 +689,7 @@ fun CadastroEditorDialog(
                         }
                         put("planoValor", dep.planoValor.ifBlank { "0,00" })
                         put("nomeMae", dep.nomeMae.trim())
-                        put("carenciaAtendimento", dep.carenciaAtendimento)
+                        put("carenciaAtendimento", 1)
                         put("funcionarioCadastro", funcionarioCadastro)
                     },
                 )
@@ -1112,7 +1112,7 @@ fun CadastroEditorDialog(
                         }
                         put("planoValor", dep.planoValor.ifBlank { "0,00" })
                         put("nomeMae", dep.nomeMae.trim())
-                        put("carenciaAtendimento", dep.carenciaAtendimento)
+                        put("carenciaAtendimento", 1)
                         put("funcionarioCadastro", funcionarioCadastro)
                     },
                 )
@@ -2760,7 +2760,7 @@ private fun parseDependentes(
             nomeMae = nomeMae,
             carenciaAtendimento = obj["carenciaAtendimento"]?.jsonPrimitive?.intOrNull
                 ?: obj["carencia_atendimento"]?.jsonPrimitive?.intOrNull
-                ?: 0,
+                ?: 1,
         )
     }
 }
@@ -2779,7 +2779,7 @@ private fun buildTitularDependente(cadastro: CadastroDetalhe): CadastroDependent
         planoNome = "",
         tipoPlano = "",
         nomeMae = cadastro.nomeMae.orEmpty(),
-        carenciaAtendimento = 0,
+        carenciaAtendimento = 1,
     )
 }
 

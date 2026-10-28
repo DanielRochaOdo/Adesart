@@ -30,7 +30,7 @@ const initialDependentes: Dependente[] = [
     plano: 4,
     planoValor: '49,90',
     nomeMae: 'Josefa Maria da Silva',
-    carenciaAtendimento: 30,
+    carenciaAtendimento: 1,
     funcionarioCadastro: 9876,
   },
   {
@@ -43,7 +43,7 @@ const initialDependentes: Dependente[] = [
     plano: 0,
     planoValor: '0,00',
     nomeMae: 'Maria de Fatima da Silva',
-    carenciaAtendimento: 30,
+    carenciaAtendimento: 1,
     funcionarioCadastro: 9876,
   },
 ];

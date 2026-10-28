@@ -428,6 +428,12 @@ Deno.serve(async (req: Request) => {
     if (!body?.dados?.responsavelFinanceiro || !body?.dados?.parceiro?.codigo) {
       return jsonResponse({ error: "Payload invalido" }, 400);
     }
+    if (Array.isArray(body?.dados?.dependente)) {
+      body.dados.dependente = body.dados.dependente.map((dependent: any) => ({
+        ...dependent,
+        carenciaAtendimento: 1,
+      }));
+    }
 
     const cadastroId = (req.headers.get("X-Cadastro-Id") || req.headers.get("x-cadastro-id") || "").trim();
     const idempotencyKey = (req.headers.get("X-Idempotency-Key") || req.headers.get("x-idempotency-key") || "").trim();

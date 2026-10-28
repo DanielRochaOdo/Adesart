@@ -37,6 +37,12 @@ assim que o CPF completo for informado. O backend canonico deve repetir a valida
 antes de chamar o ERP, inclusive para solicitacoes recebidas por Link, rascunhos
 retomados e chamadas diretas.
 
+## Carência de atendimento enviada ao ERP
+
+Em todos os fluxos de adesão e inclusão de dependentes, cada participante enviado
+ao ERP deve receber `carenciaAtendimento: 1`. Os clientes usam esse valor como
+padrão e as Edge Functions canônicas o aplicam ao payload antes do envio.
+
 ## Envio ao ERP e anexos
 
 A criação da adesão no ERP e a entrega de documentos são eventos distintos.
