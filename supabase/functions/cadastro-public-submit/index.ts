@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { PDFDocument, StandardFonts } from "npm:pdf-lib@1.17.1";
+import { duplicateParticipantCpfResponse, findDuplicateParticipantCpf } from "../_shared/cpf-uniqueness.ts";
 import {
   corsHeaders,
   createServiceClient,
@@ -669,6 +670,15 @@ Deno.serve(async (req: Request) => {
         preparedCadastro.coberturaPlanoArquivos.length > 0);
     if (!internalPending && requiresCoverageConsent && body.acceptedCoverage !== true) {
       return jsonResponse({ error: "Leia e aceite a cobertura disponibilizada antes de concluir." }, 400);
+    }
+
+    const cadastroSnapshot = session.snapshot?.cadastro || {};
+    const duplicateCpf = findDuplicateParticipantCpf(
+      cadastroSnapshot.cpf,
+      Array.isArray(cadastroSnapshot.dependentes) ? cadastroSnapshot.dependentes : [],
+    );
+    if (duplicateCpf) {
+      return jsonResponse(duplicateParticipantCpfResponse(duplicateCpf), 409);
     }
 
     const previousStatus = session.status;

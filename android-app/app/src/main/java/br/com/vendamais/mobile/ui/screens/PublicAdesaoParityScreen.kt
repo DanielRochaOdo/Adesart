@@ -883,6 +883,7 @@ fun PublicAdesaoParityScreen(
                     PublicStage.DEPENDENTS -> {
                         DependentsCard(
                             items = dependentes,
+                            titularCpf = cpf,
                             relationships = relationships,
                             plans = plans,
                             disabled = busy,
@@ -897,6 +898,13 @@ fun PublicAdesaoParityScreen(
                                 }
                                 if (depCpf == holderCpf) {
                                     error = "O CPF do dependente nao pode ser o mesmo do responsavel financeiro."
+                                    return@DependentsCard
+                                }
+                                if (dependentes.withIndex().any { (otherIndex, other) ->
+                                        otherIndex != index && other.cpf.filter(Char::isDigit) == depCpf
+                                    }
+                                ) {
+                                    error = "Este CPF ja foi informado para outro dependente."
                                     return@DependentsCard
                                 }
                                 dependentLookupKey = dep.key
@@ -1742,6 +1750,7 @@ private fun ContactsCard(
 @Composable
 private fun DependentsCard(
     items: MutableList<PublicDependentDraft>,
+    titularCpf: String,
     relationships: List<Pair<Int, String>>,
     plans: List<PublicSecurePlan>,
     disabled: Boolean,
@@ -1761,6 +1770,16 @@ private fun DependentsCard(
             items.forEachIndexed { index, dep ->
                 Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text("Dependente ${index + 1}", fontWeight = FontWeight.SemiBold)
+                    val depCpfDigits = dep.cpf.filter(Char::isDigit)
+                    val normalizedTitularCpf = titularCpf.filter(Char::isDigit)
+                    val duplicateCpfError = when {
+                        depCpfDigits.length != 11 -> null
+                        depCpfDigits == normalizedTitularCpf -> "O CPF do dependente nao pode ser igual ao do titular."
+                        items.withIndex().any { (otherIndex, other) ->
+                            otherIndex != index && other.cpf.filter(Char::isDigit) == depCpfDigits
+                        } -> "Este CPF ja foi informado para outro dependente."
+                        else -> null
+                    }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedTextField(
                             dep.cpf,
@@ -1777,6 +1796,9 @@ private fun DependentsCard(
                             if (lookupKey == dep.key) CircularProgressIndicator(strokeWidth = 2.dp)
                             else Text("Consultar")
                         }
+                    }
+                    duplicateCpfError?.let { message ->
+                        Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
                     PublicChoiceField(
                         "Grau de parentesco",

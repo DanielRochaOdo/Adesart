@@ -954,6 +954,18 @@ fun CadastroEditorDialog(
         }
     }
 
+    fun duplicateCpfError(index: Int, cpf: String): String? {
+        val normalizedCpf = cpf.filter(Char::isDigit)
+        if (index <= 0 || normalizedCpf.length != 11) return null
+        val titularCpf = dependentes.firstOrNull()?.cpf?.text?.filter(Char::isDigit).orEmpty()
+        if (normalizedCpf == titularCpf) return "O CPF do dependente nao pode ser igual ao do titular."
+        if (dependentes.withIndex().any { (otherIndex, other) ->
+                otherIndex != index && other.cpf.text.filter(Char::isDigit) == normalizedCpf
+            }
+        ) return "Este CPF ja foi informado para outro beneficiario."
+        return null
+    }
+
     fun validateStepOne(): String? {
         val dataIso = toIsoDateOrNull(dataNascimentoField.text)
         val vendedor = resolveVendedor(profile, state, selectedVendedorId)
@@ -984,6 +996,7 @@ fun CadastroEditorDialog(
         if (dependentes.isEmpty()) return "Adicione ao menos o titular e um plano."
         val titular = dependentes.firstOrNull()
         if (titular == null || titular.tipo != 1) return "Titular nao identificado nos dependentes."
+        val seenCpfs = mutableSetOf<String>()
 
         dependentes.forEachIndexed { index, dep ->
             val label = if (index == 0) "Titular" else "Dependente ${index + 1}"
@@ -1000,6 +1013,9 @@ fun CadastroEditorDialog(
                 if (cpfDigits.isNotBlank() && !validateCpf(cpfDigits)) {
                     return "$label: CPF invalido."
                 }
+            }
+            if (cpfDigits.length == 11 && !seenCpfs.add(cpfDigits)) {
+                return "$label: este CPF ja foi informado para outro beneficiario."
             }
 
             if (dep.sexo !in setOf(0, 1)) return "$label: sexo obrigatorio."
@@ -1810,13 +1826,33 @@ fun CadastroEditorDialog(
                                                         }
 
                                                         else -> {
-                                                            cpfValidationErrors.remove(index)
-                                                            if (state.cadastroWorkspace.config?.lemmitDependente == true &&
+                                                            val duplicateError = duplicateCpfError(index, digits)
+                                                            if (duplicateError != null) {
+                                                                cpfValidationErrors[index] = duplicateError
+                                                                consultedCpfByIndex.remove(index)
+                                                            } else {
+                                                                cpfValidationErrors.remove(index)
+                                                            }
+                                                            if (duplicateError == null && state.cadastroWorkspace.config?.lemmitDependente == true &&
                                                                 consultedCpfByIndex[index] != digits
                                                             ) {
                                                                 consultedCpfByIndex[index] = digits
                                                                 scope.launch {
                                                                     consultarLemmitDependente(index, digits)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    dependentes.forEachIndexed { otherIndex, other ->
+                                                        if (otherIndex != 0 && otherIndex != index) {
+                                                            val otherCpf = other.cpf.text.filter(Char::isDigit)
+                                                            if (otherCpf.length == 11 && validateCpf(otherCpf)) {
+                                                                val duplicateError = duplicateCpfError(otherIndex, otherCpf)
+                                                                val oldError = cpfValidationErrors[otherIndex].orEmpty()
+                                                                if (duplicateError != null) {
+                                                                    cpfValidationErrors[otherIndex] = duplicateError
+                                                                } else if (oldError.startsWith("O CPF do dependente") || oldError.startsWith("Este CPF ja foi informado")) {
+                                                                    cpfValidationErrors.remove(otherIndex)
                                                                 }
                                                             }
                                                         }

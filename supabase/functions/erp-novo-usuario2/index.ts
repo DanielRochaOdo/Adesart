@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, createServiceClient, jsonResponse, requireInternalUser } from "../_shared/public-flow.ts";
+import { duplicateParticipantCpfResponse, findDuplicateParticipantCpf } from "../_shared/cpf-uniqueness.ts";
 
 const extractMessage = (payload: any) => {
   for (const value of [
@@ -809,6 +810,9 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    const requestedDependents = Array.isArray(requestBody?.dados?.dependente)
+      ? requestBody.dados.dependente
+      : [];
     if (idempotencyKey) {
       const { data: existingLog } = await supabase
         .from("api_logs")
@@ -832,6 +836,13 @@ Deno.serve(async (req: Request) => {
         });
       }
     }
+
+    const duplicateCpf = findDuplicateParticipantCpf(
+      responsavel?.cpf ?? requestBody?.dados?.responsavelFinanceiro?.cpf,
+      requestedDependents,
+      true,
+    );
+    if (duplicateCpf) return jsonResponse(duplicateParticipantCpfResponse(duplicateCpf), 409);
 
     const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
     let ERP_BASE_URL = Deno.env.get("ERP_ENDPOINT") || Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";

@@ -4,7 +4,7 @@ import { Input } from '../Input';
 import { Select } from '../Select';
 import { Button } from '../Button';
 import { DateInput } from '../DateInput';
-import { formatCPF, formatDate, validateCPF, normalizeToISO } from '../../lib/cpf';
+import { formatCPF, formatDate, getDuplicateCpfError, validateCPF, normalizeToISO } from '../../lib/cpf';
 import { useConfigCadastro } from '../../contexts/ConfigCadastroContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -26,6 +26,7 @@ export interface Dependente {
 
 interface DependentesSectionProps {
   dependentes: Dependente[];
+  titularCpf?: string;
   planos: any[];
   funcionarioCadastro: number | null;
   onChange: (dependentes: Dependente[]) => void;
@@ -35,6 +36,7 @@ interface DependentesSectionProps {
 
 export function DependentesSection({
   dependentes,
+  titularCpf,
   planos,
   funcionarioCadastro,
   onChange,
@@ -253,6 +255,16 @@ export function DependentesSection({
         return;
       }
 
+      const duplicateError = getDuplicateCpfError(
+        cpfLimpo,
+        dependentes.filter((_, index) => index !== editingIndex).map((dependente) => dependente.cpf),
+        titularCpf,
+      );
+      if (duplicateError) {
+        setCpfValidationError(duplicateError);
+        return;
+      }
+
       setCpfValidationError('');
 
       if (enableLemmit && config?.lemmit_dependente && profile?.id) {
@@ -284,6 +296,16 @@ export function DependentesSection({
 
     if (idade >= 18 && !formData.cpf) {
       alert('Campo obrigatório: CPF (obrigatório para maiores de 18 anos)');
+      return;
+    }
+
+    const duplicateCpfError = getDuplicateCpfError(
+      formData.cpf,
+      dependentes.filter((_, index) => index !== editingIndex).map((dependente) => dependente.cpf),
+      titularCpf,
+    );
+    if (duplicateCpfError) {
+      setCpfValidationError(duplicateCpfError);
       return;
     }
 

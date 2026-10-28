@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, createServiceClient, jsonResponse, requireInternalUser } from "../_shared/public-flow.ts";
+import { duplicateParticipantCpfResponse, findDuplicateParticipantCpf } from "../_shared/cpf-uniqueness.ts";
 
 const ERP_DEPENDENTE_FALHA_INTERNA =
   "Não foi possível concluir a inclusão do dependente. Verifique se ele já aparece no cadastro antes de tentar novamente. Se o problema continuar, entre em contato com o suporte.";
@@ -98,11 +99,12 @@ const preflightPendingDependentInclusion = async (
   const holderRecords = await fetchAssociados(erpToken, { codigoAssociado: String(holderCode) });
   const holder = holderRecords.find((item: any) => Number(item?.codigo) === holderCode) || holderRecords[0] || null;
   if (!holder) {
-    return { holderActive: false, duplicates: [] as ExistingDependent[] };
+    return { holderActive: false, holderCpf: "", duplicates: [] as ExistingDependent[] };
   }
 
   const holderDeps = Array.isArray(holder?.dependentes) ? holder.dependentes : [];
   const holderActive = holderDeps.some((dep: any) => isActive(dep));
+  const holderCpf = digits(holder?.cpf);
   const duplicates: ExistingDependent[] = [];
 
   for (let requestIndex = 0; requestIndex < requestedDependents.length; requestIndex += 1) {
@@ -148,7 +150,7 @@ const preflightPendingDependentInclusion = async (
     }
   }
 
-  return { holderActive, duplicates };
+  return { holderActive, holderCpf, duplicates };
 };
 
 const resolveDependentTarget = async (
@@ -490,6 +492,9 @@ Deno.serve(async (req: Request) => {
         }, 409);
       }
 
+      const duplicateInRequest = findDuplicateParticipantCpf(null, requestedDependents);
+      if (duplicateInRequest) return jsonResponse(duplicateParticipantCpfResponse(duplicateInRequest), 409);
+
       let pendingFiles: any[];
       try {
         pendingFiles = await loadAndValidatePendingFiles(
@@ -514,7 +519,7 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: friendly, code: message.split(":")[0] }, 409);
       }
 
-      let preflight: { holderActive: boolean; duplicates: ExistingDependent[] };
+      let preflight: { holderActive: boolean; holderCpf: string; duplicates: ExistingDependent[] };
       try {
         preflight = await preflightPendingDependentInclusion(
           ERP_TOKEN,
@@ -534,6 +539,15 @@ Deno.serve(async (req: Request) => {
           code: "ERP_PREFLIGHT_UNAVAILABLE",
         }, 503);
       }
+
+      if (preflight.holderCpf.length !== 11) {
+        return jsonResponse({
+          error: "Nao foi possivel confirmar o CPF do titular no S4E.",
+          code: "HOLDER_CPF_UNAVAILABLE",
+        }, 503);
+      }
+      const duplicateCpf = findDuplicateParticipantCpf(preflight.holderCpf, requestedDependents);
+      if (duplicateCpf) return jsonResponse(duplicateParticipantCpfResponse(duplicateCpf), 409);
 
       if (!preflight.holderActive) {
         const now = new Date().toISOString();
@@ -880,8 +894,12 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    const duplicateInRequest = findDuplicateParticipantCpf(null, requestedDependents);
+    if (duplicateInRequest) return jsonResponse(duplicateParticipantCpfResponse(duplicateInRequest), 409);
+
     let regularPreflightBeforeSend: {
       holderActive: boolean;
+      holderCpf: string;
       duplicates: ExistingDependent[];
     } | null = null;
 
@@ -897,8 +915,21 @@ Deno.serve(async (req: Request) => {
           "[erp-novo-dependente] Preflight regular indisponivel; mantendo envio normal:",
           preflightError,
         );
+        return jsonResponse({
+          error: "Nao foi possivel confirmar o CPF do titular no S4E. Tente novamente.",
+          code: "ERP_PREFLIGHT_UNAVAILABLE",
+        }, 503);
       }
     }
+
+    if (!regularPreflightBeforeSend || regularPreflightBeforeSend.holderCpf.length !== 11) {
+      return jsonResponse({
+        error: "Nao foi possivel confirmar o CPF do titular no S4E. Tente novamente.",
+        code: "HOLDER_CPF_UNAVAILABLE",
+      }, 503);
+    }
+    const duplicateCpf = findDuplicateParticipantCpf(regularPreflightBeforeSend.holderCpf, requestedDependents);
+    if (duplicateCpf) return jsonResponse(duplicateParticipantCpfResponse(duplicateCpf), 409);
 
     if (
       regularPreflightBeforeSend &&

@@ -902,6 +902,23 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
       return false;
     }
 
+    const cpfTitular = removeCPFMask(cadastroAtual.cpf || formData.cpf);
+    const cpfsParticipantes = new Set<string>(cpfTitular.length === 11 ? [cpfTitular] : []);
+    let titularRowSkipped = false;
+    for (const dependente of dependentes) {
+      const cpfDependente = removeCPFMask(dependente.cpf || '');
+      if (dependente.tipo === 1 && cpfDependente === cpfTitular && !titularRowSkipped) {
+        titularRowSkipped = true;
+        continue;
+      }
+      if (cpfDependente.length !== 11) continue;
+      if (cpfsParticipantes.has(cpfDependente)) {
+        setError('Cada CPF pode aparecer uma única vez entre o titular e os dependentes.');
+        return false;
+      }
+      cpfsParticipantes.add(cpfDependente);
+    }
+
     const dependentesSemPlano = dependentes.filter((d) => !d.plano || d.plano === 0);
     if (dependentesSemPlano.length > 0) {
       setError('Todos os dependentes devem ter um plano selecionado');
@@ -1008,6 +1025,8 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
 
   const handleRetryWithVendedor = async (vendedorCodigo: string, vendedorNome: string) => {
     setShowParceiroInvalidoModal(false);
+
+    if (!validateCadastro(true)) return;
 
     if (cadastroAtual.link_pendencia_id) {
       setError('O vendedor de origem da solicitação por link não pode ser alterado. Trate o erro do ERP mantendo a atribuição original.');
@@ -1557,6 +1576,7 @@ export function CadastroModal({ cadastro, onClose, onSuccess }: CadastroModalPro
               ) : (
                 <DependentesSection
                   dependentes={dependentes}
+                  titularCpf={formData.cpf}
                   planos={planosEmpresa}
                   funcionarioCadastro={erpFuncionarioCadastroId}
                   onChange={setDependentes}

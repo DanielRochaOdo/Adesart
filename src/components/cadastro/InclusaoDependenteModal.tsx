@@ -7,7 +7,7 @@ import { DateInput } from '../DateInput';
 import { useAuth } from '../../contexts/AuthContext';
 import { useConfigCadastro } from '../../contexts/ConfigCadastroContext';
 import { useCadastros } from '../../hooks/useCadastros';
-import { formatCPF, removeCPFMask, validateCPF, normalizeToISO, formatDateFromISO } from '../../lib/cpf';
+import { formatCPF, getDuplicateCpfError, removeCPFMask, validateCPF, normalizeToISO, formatDateFromISO } from '../../lib/cpf';
 import { supabase } from '../../lib/supabase';
 import { LemmitLimitModal } from './LemmitLimitModal';
 import { ParceiroInvalidoModal } from './ParceiroInvalidoModal';
@@ -534,6 +534,16 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
   const handleSalvarDependente = (index: number) => {
     const dep = dependentesRef.current[index];
 
+    const duplicateCpfError = getDuplicateCpfError(
+      dep.cpf,
+      dependentesRef.current.filter((_, otherIndex) => otherIndex !== index).map((other) => other.cpf),
+      responsavelSelecionado?.cpf,
+    );
+    if (duplicateCpfError) {
+      setCpfValidationErrors((prev) => ({ ...prev, [index]: duplicateCpfError }));
+      return;
+    }
+
     if (!dep.nome) {
       setError(`Dependente ${index + 1}: Nome é obrigatório`);
       return;
@@ -611,29 +621,33 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
       return next;
     });
 
-    if (campo === 'cpf' && valor) {
-      const cpfFormatado = formatCPF(valor);
+    if (campo === 'cpf') {
+      const cpfFormatado = formatCPF(valor || '');
       const cpfLimpo = removeCPFMask(cpfFormatado);
 
-      if (cpfLimpo.length === 11) {
-        if (!validateCPF(cpfFormatado)) {
-          setCpfValidationErrors(prev => ({ ...prev, [index]: 'CPF inválido' }));
+      const duplicateErrors: Record<number, string> = {};
+      dependentesRef.current.forEach((dependenteAtual, currentIndex) => {
+        const currentCpf = removeCPFMask(dependenteAtual.cpf || '');
+        if (currentCpf.length !== 11) return;
+        if (!validateCPF(currentCpf)) {
+          duplicateErrors[currentIndex] = 'CPF inválido';
           return;
         }
+        const duplicateError = getDuplicateCpfError(
+          currentCpf,
+          dependentesRef.current
+            .filter((_, otherIndex) => otherIndex !== currentIndex)
+            .map((other) => other.cpf),
+          responsavelSelecionado?.cpf,
+        );
+        if (duplicateError) duplicateErrors[currentIndex] = duplicateError;
+      });
+      setCpfValidationErrors(duplicateErrors);
 
-        setCpfValidationErrors(prev => {
-          const next = { ...prev };
-          delete next[index];
-          return next;
-        });
+      if (cpfLimpo.length === 11) {
+        if (!validateCPF(cpfFormatado) || duplicateErrors[index]) return;
 
         await consultarLemmitDependente(index, cpfLimpo);
-      } else {
-        setCpfValidationErrors(prev => {
-          const next = { ...prev };
-          delete next[index];
-          return next;
-        });
       }
     }
   };
@@ -1731,6 +1745,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
                               onChange={(e) => handleAtualizarDependente(index, 'cpf', e.target.value)}
                               inputMode="numeric"
                               required={!isMenorDeIdade(dep.dataNascimento)}
+                              error={cpfValidationErrors[index]}
                             />
                             {consultingLemmitIndex === index && (
                               <div className="absolute right-3 top-9 flex items-center gap-2">
@@ -1739,11 +1754,6 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
                                   Consultando...
                                 </span>
                               </div>
-                            )}
-                            {cpfValidationErrors[index] && (
-                              <p className="text-xs text-red-600 mt-1">
-                                {cpfValidationErrors[index]}
-                              </p>
                             )}
                             {!cpfValidationErrors[index] && config?.lemmit_inclusao_dependente && (
                               <p className="text-xs text-slate-500 mt-1">

@@ -16,6 +16,25 @@ export function removeCPFMask(cpf: string): string {
   return cpf.replace(/\D/g, '');
 }
 
+export function getDuplicateCpfError(
+  cpf: string,
+  otherCpfs: Array<string | null | undefined>,
+  titularCpf?: string | null,
+): string | null {
+  const normalizedCpf = removeCPFMask(cpf);
+  if (normalizedCpf.length !== 11) return null;
+
+  if (normalizedCpf === removeCPFMask(titularCpf || '')) {
+    return 'O CPF do dependente não pode ser igual ao do titular.';
+  }
+
+  if (otherCpfs.some((otherCpf) => removeCPFMask(otherCpf || '') === normalizedCpf)) {
+    return 'Este CPF já foi informado para outro dependente.';
+  }
+
+  return null;
+}
+
 export function validateCPF(cpf: string): boolean {
   const numbers = removeCPFMask(cpf);
 

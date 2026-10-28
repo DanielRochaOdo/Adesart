@@ -26,6 +26,17 @@ O cliente Android não pode transformar uma mensagem textual como
 Qualquer indicação de dependente ativo deve vir de uma decisão estruturada do
 backend canônico baseada nos dados atuais do ERP.
 
+## Unicidade de CPF na mesma adesao ou inclusao
+
+O CPF normalizado (somente digitos) deve aparecer no maximo uma vez entre o titular
+e os dependentes enviados na mesma operacao. A regra bloqueia tanto CPF repetido
+entre dependentes quanto CPF de dependente igual ao CPF do titular.
+
+Web, Android e iOS (pelo Web canonico no shell atual) devem apresentar o bloqueio
+assim que o CPF completo for informado. O backend canonico deve repetir a validacao
+antes de chamar o ERP, inclusive para solicitacoes recebidas por Link, rascunhos
+retomados e chamadas diretas.
+
 ## Envio ao ERP e anexos
 
 A criação da adesão no ERP e a entrega de documentos são eventos distintos.

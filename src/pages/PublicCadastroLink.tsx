@@ -18,7 +18,7 @@ import { Button } from '../components/Button';
 import { Input } from '../components/Input';
 import { Select } from '../components/Select';
 import { useConfigCadastro } from '../contexts/ConfigCadastroContext';
-import { formatCEP, formatCPF, formatMobilePhone, formatPhone, removeCPFMask, validateCPF } from '../lib/cpf';
+import { formatCEP, formatCPF, formatMobilePhone, formatPhone, getDuplicateCpfError, removeCPFMask, validateCPF } from '../lib/cpf';
 import { getPublicLinkVisitId } from '../lib/publicLinkVisit';
 
 type Stage = 'identify' | 'details' | 'existing_member' | 'dependents' | 'existing_contact' | 'existing_review' | 'review' | 'contract' | 'success' | 'completed' | 'not_eligible';
@@ -288,6 +288,7 @@ export function PublicCadastroLink() {
   const [attemptToken, setAttemptToken] = useState('');
   const [form, setForm] = useState<FormState>(emptyForm);
   const [dependents, setDependents] = useState<Dependent[]>([]);
+  const [dependentCpfErrors, setDependentCpfErrors] = useState<Record<string, string>>({});
   const [dependentLookupId, setDependentLookupId] = useState<string | null>(null);
   const dependentLookupCpfRef = useRef<Record<string, string>>({});
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -565,6 +566,15 @@ export function PublicCadastroLink() {
       setError('O CPF do dependente não pode ser o mesmo do responsável financeiro.');
       return;
     }
+    const duplicateCpfError = getDuplicateCpfError(
+      normalizedCpf,
+      dependents.filter((dependent) => dependent.id !== id).map((dependent) => dependent.cpf),
+      cpf,
+    );
+    if (duplicateCpfError) {
+      setError(duplicateCpfError);
+      return;
+    }
     if (dependentLookupCpfRef.current[id] === normalizedCpf) return;
 
     dependentLookupCpfRef.current[id] = normalizedCpf;
@@ -614,14 +624,43 @@ export function PublicCadastroLink() {
   };
 
   const handleDependentCpfChange = (id: string, value: string) => {
-    updateDependent(id, { cpf: value });
     const normalizedCpf = removeCPFMask(value);
-    if (normalizedCpf.length === 11) void lookupDependentCpf(id, normalizedCpf);
+    const nextDependents = dependents.map((dependent) =>
+      dependent.id === id ? { ...dependent, cpf: value } : dependent,
+    );
+    setDependents(nextDependents);
+
+    const nextErrors: Record<string, string> = {};
+    nextDependents.forEach((dependent) => {
+      const candidateCpf = removeCPFMask(dependent.cpf);
+      if (candidateCpf.length !== 11 || !validateCPF(candidateCpf)) return;
+      const duplicateCpfError = getDuplicateCpfError(
+        candidateCpf,
+        nextDependents.filter((other) => other.id !== dependent.id).map((other) => other.cpf),
+        cpf,
+      );
+      if (duplicateCpfError) nextErrors[dependent.id] = duplicateCpfError;
+    });
+    setDependentCpfErrors(nextErrors);
+
+    if (normalizedCpf.length === 11 && validateCPF(normalizedCpf)) {
+      const duplicateCpfError = getDuplicateCpfError(
+        normalizedCpf,
+        nextDependents.filter((dependent) => dependent.id !== id).map((dependent) => dependent.cpf),
+        cpf,
+      );
+      if (!duplicateCpfError) void lookupDependentCpf(id, normalizedCpf);
+    }
   };
 
   const removeDependent = (id: string) => {
     delete dependentLookupCpfRef.current[id];
     setDependents((prev) => prev.filter((item) => item.id !== id));
+    setDependentCpfErrors((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
   };
 
   const dependentErrors = () => {
@@ -1073,7 +1112,7 @@ export function PublicCadastroLink() {
                 <div className="mb-4 flex items-center justify-between"><strong className="text-sm text-slate-800">Dependente {index + 1}</strong><button type="button" onClick={() => removeDependent(dep.id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button></div>
                 <div className="space-y-4">
                   <div>
-                    <Input label="CPF" inputMode="numeric" value={formatCPF(dep.cpf)} onChange={(event) => handleDependentCpfChange(dep.id, event.target.value)} maxLength={14} required className="min-h-12" />
+                    <Input label="CPF" inputMode="numeric" value={formatCPF(dep.cpf)} onChange={(event) => handleDependentCpfChange(dep.id, event.target.value)} maxLength={14} required className="min-h-12" error={dependentCpfErrors[dep.id]} />
                     {dependentLookupId === dep.id && <p className="mt-2 flex items-center gap-2 text-xs font-medium text-emerald-700"><Loader2 className="h-4 w-4 animate-spin" />Consultando dados na Lemmit...</p>}
                   </div>
                   <Select label="Grau de parentesco" value={String(dep.tipo || '')} onChange={(event) => updateDependent(dep.id, { tipo: Number(event.target.value) })} required className="min-h-12"><option value="">Selecione</option>{activeRelationships.map((item) => <option key={item.id} value={item.parentesco_id}>{item.label}</option>)}</Select>

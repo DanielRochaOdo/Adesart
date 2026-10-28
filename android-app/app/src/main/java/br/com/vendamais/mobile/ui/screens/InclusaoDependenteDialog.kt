@@ -511,12 +511,25 @@ fun InclusaoDependenteDialog(
         }
     }
 
+    fun duplicateCpfError(index: Int, cpf: String): String? {
+        val normalizedCpf = cpf.filter(Char::isDigit)
+        if (normalizedCpf.length != 11) return null
+        val holderCpf = responsavelSelecionado?.cpf.orEmpty().filter(Char::isDigit)
+        if (normalizedCpf == holderCpf) return "O CPF do dependente nao pode ser igual ao do titular."
+        if (dependentes.withIndex().any { (otherIndex, other) ->
+                otherIndex != index && other.cpf.text.filter(Char::isDigit) == normalizedCpf
+            }
+        ) return "Este CPF ja foi informado para outro dependente."
+        return null
+    }
+
     fun validateDependente(dep: DependenteFormState, index: Int): String? {
         val iso = toIsoDateOrNull(dep.dataNascimento.text)
         if (dep.nome.isBlank()) return "Dependente ${index + 1}: nome obrigatorio."
         if (iso == null) return "Dependente ${index + 1}: data de nascimento invalida."
         if (!isUnder18(iso) && dep.cpf.text.length != 11) return "Dependente ${index + 1}: CPF obrigatorio."
         if (dep.cpf.text.isNotBlank() && !validateCpf(dep.cpf.text)) return "Dependente ${index + 1}: CPF invalido."
+        duplicateCpfError(index, dep.cpf.text)?.let { return "Dependente ${index + 1}: $it" }
         if (dep.sexo !in setOf(0, 1)) return "Dependente ${index + 1}: sexo obrigatorio."
         if (dep.parentesco == 0) return "Dependente ${index + 1}: parentesco obrigatorio."
         if (dep.plano == 0) return "Dependente ${index + 1}: plano obrigatorio."
@@ -1305,6 +1318,18 @@ fun InclusaoDependenteDialog(
                                         }
 
                                         val cpfDigits = sanitized.text
+                                        dependentes.indices.forEach { currentIndex ->
+                                            val currentCpf = dependentes[currentIndex].cpf.text
+                                            when {
+                                                currentCpf.length != 11 -> cpfValidationErrors.remove(currentIndex)
+                                                !validateCpf(currentCpf) -> cpfValidationErrors[currentIndex] = "CPF invalido."
+                                                else -> {
+                                                    val duplicateError = duplicateCpfError(currentIndex, currentCpf)
+                                                    if (duplicateError == null) cpfValidationErrors.remove(currentIndex)
+                                                    else cpfValidationErrors[currentIndex] = duplicateError
+                                                }
+                                            }
+                                        }
                                         when {
                                             cpfDigits.isBlank() || cpfDigits.length < 11 -> {
                                                 cpfValidationErrors.remove(index)
@@ -1312,6 +1337,10 @@ fun InclusaoDependenteDialog(
                                             }
                                             !validateCpf(cpfDigits) -> {
                                                 cpfValidationErrors[index] = "CPF invalido."
+                                                consultedCpfByIndex.remove(index)
+                                            }
+                                            duplicateCpfError(index, cpfDigits) != null -> {
+                                                cpfValidationErrors[index] = duplicateCpfError(index, cpfDigits).orEmpty()
                                                 consultedCpfByIndex.remove(index)
                                             }
                                             else -> {
