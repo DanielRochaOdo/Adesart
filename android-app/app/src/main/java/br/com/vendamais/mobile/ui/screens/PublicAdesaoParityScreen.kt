@@ -1802,6 +1802,7 @@ private fun formatPublicPhone(phone: String?): String {
     }
 }
 
+@Composable
 private fun PublicFinalStateScreen(
     title: String,
     message: String,
