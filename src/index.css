@@ -3254,3 +3254,57 @@
     .vm-mobile-bottom-nav-label { font-size: 10px; }
   }
 }
+
+.vm-public-analysis-page {
+  background: linear-gradient(180deg, #07111e 0%, #0a1725 55%, #07111e 100%);
+  color: #f8fafc;
+}
+
+.vm-public-analysis-shell {
+  background: linear-gradient(180deg, rgba(255,255,255,.025), transparent 14%), #0b1723;
+  border-color: rgba(148,163,184,.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.035), 0 30px 78px rgba(0,0,0,.42);
+}
+
+.vm-public-analysis-content {
+  padding: 0;
+  background: #0b1723;
+}
+
+.vm-public-analysis-result {
+  min-height: 620px;
+  background: linear-gradient(180deg, #142636 0%, #0c1a28 55%, #0b1d28 100%);
+  color: #f8fafc;
+}
+
+.vm-public-analysis-contact {
+  margin-top: 3rem;
+  padding: 1.5rem;
+  border-color: rgba(110,231,183,.2);
+  border-radius: 1.75rem;
+  background: linear-gradient(145deg, rgba(5,80,68,.46), rgba(4,42,44,.7));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 14px 34px rgba(0,0,0,.12);
+}
+
+.vm-public-analysis-contact .text-emerald-900,
+.vm-public-analysis-contact .text-emerald-950,
+.vm-public-analysis-contact .text-emerald-800 {
+  color: #a7f3d0 !important;
+}
+
+.vm-public-analysis-contact .text-emerald-900 {
+  font-size: 1.25rem;
+}
+
+.vm-public-analysis-contact a {
+  min-height: 4rem;
+  margin-top: 1.5rem;
+  border-radius: 1.25rem;
+  background: #f97316;
+  font-size: 1.125rem;
+  box-shadow: 0 8px 22px rgba(249,115,22,.2);
+}
+
+.vm-public-analysis-contact a:hover {
+  background: #ea580c;
+}

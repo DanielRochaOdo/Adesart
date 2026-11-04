@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,6 +14,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -36,6 +44,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -409,6 +419,22 @@ fun PublicAdesaoParityScreen(
             consultantPhone = currentLink.vendedorTelefone,
             onInstallApp = { openAssociadoApp(context) },
             onClose = onClose,
+        )
+        return
+    }
+
+    if (stage == PublicStage.SUCCESS && requiresAuthorization) {
+        PublicAuthorizationPendingScreen(
+            companyName = currentLink.empresaNome,
+            message = if (flowMode == "existing_member") {
+                successMessage.ifBlank {
+                    "Sua solicita\u00e7\u00e3o foi enviada para an\u00e1lise. Voc\u00ea receber\u00e1 um e-mail quando ela for conclu\u00edda."
+                }
+            } else {
+                "Seus dados e seu contrato aceito foram enviados para an\u00e1lise. Voc\u00ea receber\u00e1 o e-mail quando a ades\u00e3o for efetivada."
+            },
+            consultantName = currentLink.vendedorNome,
+            consultantPhone = currentLink.vendedorTelefone,
         )
         return
     }
@@ -1609,6 +1635,173 @@ private fun PublicUnavailableScreen(
 }
 
 @Composable
+private fun PublicAuthorizationPendingScreen(
+    companyName: String,
+    message: String,
+    consultantName: String?,
+    consultantPhone: String?,
+) {
+    val phoneDigits = consultantPhone.orEmpty().filter(Char::isDigit)
+    val whatsappNumber = if (phoneDigits.startsWith("55")) phoneDigits else "55$phoneDigits"
+    ScreenBackground {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 20.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                color = Color(0xFF087B5E),
+                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(5.dp),
+                        ) {
+                            Text(
+                                "ADES\u00c3O ODONTOART",
+                                color = Color(0xFFD1FAE5),
+                                letterSpacing = 3.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(companyName, color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            consultantName?.takeIf(String::isNotBlank)?.let {
+                                Text("Consultor: $it", color = Color(0xFFD1FAE5))
+                            }
+                            if (phoneDigits.length >= 10) {
+                                Text("WhatsApp: ${formatPublicPhone(consultantPhone)}", color = Color(0xFFD1FAE5))
+                            }
+                        }
+                        Surface(
+                            modifier = Modifier.width(116.dp),
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color.White.copy(alpha = 0.16f),
+                            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.22f)),
+                        ) {
+                            OdontoartBrandMark(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                            )
+                        }
+                    }
+                    AuthorizationWhatsAppButton(
+                        label = "Precisa de ajuda? Fale com seu consultor",
+                        phoneDigits = phoneDigits,
+                        whatsappNumber = whatsappNumber,
+                    )
+                }
+            }
+
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(bottomStart = 28.dp, bottomEnd = 28.dp),
+                color = Color(0xFF0D1D2B),
+                border = BorderStroke(1.dp, Color(0xFF263A48)),
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 30.dp),
+                    horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(86.dp)
+                            .border(BorderStroke(4.dp, Color(0xFF34D399)), CircleShape),
+                        contentAlignment = androidx.compose.ui.Alignment.Center,
+                    ) {
+                        Text("\u2713", color = Color(0xFF34D399), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+                    }
+                    Text(
+                        "Solicita\u00e7\u00e3o est\u00e1 em An\u00e1lise",
+                        modifier = Modifier.widthIn(max = 360.dp),
+                        color = Color.White,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
+                    )
+                    Text(
+                        message,
+                        color = Color(0xFFCBD5E1),
+                        style = MaterialTheme.typography.bodyLarge,
+                        lineHeight = 29.sp,
+                        textAlign = TextAlign.Center,
+                    )
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(28.dp),
+                        color = Color(0xFF0B302F),
+                        border = BorderStroke(1.dp, Color(0xFF28544E)),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Text("Ficou com alguma d\u00favida?", color = Color(0xFFA7F3D0), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Text("Seu consultor est\u00e1 pronto para lhe atender.", color = Color(0xFFA7F3D0), style = MaterialTheme.typography.bodyLarge)
+                            consultantName?.takeIf(String::isNotBlank)?.let {
+                                Text(it, color = Color(0xFFD1FAE5), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                            }
+                            if (phoneDigits.length >= 10) {
+                                Text("WhatsApp: ${formatPublicPhone(consultantPhone)}", color = Color(0xFFA7F3D0), style = MaterialTheme.typography.bodyLarge)
+                                AuthorizationWhatsAppButton(
+                                    label = "Falar com meu consultor",
+                                    phoneDigits = phoneDigits,
+                                    whatsappNumber = whatsappNumber,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AuthorizationWhatsAppButton(
+    label: String,
+    phoneDigits: String,
+    whatsappNumber: String,
+) {
+    val context = LocalContext.current
+    Button(
+        modifier = Modifier.fillMaxWidth().heightIn(min = 58.dp),
+        enabled = phoneDigits.length >= 10,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color(0xFFF97316),
+            contentColor = Color.White,
+            disabledContainerColor = Color(0xFFF97316).copy(alpha = 0.55f),
+        ),
+        onClick = {
+            val message = Uri.encode("Ol\u00e1! Preciso de ajuda com minha ades\u00e3o \u00e0 Odontoart.")
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://wa.me/$whatsappNumber?text=$message")))
+        },
+    ) {
+        Text(label, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+    }
+}
+
+private fun formatPublicPhone(phone: String?): String {
+    val digits = phone.orEmpty().filter(Char::isDigit).takeLast(11)
+    return when (digits.length) {
+        11 -> "(${digits.take(2)}) ${digits.substring(2, 7)}-${digits.takeLast(4)}"
+        10 -> "(${digits.take(2)}) ${digits.substring(2, 6)}-${digits.takeLast(4)}"
+        else -> phone.orEmpty()
+    }
+}
+
 private fun PublicFinalStateScreen(
     title: String,
     message: String,

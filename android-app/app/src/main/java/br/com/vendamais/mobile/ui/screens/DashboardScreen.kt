@@ -309,17 +309,17 @@ fun DashboardScreen(
     }
     val planRanking = dashboardPlanRanking(currentRecords, state.planosMap).filter { it.second > 0 }
     val statusCounts = listOf(
-        "Enviado ao ERP" to currentCadastros.count { it.status == "enviado" },
-        "Incompleto" to currentCadastros.count { it.status == "incompleto" },
-        "Adesoes pendentes" to currentCadastros.count { it.status == "adesoes_pendentes" },
-        "Erro de envio" to currentCadastros.count { it.status == "erro_envio" },
+        "Enviado ao ERP" to currentCadastros.filter { it.status == "enviado" }.sumOf(::dashboardLives),
+        "Incompleto" to currentCadastros.filter { it.status == "incompleto" }.sumOf(::dashboardLives),
+        "Adesoes pendentes" to currentCadastros.filter { it.status == "adesoes_pendentes" }.sumOf(::dashboardLives),
+        "Erro de envio" to currentCadastros.filter { it.status == "erro_envio" }.sumOf(::dashboardLives),
     )
     val evolution = currentCadastros
         .groupBy { it.dashboardDate() }
         .toSortedMap()
-        .map { (date, items) -> date.toString() to items.size }
-    val internalCount = currentCadastros.count { dashboardChannelKey(it) == "interno" }
-    val publicCount = currentCadastros.count { dashboardChannelKey(it) == "publico" }
+        .map { (date, items) -> date.toString() to items.sumOf(::dashboardLives) }
+    val internalCount = currentCadastros.filter { dashboardChannelKey(it) == "interno" }.sumOf(::dashboardLives)
+    val publicCount = currentCadastros.filter { dashboardChannelKey(it) == "publico" }.sumOf(::dashboardLives)
 
     val indicators = listOf(
         DashboardIndicator("Cadastros iniciados", current.titulares, previous.titulares, Icons.Rounded.Description, Blue100, Blue500),
@@ -527,16 +527,16 @@ fun DashboardScreen(
             }
 
             item {
-                WebCard(title = "Evolucao de cadastros no periodo") {
+                WebCard(title = "Evolucao de vidas no periodo") {
                     DashboardEvolutionChart(
                         entries = evolution.takeLast(31),
-                        emptyMessage = "Sem cadastros para montar a evolucao.",
+                        emptyMessage = "Sem vidas para montar a evolucao.",
                     )
                 }
             }
 
             item {
-                WebCard(title = "Distribuicao dos cadastros por status") {
+                WebCard(title = "Distribuicao das vidas por status") {
                     DashboardDistribution(statusCounts)
                 }
             }
@@ -785,7 +785,7 @@ private fun DashboardEvolutionChart(entries: List<Pair<String, Int>>, emptyMessa
 private fun DashboardDistribution(entries: List<Pair<String, Int>>) {
     val total = entries.sumOf { it.second }
     if (total == 0) {
-        Text("Sem registros para esta distribuicao.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Sem vidas para esta distribuicao.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         return
     }
     val colors = listOf(Emerald, Blue500, Amber500, Red500)
@@ -812,7 +812,7 @@ private fun DashboardDistribution(entries: List<Pair<String, Int>>) {
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(inteiroDashboard(total), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("registros", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("vidas", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(9.dp)) {
@@ -869,7 +869,7 @@ private fun DashboardGroupList(groups: List<DashboardGroup>, showRate: Boolean) 
                 }
                 val rate = if (group.total == 0) 0.0 else group.enviados.toDouble() / group.total.toDouble()
                 Text(
-                    "${group.enviados} enviados · ${group.pendentes} pendentes" + if (showRate) " · ${String.format(Locale("pt", "BR"), "%.1f", rate * 100)}%" else "",
+                    "${group.enviados} vidas enviadas · ${group.pendentes} vidas pendentes" + if (showRate) " · ${String.format(Locale("pt", "BR"), "%.1f", rate * 100)}%" else "",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -894,7 +894,7 @@ private fun PerformanceLine(icon: ImageVector, label: String, value: String?, to
             Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(value ?: "Nao informado", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
         }
-        Text((total ?: 0).toString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text("${total ?: 0} vidas", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -976,12 +976,14 @@ private fun dashboardGroups(
     name: (DashboardCadastro) -> String,
 ): List<DashboardGroup> {
     return records.groupBy(key).map { (groupKey, items) ->
+        val totalVidas = items.sumOf(::dashboardLives)
+        val vidasEnviadas = items.filter { it.status == "enviado" }.sumOf(::dashboardLives)
         DashboardGroup(
             key = groupKey,
             name = name(items.first()),
-            total = items.size,
-            enviados = items.count { it.status == "enviado" },
-            pendentes = items.count { it.status != "enviado" },
+            total = totalVidas,
+            enviados = vidasEnviadas,
+            pendentes = totalVidas - vidasEnviadas,
         )
     }.sortedWith(compareByDescending<DashboardGroup> { it.total }.thenBy { it.name })
 }

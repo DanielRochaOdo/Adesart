@@ -270,9 +270,10 @@ function agrupar(
     const grupo = grupos.get(key) || {
       key, nome: nome(cadastro), total: 0, enviados: 0, pendentes: 0,
     };
-    grupo.total++;
-    if (cadastro.status === 'enviado') grupo.enviados++;
-    else grupo.pendentes++;
+    const quantidadeVidas = vidas(cadastro);
+    grupo.total += quantidadeVidas;
+    if (cadastro.status === 'enviado') grupo.enviados += quantidadeVidas;
+    else grupo.pendentes += quantidadeVidas;
     grupos.set(key, grupo);
   });
   return Array.from(grupos.values()).sort((a, b) =>
@@ -688,8 +689,8 @@ function GraficoEvolucao({ registros, inicio, fimExclusivo }: {
     const distancia = diasEntre(inicio, dataLocal(cadastro.created_at));
     const indice = Math.floor(distancia / tamanhoGrupo);
     if (indice >= 0 && indice < pontos.length) {
-      pontos[indice].iniciados++;
-      if (cadastro.status === 'enviado') pontos[indice].enviados++;
+      pontos[indice].iniciados += vidas(cadastro);
+      if (cadastro.status === 'enviado') pontos[indice].enviados += vidas(cadastro);
     }
   });
   const maior = Math.max(1, ...pontos.flatMap((p) => [p.iniciados, p.enviados]));
@@ -704,8 +705,8 @@ function GraficoEvolucao({ registros, inicio, fimExclusivo }: {
   }
   return <div className="vm-chart-well p-3">
     <div className="vm-muted-text mb-2 flex justify-end gap-4 text-xs">
-      <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-blue-500 shadow-sm" />Iniciados</span>
-      <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500 shadow-sm" />Enviados ao ERP</span>
+      <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-blue-500 shadow-sm" />Vidas iniciadas</span>
+      <span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500 shadow-sm" />Vidas enviadas ao ERP</span>
     </div>
     <svg viewBox="0 0 715 208" role="img" aria-label="Cadastros criados em cada dia ou grupo de dias do período, separados pelo status atual" className="h-56 w-full">
       {[0, 1, 2, 3, 4].map((parte) => <g key={parte}>
@@ -759,9 +760,9 @@ function TabelaProfissionais({ titulo, grupos, mostrarTaxa }: {
       <div className="overflow-x-auto"><table className="w-full min-w-[420px] text-left text-xs sm:text-sm">
         <thead className="vm-table-head text-slate-600 dark:text-slate-300"><tr>
           <th className="rounded-l-lg px-2 py-2">Nome</th>
-          <th className="px-2 py-2 text-right">Cadastros</th>
-          <th className="px-2 py-2 text-right">Enviados</th>
-          <th className="rounded-r-lg px-2 py-2 text-right">{mostrarTaxa ? 'Envio %' : 'Pendentes'}</th>
+          <th className="px-2 py-2 text-right">Vidas</th>
+          <th className="px-2 py-2 text-right">Vidas enviadas</th>
+          <th className="rounded-r-lg px-2 py-2 text-right">{mostrarTaxa ? 'Envio %' : 'Vidas pendentes'}</th>
         </tr></thead>
         <tbody>{grupos.slice(0, 5).map((grupo) => <tr key={grupo.key} className="vm-table-row border-b last:border-0">
           <td className="max-w-40 truncate px-2 py-2 font-medium text-slate-700" title={grupo.nome}>{grupo.nome}</td>
@@ -1098,11 +1099,13 @@ export function Dashboard() {
     (c) => c.vendedor_nome || (c.vendedor_codigo ? `Código ${c.vendedor_codigo} (nome não informado)` : 'Sem vendedor atribuído'));
   const profissionaisAdesionista = agrupar(atual.cadastros, adesionistaKey,
     (c) => c.adesionista_nome || 'Sem adesionista').filter((g) => g.key !== 'sem-adesionista');
-  const semVendedor = atual.cadastros.filter((c) => vendedorKey(c) === 'sem-vendedor').length;
-  const semAdesionista = atual.cadastros.filter((c) => adesionistaKey(c) === 'sem-adesionista').length;
+  const semVendedor = atual.cadastros.filter((c) => vendedorKey(c) === 'sem-vendedor').reduce((total, c) => total + vidas(c), 0);
+  const semAdesionista = atual.cadastros.filter((c) => adesionistaKey(c) === 'sem-adesionista').reduce((total, c) => total + vidas(c), 0);
   const porEmpresa = agrupar(atual.cadastros, empresaKey, empresaLabel);
   const motivos = ESTADOS.filter((s) => s.key !== 'enviado')
-    .map((s) => ({ ...s, total: atual.cadastros.filter((c) => c.status === s.key).length }));
+    .map((s) => ({ ...s, total: atual.cadastros.filter((c) => c.status === s.key).reduce((total, c) => total + vidas(c), 0) }));
+  const vidasPendentes = atual.cadastros.filter((c) => c.status !== 'enviado')
+    .reduce((total, c) => total + vidas(c), 0);
 
   const indicadorDetalhes: Record<IndicadorId, IndicadorDetalhes> = {
     cadastros: {
@@ -1316,13 +1319,15 @@ export function Dashboard() {
             onClick={() => setIndicadorAberto('pendencias')} />
         </div>
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)]">
-          <Painel titulo="Evolução de cadastros no período">
+          <Painel titulo="Evolução de vidas no período">
             <GraficoEvolucao registros={atuais} inicio={datas.inicioAtual} fimExclusivo={datas.fimExclusivo} />
           </Painel>
-          <Painel titulo="Distribuição dos cadastros por status">
+          <Painel titulo="Distribuição das vidas por status">
             <Rosca entradas={ESTADOS.map((s) => ({
-              nome: s.titulo, valor: atual.cadastros.filter((c) => c.status === s.key).length, cor: s.cor,
-            }))} centro={atual.titulares} legenda="cadastros" />
+              nome: s.titulo, valor: atual.cadastros
+                .filter((c) => c.status === s.key)
+                .reduce((total, c) => total + vidas(c), 0), cor: s.cor,
+            }))} centro={atual.vidas} legenda="vidas" />
           </Painel>
         </div>
         <div className="grid gap-4 xl:grid-cols-2">
@@ -1334,10 +1339,10 @@ export function Dashboard() {
           <Painel titulo="Ranking de planos">
             <RankingPlanos catalogo={catalogoPlanos} registros={atuais} erro={erroCatalogoPlanos} />
           </Painel>
-          <Painel titulo="Canais de origem"><Rosca centro={atual.titulares} legenda="cadastros" compacto
+          <Painel titulo="Canais de origem"><Rosca centro={atual.vidas} legenda="vidas" compacto
             entradas={[
-              { nome: 'Interno', valor: atual.cadastros.filter((c) => canalKey(c) === 'interno').length, cor: '#16a34a' },
-              { nome: 'Link / QR Code', valor: atual.cadastros.filter((c) => canalKey(c) === 'publico').length, cor: '#3b82f6' },
+              { nome: 'Interno', valor: atual.cadastros.filter((c) => canalKey(c) === 'interno').reduce((total, c) => total + vidas(c), 0), cor: '#16a34a' },
+              { nome: 'Link / QR Code', valor: atual.cadastros.filter((c) => canalKey(c) === 'publico').reduce((total, c) => total + vidas(c), 0), cor: '#3b82f6' },
             ]} />
             <p className="mt-3 text-xs text-slate-500">O banco atual não distingue abertura por link e por QR Code.</p>
           </Painel>
@@ -1347,12 +1352,12 @@ export function Dashboard() {
             <div className="space-y-4">{motivos.map((motivo) => <div key={motivo.key}>
               <div className="mb-1 flex items-center justify-between gap-2 text-sm">
                 <span className="text-slate-600">{motivo.titulo}</span>
-                <span className="font-semibold tabular-nums text-slate-800">{inteiro(motivo.total)} · {percentual(atual.pendentes ? motivo.total / atual.pendentes : 0)}</span>
+                <span className="font-semibold tabular-nums text-slate-800">{inteiro(motivo.total)} · {percentual(vidasPendentes ? motivo.total / vidasPendentes : 0)}</span>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-800/80"><div className="h-full rounded-full"
-                style={{ backgroundColor: motivo.cor, width: (100 * motivo.total / Math.max(1, atual.pendentes)) + '%' }} /></div>
+                style={{ backgroundColor: motivo.cor, width: (100 * motivo.total / Math.max(1, vidasPendentes)) + '%' }} /></div>
             </div>)}</div>
-            <p className="mt-3 text-xs text-slate-500">Categorias mutuamente exclusivas de cadastros ainda não enviados ao ERP.</p>
+            <p className="mt-3 text-xs text-slate-500">Categorias mutuamente exclusivas de vidas ainda não enviadas ao ERP.</p>
           </Painel>
           <Painel titulo="Resumo de performance">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1360,29 +1365,29 @@ export function Dashboard() {
                 <BarChart3 className="mb-2 h-5 w-5 text-blue-600" />
                 <p className="text-xs text-slate-500">Vendedor com maior volume</p>
                 <p className="font-bold text-slate-800">{profissionaisVendedor[0]?.nome || 'Não informado'}</p>
-                <p className="vm-muted-text text-sm">{inteiro(profissionaisVendedor[0]?.total || 0)} cadastros</p>
+                <p className="vm-muted-text text-sm">{inteiro(profissionaisVendedor[0]?.total || 0)} vidas</p>
               </div>
               <div className="vm-dashboard-subpanel rounded-xl p-3">
                 <Users className="mb-2 h-5 w-5 text-emerald-600" />
                 <p className="text-xs text-slate-500">Adesionista com maior volume</p>
                 <p className="font-bold text-slate-800">{profissionaisAdesionista[0]?.nome || 'Não informado'}</p>
-                <p className="vm-muted-text text-sm">{inteiro(profissionaisAdesionista[0]?.total || 0)} cadastros</p>
+                <p className="vm-muted-text text-sm">{inteiro(profissionaisAdesionista[0]?.total || 0)} vidas</p>
               </div>
               <div className="vm-dashboard-subpanel rounded-xl p-3">
                 <ClipboardList className="mb-2 h-5 w-5 text-blue-600" />
                 <p className="text-xs text-slate-500">Empresa com maior volume</p>
                 <p className="font-bold text-slate-800">{porEmpresa[0]?.nome || 'Não informada'}</p>
-                <p className="vm-muted-text text-sm">{inteiro(porEmpresa[0]?.total || 0)} cadastros</p>
+                <p className="vm-muted-text text-sm">{inteiro(porEmpresa[0]?.total || 0)} vidas</p>
               </div>
               <div className="vm-dashboard-subpanel rounded-xl p-3">
                 <ShieldCheck className="mb-2 h-5 w-5 text-emerald-600" />
                 <p className="text-xs text-slate-500">Proporção enviada ao ERP</p>
-                <p className="text-2xl font-bold text-slate-800">{percentual(atual.titulares ? atual.enviados / atual.titulares : 0)}</p>
+                <p className="text-2xl font-bold text-slate-800">{percentual(atual.vidas ? atual.cadastros.filter((c) => c.status === 'enviado').reduce((total, c) => total + vidas(c), 0) / atual.vidas : 0)}</p>
                 <p className="text-xs text-slate-500">Não é taxa de conversão de visitas.</p>
               </div>
             </div>
             <p className="mt-4 text-xs text-slate-500">
-              {inteiro(semVendedor)} cadastros sem vendedor atribuído · {inteiro(semAdesionista)} sem adesionista atribuído.
+              {inteiro(semVendedor)} vidas sem vendedor atribuído · {inteiro(semAdesionista)} sem adesionista atribuído.
               {' '}{inteiro(atual.inclusoes)} registros de inclusão de dependente no período (fora dos totais de titulares e vidas desta visão).
             </p>
           </Painel>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   Apple,
+  Check,
   CheckCircle2,
   ChevronLeft,
   FileCheck2,
@@ -137,10 +138,10 @@ const whatsappUrl = (phone?: string | null) => {
   const digits = normalizePhone(phone || '');
   return digits.length >= 10 ? `https://wa.me/${digits.startsWith('55') ? digits : `55${digits}`}?text=${encodeURIComponent('Olá! Preciso de ajuda com minha adesão à Odontoart.')}` : null;
 };
-function ConsultantContact({ link }: { link: Pick<LinkData, 'vendedorNome' | 'vendedorTelefone'> | null }) {
+function ConsultantContact({ link, analysis = false }: { link: Pick<LinkData, 'vendedorNome' | 'vendedorTelefone'> | null; analysis?: boolean }) {
   const url = whatsappUrl(link?.vendedorTelefone);
   if (!link?.vendedorNome && !url) return null;
-  return <div className="vm-public-consultant mt-5 rounded-2xl p-4 text-left">
+  return <div className={'vm-public-consultant mt-5 rounded-2xl p-4 text-left ' + (analysis ? 'vm-public-analysis-contact' : '')}>
     <p className="font-bold text-emerald-900">Ficou com alguma dúvida?</p>
     <p className="mt-1 text-sm text-emerald-900">Seu consultor está pronto para lhe atender.</p>
     {link?.vendedorNome && <p className="mt-3 text-sm font-semibold text-emerald-950">{link.vendedorNome}</p>}
@@ -945,8 +946,8 @@ export function PublicCadastroLink() {
   };
 
   const shell = (children: React.ReactNode) => (
-    <div translate="no" className="vm-public-page min-h-screen px-4 py-5 sm:py-8">
-      <main className="vm-public-shell mx-auto w-full max-w-2xl overflow-hidden rounded-[32px]">
+    <div translate="no" className={'vm-public-page min-h-screen px-4 py-5 sm:py-8 ' + (stage === 'success' && authorizationRequired ? 'vm-public-analysis-page' : '')}>
+      <main className={'vm-public-shell mx-auto w-full max-w-2xl overflow-hidden rounded-[32px] ' + (stage === 'success' && authorizationRequired ? 'vm-public-analysis-shell' : '')}>
         <header className="vm-public-header px-5 py-6 text-white sm:px-7 sm:py-7">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
@@ -961,7 +962,7 @@ export function PublicCadastroLink() {
           </div>
           {whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) && <a href={whatsappUrl((linkData || knownConsultant)?.vendedorTelefone) || '#'} target="_blank" rel="noreferrer" className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-4 py-3 text-sm font-extrabold text-white shadow-lg ring-2 ring-orange-200 transition-colors hover:bg-orange-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-300"><MessageCircle className="h-5 w-5" />Precisa de ajuda? Fale com seu consultor</a>}
         </header>
-        <div className="vm-public-content p-5 sm:p-7">
+        <div className={'vm-public-content ' + (stage === 'success' && authorizationRequired ? 'vm-public-analysis-content' : 'p-5 sm:p-7')}>
           {linkData && !['success', 'completed', 'not_eligible', 'existing_member'].includes(stage) && (
             flowMode === 'existing_member'
               ? <div aria-label="Progresso da inclusão" className="vm-public-progress mb-5 grid grid-cols-3 gap-1.5 rounded-2xl p-1.5 text-center text-[10px] font-semibold">
@@ -1006,15 +1007,15 @@ export function PublicCadastroLink() {
   );
 
   if (stage === 'success') return shell(
-    <div className="py-4 text-center">
-      <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600" />
+    <div className={authorizationRequired ? "vm-public-analysis-result px-5 py-8 text-center sm:px-8 sm:py-10" : "py-4 text-center"}>
+      {authorizationRequired ? <div className="mx-auto mt-2 flex h-24 w-24 items-center justify-center rounded-full border-4 border-emerald-400"><Check className="h-10 w-10 text-emerald-400" /></div> : <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-600" />}
       {authorizationRequired ? (
         <>
-          <h2 className="mt-4 text-2xl font-bold text-slate-900">Solicitação recebida com sucesso</h2>
-          <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-600">
-            {successMessage || 'Seus dados foram enviados para análise. Em caso de dúvidas você pode entrar em contato com seu consultor.'}
+          <h2 className="mx-auto mt-8 max-w-sm text-3xl font-bold leading-tight text-white sm:text-4xl">Solicita&ccedil;&atilde;o est&aacute; em An&aacute;lise</h2>
+          <p className="mx-auto mt-6 max-w-xl text-base leading-8 text-slate-300 sm:text-lg">
+            {flowMode === 'existing_member' ? successMessage || 'Sua solicita\u00e7\u00e3o foi enviada para an\u00e1lise. Voc\u00ea receber\u00e1 um e-mail quando ela for conclu\u00edda.' : 'Seus dados e seu contrato aceito foram enviados para an\u00e1lise. Voc\u00ea receber\u00e1 o e-mail quando a ades\u00e3o for efetivada.'}
           </p>
-          <ConsultantContact link={linkData} />
+          <ConsultantContact link={linkData} analysis />
         </>
       ) : (
         <>
