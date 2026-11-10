@@ -453,10 +453,10 @@ export function GeralConfigCard() {
       <div className="vm-settings-card rounded-2xl p-4">
         <div>
           <h3 className="vm-page-title mb-1 text-sm font-semibold">
-            Planos Ocultos na Seleção de Dependentes
+            Planos Ocultos
           </h3>
           <p className="text-xs text-slate-600 mb-3">
-            Códigos de planos que não devem aparecer no dropdown de seleção de planos dos dependentes.
+            Códigos de planos ocultos para titulares e dependentes em todos os módulos (+Nova Adesão, Link e Incluir Dependente).
           </p>
 
           {editingPlanosOcultos ? (

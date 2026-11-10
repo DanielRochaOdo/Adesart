@@ -1,3 +1,4 @@
+import { isPlanHidden } from '../../lib/planVisibility';
 import { useEffect, useState } from 'react';
 import { Plus, Trash2, Pencil, X, Check, Loader2 } from 'lucide-react';
 import { Input } from '../Input';
@@ -63,22 +64,7 @@ export function DependentesSection({
 
   const planosOcultos = config?.planos_ocultos || [];
 
-  const planosFiltrados = planos.filter((p) => {
-    const planoId = p.Plano?.toString();
-    const isOculto = planosOcultos.includes(planoId);
-
-    if (editingIndex !== null && dependentes[editingIndex]) {
-      const planoDepEditando = dependentes[editingIndex].plano;
-      if (planoDepEditando !== null && planoDepEditando !== undefined) {
-        const planoDoDepEditando = planoDepEditando.toString();
-        if (planoId === planoDoDepEditando) {
-          return true;
-        }
-      }
-    }
-
-    return !isOculto;
-  });
+  const planosFiltrados = planos.filter((p) => !isPlanHidden(p.Plano, planosOcultos));
 
   const parsePlanoValor = (plano: any, tipo: 'titular' | 'dependente') => {
     const valorBruto =
@@ -338,7 +324,7 @@ export function DependentesSection({
     }
 
     const planoId = parseInt(formData.plano);
-    const planoSelecionado = planos.find((p) => p.Plano === planoId);
+    const planoSelecionado = planosFiltrados.find((p) => Number(p.Plano) === planoId);
     if (!planoSelecionado) {
       alert('Plano não encontrado');
       return;

@@ -228,8 +228,11 @@ fun PublicAdesaoParityScreen(
     val currentLink = link
     val requiresAuthorization =
         authoritativeRequiresAuthorization == true || currentLink?.requiresAuthorization == true
-    val plans = remember(flowMode, existingPlans, currentLink?.id, currentLink?.planos, currentLink?.planosRaw) {
-        if (flowMode == "existing_member") {
+    val hiddenCodes = remember(currentLink?.planosOcultos) {
+        currentLink?.planosOcultos.orEmpty().mapNotNull { it.trim().toIntOrNull() }.toSet()
+    }
+    val plans = remember(flowMode, existingPlans, currentLink?.id, currentLink?.planos, currentLink?.planosRaw, hiddenCodes) {
+        val source = if (flowMode == "existing_member") {
             existingPlans
         } else if (currentLink?.planos.orEmpty().isNotEmpty()) {
             currentLink!!.planos.map {
@@ -242,6 +245,17 @@ fun PublicAdesaoParityScreen(
             }
         } else {
             extractLegacyPlans(currentLink?.planosRaw, currentLink?.planosOcultos.orEmpty())
+        }
+        source.filterNot { it.codigo in hiddenCodes }
+    }
+    LaunchedEffect(plans) {
+        val available = plans.map { it.codigo }.toSet()
+        if (titularPlano != 0 && titularPlano !in available) titularPlano = 0
+        dependentes.indices.forEach { index ->
+            val dependent = dependentes[index]
+            if (dependent.plano != 0 && dependent.plano !in available) {
+                dependentes[index] = dependent.copy(plano = 0, planoValor = "0,00")
+            }
         }
     }
     // Apenas a sessao preparada pelo servidor determina se ha cobertura a apresentar.
