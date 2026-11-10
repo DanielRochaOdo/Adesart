@@ -1821,13 +1821,10 @@ class CadastroWorkflowRepository(
                     },
                 ).firstOrNull()
             }.getOrNull()
-            val priorResponse = priorSuccess?.get("erp_response") as? JsonObject
-            val confirmed = priorSuccess?.get("status")?.jsonPrimitive?.contentOrNull == "enviado" &&
-                priorResponse?.get("success")?.jsonPrimitive?.booleanOrNull == true &&
-                priorResponse["data"] != null
-            if (confirmed) {
+            val confirmedResponse = ErpSendOperation.confirmedSameCadastro(priorSuccess)
+            if (confirmedResponse != null) {
                 Log.w(logTag, "Resposta perdida; concluido no ERP para cadastro=$cadastroId", sendError)
-                priorResponse!!
+                confirmedResponse
             } else {
                 throw sendError
             }
@@ -1853,10 +1850,7 @@ class CadastroWorkflowRepository(
     private fun buildCadastroSendIdempotencyKey(
         cadastroId: String,
         payload: JsonObject,
-    ): String {
-        // Mesma chave da Web; a tentativa não muda quando o payload é atualizado.
-        return "cadastro:$cadastroId"
-    }
+    ): String = ErpSendOperation.cadastroKey(cadastroId)
 
     private suspend fun syncCadastroAfterSend(
         session: SavedSession,
@@ -2411,13 +2405,10 @@ class CadastroWorkflowRepository(
                     },
                 ).firstOrNull()
             }.getOrNull()
-            val priorResponse = priorSuccess?.get("erp_response") as? JsonObject
-            val confirmed = priorSuccess?.get("status")?.jsonPrimitive?.contentOrNull == "enviado" &&
-                priorResponse?.get("success")?.jsonPrimitive?.booleanOrNull == true &&
-                priorResponse["data"] != null
-            if (confirmed) {
+            val confirmedResponse = ErpSendOperation.confirmedSameCadastro(priorSuccess)
+            if (confirmedResponse != null) {
                 Log.w(logTag, "Resposta perdida; inclusao confirmada para cadastro=$cadastroId", sendError)
-                priorResponse!!
+                confirmedResponse
             } else {
                 throw sendError
             }
@@ -2427,13 +2418,7 @@ class CadastroWorkflowRepository(
     private fun buildInclusaoDependenteIdempotencyKey(
         cadastroId: String?,
         payload: JsonObject,
-    ): String {
-        // Cada operação é identificada pelo registro pendente, nunca pelo
-        // conteúdo mutável do formulário. Ausência de ID é um erro de fluxo.
-        val id = cadastroId?.trim()?.takeIf { it.isNotBlank() }
-            ?: throw IllegalStateException("Salve a inclusão antes de enviá-la ao ERP.")
-        return "inclusao-dependente:$id"
-    }
+    ): String = ErpSendOperation.inclusaoKey(cadastroId)
 
     suspend fun closeDuplicateInclusaoPendentes(
         session: SavedSession,
