@@ -155,7 +155,7 @@ const checkErpEligibility = async (
   const records = Array.isArray(result?.dados) ? result.dados : [];
   const decision = resolveLinkCpfFlow(records, cpf, rules, linkCompanyCode);
 
-  if (!decision.matched) return { eligible: true, blocked: false, activeRecord: null };
+  if (!decision.matched) return { eligible: true, blocked: false, reason: null, activeRecord: null };
   const { associado, dep, isResponsible } = decision.matched;
   const memberContacts = extractErpMemberContacts(associado);
   const activeRecord = {
@@ -174,7 +174,9 @@ const checkErpEligibility = async (
   };
   return {
     eligible: false,
-    blocked: decision.kind === "blocked",
+    blocked: decision.kind === "blocked" || decision.kind === "company_mismatch",
+    reason: decision.kind === "company_mismatch" ? "COMPANY_MISMATCH" :
+      decision.kind === "blocked" ? "BLOCKED_BY_CADASTRO_CONFIG" : null,
     activeRecord,
   };
 };
@@ -248,7 +250,7 @@ const finishAuthentication = async (
   const activeRecord = erpEligibility.activeRecord;
 
   if (erpEligibility.blocked) {
-    return jsonResponse({ ok: true, state: "not_eligible", reason: "BLOCKED_BY_CADASTRO_CONFIG", requiresAuthorization: link.requires_authorization === true });
+    return jsonResponse({ ok: true, state: "not_eligible", reason: erpEligibility.reason || "BLOCKED_BY_CADASTRO_CONFIG", requiresAuthorization: link.requires_authorization === true });
   }
   if (activeRecord && !activeRecord.isResponsible) {
     await supabase.from("public_adesao_attempts").update({
@@ -269,6 +271,9 @@ const finishAuthentication = async (
 
   if (activeRecord?.isResponsible) {
     const companyCode = Number(activeRecord.codigoEmpresa);
+    if (companyCode !== Number(link.empresa_codigo)) {
+      return jsonResponse({ ok: true, state: "not_eligible", reason: "COMPANY_MISMATCH", requiresAuthorization: link.requires_authorization === true });
+    }
     if (!Number.isInteger(companyCode) || companyCode <= 0 ||
         (await validateCurrentCompany(companyCode, rules)).blocked) {
       return jsonResponse({ error: "Empresa do associado bloqueada ou inválida para inclusão.", code: "COMPANY_BLOCKED" }, 409);

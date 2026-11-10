@@ -1,4 +1,4 @@
-import { loadCadastroRules, isBlockedByCadastroRules, isHiddenCadastroPlan, isInvalidCadastroCompany, validateCurrentCompany, selectErpMemberCandidates } from "../_shared/cadastro-rules.ts";
+import { loadCadastroRules, evaluateNewAdhesionEligibility } from "../_shared/cadastro-rules.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
   corsHeaders,
@@ -54,23 +54,21 @@ Deno.serve(async (req: Request) => {
     let blockReason = "";
     let summary: Record<string, unknown> = {};
 
-    for (const associado of records) {
-      for (const dep of selectErpMemberCandidates(associado, cpf || undefined)) {
-        if (isBlockedByCadastroRules(dep?.codigoSituacao, dep?.codigoPlano, rules)) {
-          shouldBlock = true;
-          blockReason = `Associado ja cadastrado na empresa ${associado?.nomeFantasiaDaEmpresa || "informada"} em situacao que nao permite recadastro`;
-          summary = {
-            empresa: associado?.codigoDaEmpresa ?? null,
-            codigo: associado?.codigo ?? null,
-            nomeFantasiaDaEmpresa: associado?.nomeFantasiaDaEmpresa ?? null,
-            codigoPlano: dep?.codigoPlano ?? null,
-            codigoSituacao: dep?.codigoSituacao ?? null,
-            nomeSituacao: dep?.nomeSituacao ?? null,
-          };
-          break;
-        }
-      }
-      if (shouldBlock) break;
+    const eligibility = evaluateNewAdhesionEligibility(records, cpf, rules);
+    shouldBlock = eligibility.blocked;
+    if (eligibility.matched) {
+      const { associado, dep } = eligibility.matched;
+      blockReason = eligibility.reason === "ACTIVE_IN_ERP"
+        ? "Este CPF ja possui vinculo ativo no ERP e nao pode realizar outra adesao."
+        : `Associado ja cadastrado na empresa ${associado?.nomeFantasiaDaEmpresa || "informada"} em situacao que nao permite recadastro`;
+      summary = {
+        empresa: associado?.codigoDaEmpresa ?? null,
+        codigo: associado?.codigo ?? null,
+        nomeFantasiaDaEmpresa: associado?.nomeFantasiaDaEmpresa ?? null,
+        codigoPlano: dep?.codigoPlano ?? null,
+        codigoSituacao: dep?.codigoSituacao ?? null,
+        nomeSituacao: dep?.nomeSituacao ?? null,
+      };
     }
 
     if (!shouldBlock && records[0]) {

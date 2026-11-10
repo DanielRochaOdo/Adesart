@@ -1,4 +1,4 @@
-import { loadCadastroRules, isBlockedByCadastroRules, isHiddenCadastroPlan, isInvalidCadastroCompany, validateCurrentCompany, selectErpMemberCandidates } from "../_shared/cadastro-rules.ts";
+import { loadCadastroRules, isHiddenCadastroPlan, isInvalidCadastroCompany, validateCurrentCompany, evaluateNewAdhesionEligibility } from "../_shared/cadastro-rules.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { PDFDocument, StandardFonts } from "npm:pdf-lib@1.17.1";
 import { duplicateParticipantCpfResponse, findDuplicateParticipantCpf } from "../_shared/cpf-uniqueness.ts";
@@ -241,25 +241,20 @@ async function checkErpEligibility(cpfValue: string, rules: Awaited<ReturnType<t
   const result = await response.json();
   const records = Array.isArray(result?.dados) ? result.dados : [];
 
-  for (const associado of records) {
-    const dependentes = Array.isArray(associado?.dependentes) ? associado.dependentes : [];
-    const candidates = selectErpMemberCandidates(associado, cpf);
-
-    for (const dep of candidates) {
-      if (isBlockedByCadastroRules(dep?.codigoSituacao, dep?.codigoPlano, rules)) {
-        return {
-          eligible: false,
-          activeRecord: {
-            codigoAssociado: associado?.codigo ?? null,
-            codigoEmpresa: associado?.codigoDaEmpresa ?? null,
-            codigoDependente: dep?.codigoDependente ?? null,
-            codigoPlano: dep?.codigoPlano ?? null,
-            codigoSituacao: dep?.codigoSituacao ?? null,
-            nomeSituacao: dep?.nomeSituacao ?? null,
-          },
-        };
-      }
-    }
+  const eligibility = evaluateNewAdhesionEligibility(records, cpf, rules);
+  if (eligibility.blocked && eligibility.matched) {
+    const { associado, dep } = eligibility.matched;
+    return {
+      eligible: false,
+      activeRecord: {
+        codigoAssociado: associado?.codigo ?? null,
+        codigoEmpresa: associado?.codigoDaEmpresa ?? null,
+        codigoDependente: dep?.codigoDependente ?? null,
+        codigoPlano: dep?.codigoPlano ?? null,
+        codigoSituacao: dep?.codigoSituacao ?? null,
+        nomeSituacao: dep?.nomeSituacao ?? null,
+      },
+    };
   }
 
   return { eligible: true, activeRecord: null };
