@@ -55,6 +55,82 @@ export function selectErpMemberCandidates(associado: any, cpfValue?: string): an
   return titular ? [titular] : dependentes.slice(0, 1);
 }
 
+
+/** Situação atual do vínculo no ERP. Não confundir com plano válido para recadastro. */
+export function isActiveErpMember(member: any): boolean {
+  const status = String(member?.nomeSituacao ?? "")
+    .trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return Number(member?.codigoSituacao) === 1 || status === "ATIVO";
+}
+
+const digits = (value: unknown): string => String(value ?? "").replace(/\D/g, "");
+
+/** Um dependente ativo não confere ao CPF o direito de incluir novos dependentes como titular. */
+export function isActiveTitularForInclusion(associado: any, cpfValue: string): boolean {
+  const cpf = digits(cpfValue);
+  if (!cpf || digits(associado?.cpf) !== cpf) return false;
+  return selectErpMemberCandidates(associado, cpf).some((member) => {
+    const type = member?.tipo ?? member?.Tipo;
+    return (type == null || String(type).trim() === "" || Number(type) === 1) &&
+      isActiveErpMember(member);
+  });
+}
+
+export type LinkCpfFlow =
+  | "existing_member"
+  | "blocked"
+  | "active_dependent"
+  | "new_member";
+export type LinkCpfMatch = { associado: any; dep: any; isResponsible: boolean };
+
+/**
+ * A inclusão de dependentes é determinada PRIMEIRO pela existência de titular
+ * ativo, independente do plano do vínculo já existente.
+ * Somente na ausência de titular ativo aplicam-se os impedimentos de recadastro.
+ */
+export function resolveLinkCpfFlow(
+  records: any[],
+  cpfValue: string,
+  rules: CadastroRules,
+  preferredCompanyCode?: number,
+): { kind: LinkCpfFlow; matched: LinkCpfMatch | null } {
+  const cpf = digits(cpfValue);
+  const activeHolders: LinkCpfMatch[] = [];
+  const blocked: LinkCpfMatch[] = [];
+  const activeDependents: LinkCpfMatch[] = [];
+
+  for (const associado of Array.isArray(records) ? records : []) {
+    for (const dep of selectErpMemberCandidates(associado, cpf)) {
+      const active = isActiveErpMember(dep);
+      const blockedForRecadastro = isBlockedByCadastroRules(dep?.codigoSituacao, dep?.codigoPlano, rules);
+      if (!active && !blockedForRecadastro) continue;
+
+      const type = dep?.tipo ?? dep?.Tipo;
+      const isResponsible = digits(associado?.cpf) === cpf &&
+        (type == null || String(type).trim() === "" || Number(type) === 1);
+      const candidate = { associado, dep, isResponsible };
+      if (active && isResponsible) {
+        activeHolders.push(candidate);
+      } else if (blockedForRecadastro) {
+        blocked.push(candidate);
+      } else {
+        activeDependents.push(candidate);
+      }
+    }
+  }
+
+  // Em múltiplos vínculos, priorizar titular ativo da empresa do Link.
+  // Um outro vínculo bloqueado para RECADAStRO não invalida esta inclusão.
+  activeHolders.sort((a, b) =>
+    Number(Number(b.associado?.codigoDaEmpresa) === Number(preferredCompanyCode)) -
+    Number(Number(a.associado?.codigoDaEmpresa) === Number(preferredCompanyCode))
+  );
+  if (activeHolders.length) return { kind: "existing_member", matched: activeHolders[0] };
+  if (blocked.length) return { kind: "blocked", matched: blocked[0] };
+  if (activeDependents.length) return { kind: "active_dependent", matched: activeDependents[0] };
+  return { kind: "new_member", matched: null };
+}
+
 export async function validateCurrentCompany(
   companyCode: number, rules: CadastroRules,
 ): Promise<{ blocked: boolean; situation: unknown }> {

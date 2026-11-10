@@ -1,4 +1,4 @@
-import { loadCadastroRules, isBlockedByCadastroRules, isHiddenCadastroPlan, isInvalidCadastroCompany, validateCurrentCompany, selectErpMemberCandidates } from "../_shared/cadastro-rules.ts";
+import { loadCadastroRules, isHiddenCadastroPlan, isInvalidCadastroCompany, isActiveTitularForInclusion } from "../_shared/cadastro-rules.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { PDFDocument, StandardFonts } from "npm:pdf-lib@1.17.1";
 import {
@@ -64,13 +64,8 @@ const fetchAssociados = async (params: Record<string, string>) => {
   const result = await response.json();
   return Array.isArray(result?.dados) ? result.dados : [];
 };
-const holderActive = (record: any, cpf: string) => {
-  if (normalizeDigits(record?.cpf) !== cpf) return false;
-  const deps = Array.isArray(record?.dependentes) ? record.dependentes : [];
-  const exact = deps.filter((dep: any) => normalizeDigits(dep?.numeroCpfDependente) === cpf);
-  const candidates = exact.length ? exact : deps.slice(0, 1);
-  return candidates.some(isActive);
-};
+const holderActive = (record: any, cpf: string) =>
+  isActiveTitularForInclusion(record, cpf);
 const anyActive = async (cpf: string) => {
   const records = await fetchAssociados({ cpfAssociado: cpf });
   return records.some((record: any) => {
@@ -501,10 +496,8 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Empresa do associado nao identificada no ERP", code: "MEMBER_COMPANY_NOT_FOUND" }, 409);
     }
     const rules = await loadCadastroRules(supabase);
-    if (selectErpMemberCandidates(holder, holderCpf).some((dep: any) =>
-      isBlockedByCadastroRules(dep?.codigoSituacao, dep?.codigoPlano, rules))) {
-      return jsonResponse({ error: "A situação e o plano do titular impedem esta inclusão.", code: "MEMBER_BLOCKED_BY_CONFIG" }, 409);
-    }
+    // O plano já contratado pelo titular não é uma nova adesão.
+    // Para inclusão, exigir titular ativo e validar apenas empresa e novos planos.
     const catalog = await companyPlans(companyCode);
     if (isInvalidCadastroCompany(catalog.company?.CodigoSituacao ?? catalog.company?.codigoSituacao, rules)) {
       return jsonResponse({ error: "Empresa bloqueada para cadastro", code: "COMPANY_BLOCKED" }, 409);

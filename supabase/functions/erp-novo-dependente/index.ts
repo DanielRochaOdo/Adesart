@@ -1,4 +1,4 @@
-import { loadCadastroRules, isBlockedByCadastroRules, isHiddenCadastroPlan, validateCurrentCompany, selectErpMemberCandidates, type CadastroRules } from "../_shared/cadastro-rules.ts";
+import { loadCadastroRules, isBlockedByCadastroRules, isHiddenCadastroPlan, validateCurrentCompany, selectErpMemberCandidates, isActiveTitularForInclusion, type CadastroRules } from "../_shared/cadastro-rules.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, createServiceClient, jsonResponse, requireInternalUser } from "../_shared/public-flow.ts";
 import { duplicateParticipantCpfResponse, findDuplicateParticipantCpf } from "../_shared/cpf-uniqueness.ts";
@@ -105,9 +105,11 @@ const preflightPendingDependentInclusion = async (
   }
 
   const holderDeps = Array.isArray(holder?.dependentes) ? holder.dependentes : [];
-  const holderActive = holderDeps.some((dep: any) => isActive(dep));
   const holderCpf = digits(holder?.cpf);
-  const holderBlocked = selectErpMemberCandidates(holder, holderCpf).some((dep: any) =>
+  const holderActive = isActiveTitularForInclusion(holder, holderCpf);
+  // Situação/plano válidos são regras de recadastro, não da inclusão no
+  // contrato de um titular que já esteja ativo no ERP.
+  const holderBlocked = !holderActive && selectErpMemberCandidates(holder, holderCpf).some((dep: any) =>
     isBlockedByCadastroRules(dep?.codigoSituacao, dep?.codigoPlano, rules));
   const companyBlocked = (await validateCurrentCompany(Number(holder?.codigoDaEmpresa), rules)).blocked;
   const duplicates: ExistingDependent[] = [];
