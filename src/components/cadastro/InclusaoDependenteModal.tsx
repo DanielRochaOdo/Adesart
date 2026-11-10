@@ -1,3 +1,4 @@
+import { isPlanHidden } from '../../lib/planVisibility';
 import { useState, useEffect, useRef } from 'react';
 import { X, Search, Plus, Trash, Loader2, Save } from 'lucide-react';
 import { Button } from '../Button';
@@ -1834,7 +1835,7 @@ export function InclusaoDependenteModal({ onClose, onSuccess }: InclusaoDependen
                             </option>
 
                             {planosEmpresa
-                              .filter((p) => !config?.planos_ocultos?.includes(p.Plano?.toString()))
+                              .filter((p) => !isPlanHidden(p.Plano, config?.planos_ocultos))
                               .map((planoEmpresa, idx) => {
                                 const planoMap = planos.find((pm) => pm.plano_id === planoEmpresa.Plano);
                                 return (

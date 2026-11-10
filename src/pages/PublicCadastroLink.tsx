@@ -21,6 +21,7 @@ import { Select } from '../components/Select';
 import { useConfigCadastro } from '../contexts/ConfigCadastroContext';
 import { formatCEP, formatCPF, formatMobilePhone, formatPhone, getDuplicateCpfError, removeCPFMask, validateCPF } from '../lib/cpf';
 import { getPublicLinkVisitId } from '../lib/publicLinkVisit';
+import { isPlanHidden } from '../lib/planVisibility';
 
 type Stage = 'identify' | 'details' | 'existing_member' | 'dependents' | 'existing_contact' | 'existing_review' | 'review' | 'contract' | 'success' | 'completed' | 'not_eligible';
 
@@ -40,6 +41,7 @@ type LinkData = {
   empresaExigeMatricula: number;
   requiresAuthorization: boolean;
   planos: PublicPlan[];
+  planosOcultos?: Array<string | number>;
   vendedorNome: string;
   vendedorTelefone?: string | null;
   coberturaPlanos?: Record<string, string>;
@@ -305,9 +307,22 @@ export function PublicCadastroLink() {
   const [existingPlans, setExistingPlans] = useState<PublicPlan[]>([]);
 
   const plans = useMemo(
-    () => flowMode === 'existing_member' ? existingPlans : (linkData?.planos || []),
+    () => (flowMode === 'existing_member' ? existingPlans : (linkData?.planos || []))
+      .filter((plan) => !isPlanHidden(plan.Plano, linkData?.planosOcultos)),
     [existingPlans, flowMode, linkData],
   );
+
+  useEffect(() => {
+    if (!linkData) return;
+    const available = new Set(plans.map((plan) => Number(plan.Plano)));
+    setForm((current) => current.titularPlano && !available.has(Number(current.titularPlano))
+      ? { ...current, titularPlano: 0 } : current);
+    setDependents((current) => {
+      if (!current.some((dep) => dep.plano && !available.has(Number(dep.plano)))) return current;
+      return current.map((dep) => dep.plano && !available.has(Number(dep.plano))
+        ? { ...dep, plano: 0 } : dep);
+    });
+  }, [linkData, plans]);
 
   useEffect(() => {
     if (plans.length !== 1) return;
@@ -360,7 +375,7 @@ export function PublicCadastroLink() {
     const resolve = async () => {
       try {
         const response = await fetch(apiUrl('cadastro-link-resolve'), {
-          method: 'POST', headers: publicHeaders(), body: JSON.stringify({ token: linkToken, visitId: getPublicLinkVisitId(linkToken) }),
+          method: 'POST', headers: publicHeaders(), cache: 'no-store', body: JSON.stringify({ token: linkToken, visitId: getPublicLinkVisitId(linkToken) }),
         });
         const result = await response.json();
         if (!response.ok || !result.ok) {
@@ -529,6 +544,7 @@ export function PublicCadastroLink() {
     !isEmail(form.email) && 'E-mail',
     linkData?.empresaExigeMatricula === 1 && !form.numeroMatricula.trim() && 'Matrícula',
     !form.titularPlano && 'Plano do titular',
+    form.titularPlano > 0 && !plans.some((plan) => Number(plan.Plano) === Number(form.titularPlano)) && 'Plano do titular indisponível',
     form.endereco.cep.replace(/\D/g, '').length !== 8 && 'CEP',
     !form.endereco.logradouro.trim() && 'Logradouro',
     !form.endereco.numero.trim() && 'Número',
@@ -682,6 +698,7 @@ export function PublicCadastroLink() {
       if (![0, 1].includes(dep.sexo)) errors.push(`${label}: selecione o sexo.`);
       if (!dep.nomeMae.trim()) errors.push(`${label}: informe o nome da mãe.`);
       if (!dep.plano) errors.push(`${label}: selecione o plano.`);
+      else if (!plans.some((plan) => Number(plan.Plano) === Number(dep.plano))) errors.push(`${label}: plano indisponível; selecione novamente.`);
     });
 
     return errors;
