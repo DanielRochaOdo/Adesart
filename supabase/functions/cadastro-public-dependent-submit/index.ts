@@ -1,3 +1,4 @@
+import { loadCadastroRules, isBlockedByCadastroRules, isHiddenCadastroPlan, isInvalidCadastroCompany, validateCurrentCompany, selectErpMemberCandidates } from "../_shared/cadastro-rules.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { PDFDocument, StandardFonts } from "npm:pdf-lib@1.17.1";
 import {
@@ -499,7 +500,18 @@ Deno.serve(async (req: Request) => {
     if (!Number.isInteger(companyCode) || companyCode <= 0) {
       return jsonResponse({ error: "Empresa do associado nao identificada no ERP", code: "MEMBER_COMPANY_NOT_FOUND" }, 409);
     }
+    const rules = await loadCadastroRules(supabase);
+    if (selectErpMemberCandidates(holder, holderCpf).some((dep: any) =>
+      isBlockedByCadastroRules(dep?.codigoSituacao, dep?.codigoPlano, rules))) {
+      return jsonResponse({ error: "A situação e o plano do titular impedem esta inclusão.", code: "MEMBER_BLOCKED_BY_CONFIG" }, 409);
+    }
     const catalog = await companyPlans(companyCode);
+    if (isInvalidCadastroCompany(catalog.company?.CodigoSituacao ?? catalog.company?.codigoSituacao, rules)) {
+      return jsonResponse({ error: "Empresa bloqueada para cadastro", code: "COMPANY_BLOCKED" }, 409);
+    }
+    if (normalized.some((dep) => isHiddenCadastroPlan(dep.plano, rules))) {
+      return jsonResponse({ error: "Plano oculto nas configurações; atualize sua seleção.", code: "PLAN_HIDDEN" }, 409);
+    }
     const planMap = new Map<number, any>(
       catalog.plans.map((plan: any): [number, any] => [Number(plan.Plano), plan]),
     );

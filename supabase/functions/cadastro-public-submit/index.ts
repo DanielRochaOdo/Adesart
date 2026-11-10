@@ -1,3 +1,4 @@
+import { loadCadastroRules, isBlockedByCadastroRules, isHiddenCadastroPlan, isInvalidCadastroCompany, validateCurrentCompany, selectErpMemberCandidates } from "../_shared/cadastro-rules.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { PDFDocument, StandardFonts } from "npm:pdf-lib@1.17.1";
 import { duplicateParticipantCpfResponse, findDuplicateParticipantCpf } from "../_shared/cpf-uniqueness.ts";
@@ -218,7 +219,7 @@ function isActiveErpStatus(dep: any) {
   return statusCode === 1 || statusName === "ATIVO";
 }
 
-async function checkErpEligibility(cpfValue: string) {
+async function checkErpEligibility(cpfValue: string, rules: Awaited<ReturnType<typeof loadCadastroRules>>) {
   const token = Deno.env.get("ERP_TOKEN");
   if (!token) throw new Error("ERP_TOKEN not configured");
 
@@ -242,17 +243,10 @@ async function checkErpEligibility(cpfValue: string) {
 
   for (const associado of records) {
     const dependentes = Array.isArray(associado?.dependentes) ? associado.dependentes : [];
-    const exactMatches = dependentes.filter(
-      (dep: any) => normalizeDigits(dep?.numeroCpfDependente) === cpf,
-    );
-
-    let candidates = exactMatches;
-    if (candidates.length === 0 && normalizeDigits(associado?.cpf) === cpf && dependentes.length > 0) {
-      candidates = [dependentes[0]];
-    }
+    const candidates = selectErpMemberCandidates(associado, cpf);
 
     for (const dep of candidates) {
-      if (isActiveErpStatus(dep)) {
+      if (isBlockedByCadastroRules(dep?.codigoSituacao, dep?.codigoPlano, rules)) {
         return {
           eligible: false,
           activeRecord: {
@@ -664,6 +658,15 @@ Deno.serve(async (req: Request) => {
     // O requisito de aceite e determinado pelo snapshot preparado no servidor.
     // A ausencia de cobertura nunca gera aceite presumido nem bloqueia a adesao.
     const preparedCadastro = session.snapshot?.cadastro;
+    const rules = await loadCadastroRules(supabase);
+    const newPlanCodes = [preparedCadastro?.titularPlano,
+      ...(Array.isArray(preparedCadastro?.dependentes) ? preparedCadastro.dependentes.map((d: any) => d?.plano) : [])];
+    if (newPlanCodes.some((code) => isHiddenCadastroPlan(code, rules))) {
+      return jsonResponse({ error: "Plano oculto nas configurações; atualize sua seleção.", code: "PLAN_HIDDEN" }, 409);
+    }
+    if ((await validateCurrentCompany(Number(session.snapshot?.link?.empresaCodigo), rules)).blocked) {
+      return jsonResponse({ error: "Empresa bloqueada para cadastro", code: "COMPANY_BLOCKED" }, 409);
+    }
     const requiresCoverageConsent = preparedCadastro?.coberturaDisponivel === true ||
       (preparedCadastro?.coberturaDisponivel == null &&
         Array.isArray(preparedCadastro?.coberturaPlanoArquivos) &&
@@ -722,7 +725,7 @@ Deno.serve(async (req: Request) => {
       stage = "erp_eligibility";
       let erpEligibility: { eligible: boolean; activeRecord: any };
       try {
-        erpEligibility = await checkErpEligibility(c.cpf);
+        erpEligibility = await checkErpEligibility(c.cpf, rules);
       } catch (eligibilityError) {
         await supabase.from("public_contract_sessions").update({
           status: previousStatus,
