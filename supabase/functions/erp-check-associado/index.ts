@@ -38,7 +38,16 @@ Deno.serve(async (req: Request) => {
     if (!response.ok) return jsonResponse({ error: "Erro ao consultar ERP" }, 502);
     const result = await response.json();
 
-    const rules = await loadCadastroRules(supabase);
+    let rules: Awaited<ReturnType<typeof loadCadastroRules>>;
+    try {
+      rules = await loadCadastroRules(supabase);
+    } catch (configError) {
+      console.error("[erp-check-associado] Falha ao carregar cadastro_config:", configError);
+      return jsonResponse({
+        error: "Não foi possível carregar as regras de cadastro. Tente novamente.",
+        code: "CADASTRO_CONFIG_UNAVAILABLE",
+      }, 503);
+    }
     const records = Array.isArray(result?.dados) ? result.dados : [];
     const exists = Number(result?.totalRegistros || 0) > 0 || records.length > 0;
     let shouldBlock = false;
@@ -76,17 +85,24 @@ Deno.serve(async (req: Request) => {
       };
     }
 
-    await supabase.from("api_logs").insert({
-      user_id: auth.user.id,
-      user_email: auth.user.email,
-      endpoint: "erp-check-associado",
-      method: "POST",
-      request_body: { cpf_hash: cpf ? await hashSensitiveValue(cpf) : null, codigoAssociado: body.codigoAssociado || null },
-      response_body: { exists, shouldBlock, totalRegistros: Number(result?.totalRegistros || records.length) },
-      status_code: 200,
-      success: true,
-      duration_ms: Date.now() - startedAt,
-    }).catch(() => undefined);
+    // PostgrestBuilder é PromiseLike (thenable), não uma Promise com .catch().
+    // Falha no log nunca pode impedir uma consulta de CPF bem-sucedida.
+    try {
+      const { error: logError } = await supabase.from("api_logs").insert({
+        user_id: auth.user.id,
+        user_email: auth.user.email,
+        endpoint: "erp-check-associado",
+        method: "POST",
+        request_body: { cpf_hash: cpf ? await hashSensitiveValue(cpf) : null, codigoAssociado: body.codigoAssociado || null },
+        response_body: { exists, shouldBlock, totalRegistros: Number(result?.totalRegistros || records.length) },
+        status_code: 200,
+        success: true,
+        duration_ms: Date.now() - startedAt,
+      });
+      if (logError) console.warn("[erp-check-associado] Log não registrado:", logError.message);
+    } catch (logException) {
+      console.warn("[erp-check-associado] Erro não bloqueante no log:", logException);
+    }
 
     return jsonResponse({
       exists,
@@ -98,6 +114,6 @@ Deno.serve(async (req: Request) => {
     });
   } catch (error) {
     console.error("[erp-check-associado]", error);
-    return jsonResponse({ error: "Erro ao consultar ERP" }, 500);
+    return jsonResponse({ error: "Erro ao consultar ERP", code: "ERP_CHECK_INTERNAL_ERROR" }, 500);
   }
 });
