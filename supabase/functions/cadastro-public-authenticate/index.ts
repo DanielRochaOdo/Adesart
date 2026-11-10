@@ -1,4 +1,4 @@
-import { loadCadastroRules, isBlockedByCadastroRules, isHiddenCadastroPlan, isInvalidCadastroCompany, validateCurrentCompany, selectErpMemberCandidates } from "../_shared/cadastro-rules.ts";
+import { loadCadastroRules, isHiddenCadastroPlan, validateCurrentCompany, resolveLinkCpfFlow } from "../_shared/cadastro-rules.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
   corsHeaders,
@@ -148,7 +148,11 @@ const extractErpMemberContacts = (associado: any) => {
   };
 };
 
-const checkErpEligibility = async (cpf: string, rules: Awaited<ReturnType<typeof loadCadastroRules>>) => {
+const checkErpEligibility = async (
+  cpf: string,
+  rules: Awaited<ReturnType<typeof loadCadastroRules>>,
+  linkCompanyCode: number,
+) => {
   const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
   let ERP_BASE_URL = Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
   if (!ERP_TOKEN) throw new Error("ERP_TOKEN not configured");
@@ -160,42 +164,30 @@ const checkErpEligibility = async (cpf: string, rules: Awaited<ReturnType<typeof
   if (!response.ok) throw new Error("ERP_VALIDATION_UNAVAILABLE");
   const result = await response.json();
   const records = Array.isArray(result?.dados) ? result.dados : [];
-  const activeRecords: any[] = [];
-  const blockedRecords: any[] = [];
+  const decision = resolveLinkCpfFlow(records, cpf, rules, linkCompanyCode);
 
-  for (const associado of records) {
-    const dependentes = Array.isArray(associado?.dependentes) ? associado.dependentes : [];
-    const isResponsible = normalizeDigits(associado?.cpf) === cpf;
-    const candidates = selectErpMemberCandidates(associado, cpf);
-
-    for (const dep of candidates) {
-      const blocked = isBlockedByCadastroRules(dep?.codigoSituacao, dep?.codigoPlano, rules);
-      if (!blocked && !isActiveErpStatus(dep)) continue;
-      const memberContacts = extractErpMemberContacts(associado);
-      const record = {
-        codigoAssociado: associado?.codigo ?? null,
-        codigoEmpresa: associado?.codigoDaEmpresa ?? null,
-        codigoDependente: dep?.codigoDependente ?? null,
-        codigoPlano: dep?.codigoPlano ?? null,
-        codigoSituacao: dep?.codigoSituacao ?? null,
-        nomeSituacao: dep?.nomeSituacao ?? null,
-        nomeAssociado: String(associado?.nome || "").trim(),
-        empresaNome: String(associado?.nomeFantasiaDaEmpresa || associado?.razaoSocialDaEmpresa || "").trim(),
-        dataNascimento: normalizeDate(dep?.dataNascimento),
-        telefone: memberContacts.telefone,
-        email: memberContacts.email,
-        isResponsible,
-      };
-      if (blocked) blockedRecords.push(record);
-      else activeRecords.push(record);
-    }
-  }
-
-  if (blockedRecords.length) return { eligible: false, blocked: true, activeRecord: blockedRecords[0] };
-  activeRecords.sort((a, b) => Number(Boolean(b.isResponsible)) - Number(Boolean(a.isResponsible)));
-  return activeRecords.length > 0
-    ? { eligible: false, activeRecord: activeRecords[0] }
-    : { eligible: true, activeRecord: null };
+  if (!decision.matched) return { eligible: true, blocked: false, activeRecord: null };
+  const { associado, dep, isResponsible } = decision.matched;
+  const memberContacts = extractErpMemberContacts(associado);
+  const activeRecord = {
+    codigoAssociado: associado?.codigo ?? null,
+    codigoEmpresa: associado?.codigoDaEmpresa ?? null,
+    codigoDependente: dep?.codigoDependente ?? null,
+    codigoPlano: dep?.codigoPlano ?? null,
+    codigoSituacao: dep?.codigoSituacao ?? null,
+    nomeSituacao: dep?.nomeSituacao ?? null,
+    nomeAssociado: String(associado?.nome || "").trim(),
+    empresaNome: String(associado?.nomeFantasiaDaEmpresa || associado?.razaoSocialDaEmpresa || "").trim(),
+    dataNascimento: normalizeDate(dep?.dataNascimento),
+    telefone: memberContacts.telefone,
+    email: memberContacts.email,
+    isResponsible,
+  };
+  return {
+    eligible: false,
+    blocked: decision.kind === "blocked",
+    activeRecord,
+  };
 };
 
 const fetchExistingMemberPlans = async (supabase: any, companyCode: number, rules: Awaited<ReturnType<typeof loadCadastroRules>>) => {
@@ -288,6 +280,10 @@ const finishAuthentication = async (
 
   if (activeRecord?.isResponsible) {
     const companyCode = Number(activeRecord.codigoEmpresa);
+    if (!Number.isInteger(companyCode) || companyCode <= 0 ||
+        (await validateCurrentCompany(companyCode, rules)).blocked) {
+      return jsonResponse({ error: "Empresa do associado bloqueada ou inválida para inclusão.", code: "COMPANY_BLOCKED" }, 409);
+    }
     const plans = await fetchExistingMemberPlans(supabase, companyCode, rules);
     if (!Number.isInteger(companyCode) || companyCode <= 0 || plans.length === 0) {
       return jsonResponse({
@@ -427,7 +423,7 @@ Deno.serve(async (req: Request) => {
     if ((await validateCurrentCompany(Number(link.empresa_codigo), rules)).blocked) {
       return jsonResponse({ error: "Empresa bloqueada para cadastro", code: "COMPANY_BLOCKED" }, 409);
     }
-    const erpEligibility = await checkErpEligibility(cpf, rules);
+    const erpEligibility = await checkErpEligibility(cpf, rules, Number(link.empresa_codigo));
     await safeInsertLog(supabase, {
       endpoint: "cadastro-public-authenticate:erp-eligibility",
       method: "POST",
