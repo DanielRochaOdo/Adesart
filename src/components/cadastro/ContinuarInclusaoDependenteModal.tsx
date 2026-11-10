@@ -1,3 +1,4 @@
+import { isPlanHidden } from '../../lib/planVisibility';
 import { X, Loader2, AlertCircle, CheckCircle2, Upload, Plus, Trash2, Save } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { Button } from '../Button';
@@ -1784,7 +1785,7 @@ export function ContinuarInclusaoDependenteModal({ cadastro, onClose, onSuccess 
                       {loadingEmpresa ? 'Carregando planos...' : 'Selecione'}
                     </option>
                     {planosEmpresa
-                      .filter((p: any) => !config?.planos_ocultos?.includes(p.Plano?.toString()))
+                      .filter((p: any) => !isPlanHidden(p.Plano, config?.planos_ocultos))
                       .map((p: any, idx: number) => {
                         const planoMap = planos.find((pm) => pm.plano_id === p.Plano);
                         const valor = planoMap?.regra_valor === 'titular'
