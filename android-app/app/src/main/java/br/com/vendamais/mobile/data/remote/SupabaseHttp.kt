@@ -47,70 +47,30 @@ internal suspend inline fun <reified T> HttpClient.safeGet(
     }
 }
 
+// Paridade com Web: uma única tentativa por envio. HTTP 409/422 não é transitório
+// e repetir POST após timeout pode duplicar operação já efetivada no ERP.
+// A reconciliação é responsabilidade do fluxo, usando o mesmo cadastroId.
 internal suspend inline fun <reified T> HttpClient.safePost(
     url: String,
     json: Json,
     body: Any? = null,
     crossinline builder: HttpRequestBuilder.() -> Unit = {},
 ): T {
-    val recoverErpCadastroSend = url.contains("/functions/v1/erp-novo-usuario2")
-    val maxAttempts = if (recoverErpCadastroSend) 6 else 1
-    var attempt = 1
-
-    while (true) {
-        try {
-            val response = post(url) {
-                if (body != null) {
-                    contentType(ContentType.Application.Json)
-                    when (body) {
-                        is JsonElement -> setBody(body.toString())
-                        else -> setBody(body)
-                    }
+    return try {
+        val response = post(url) {
+            if (body != null) {
+                contentType(ContentType.Application.Json)
+                when (body) {
+                    is JsonElement -> setBody(body.toString())
+                    else -> setBody(body)
                 }
-                builder()
             }
-
-            if (recoverErpCadastroSend && response.status.value == 409 && attempt < maxAttempts) {
-                delay((attempt * 1500L).coerceAtMost(5000L))
-                attempt++
-                continue
-            }
-
-            if (!response.status.isSuccess()) throw response.toReadableException(json)
-            return response.body()
-        } catch (exception: ClientRequestException) {
-            if (recoverErpCadastroSend && exception.response.status.value == 409 && attempt < maxAttempts) {
-                delay((attempt * 1500L).coerceAtMost(5000L))
-                attempt++
-                continue
-            }
-            throw exception.toReadableException(json)
-        } catch (exception: Throwable) {
-            val normalizedMessage = exception.message.orEmpty().lowercase()
-            val retryableTransportFailure =
-                exception is IOException ||
-                    normalizedMessage.contains("socket timeout") ||
-                    normalizedMessage.contains("timed out") ||
-                    normalizedMessage.contains("timeout") ||
-                    normalizedMessage.contains("connection reset") ||
-                    normalizedMessage.contains("connection refused") ||
-                    normalizedMessage.contains("unexpected end of stream")
-
-            if (recoverErpCadastroSend && retryableTransportFailure && attempt < maxAttempts) {
-                delay((attempt * 1500L).coerceAtMost(5000L))
-                attempt++
-                continue
-            }
-
-            if (recoverErpCadastroSend && retryableTransportFailure) {
-                throw IllegalStateException(
-                    "O servidor ainda esta processando o cadastro. Aguarde alguns segundos e tente novamente; o reenvio e protegido contra duplicidade.",
-                    exception,
-                )
-            }
-
-            throw exception
+            builder()
         }
+        if (!response.status.isSuccess()) throw response.toReadableException(json)
+        response.body()
+    } catch (exception: ClientRequestException) {
+        throw exception.toReadableException(json)
     }
 }
 
