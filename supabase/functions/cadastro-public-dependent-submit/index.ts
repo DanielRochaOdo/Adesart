@@ -358,9 +358,12 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Esta sessao nao permite inclusao de dependentes", code: "INVALID_FLOW_MODE" }, 409);
     }
     const { data: currentLink, error: currentLinkError } = await supabase.from("cadastro_links")
-      .select("id,requires_authorization").eq("id", attempt.link_id).maybeSingle();
+      .select("id,empresa_codigo,requires_authorization").eq("id", attempt.link_id).maybeSingle();
     if (currentLinkError) throw currentLinkError;
     if (!currentLink) return jsonResponse({ error: "Link indisponivel", code: "LINK_UNAVAILABLE" }, 410);
+    if (Number(attempt.erp_member_snapshot?.codigoEmpresa) !== Number(currentLink.empresa_codigo)) {
+      return jsonResponse({ error: "O associado pertence a outra empresa e não pode incluir dependentes por este link.", code: "COMPANY_MISMATCH" }, 409);
+    }
     if (Boolean(currentLink.requires_authorization) !== Boolean(internalPending)) {
       return jsonResponse({ error: "Fluxo de autorizacao inconsistente" }, 409);
     }
@@ -492,6 +495,9 @@ Deno.serve(async (req: Request) => {
     }
 
     const companyCode = Number(holder?.codigoDaEmpresa);
+    if (companyCode !== Number(currentLink.empresa_codigo)) {
+      return jsonResponse({ error: "O associado pertence a outra empresa e não pode incluir dependentes por este link.", code: "COMPANY_MISMATCH" }, 409);
+    }
     if (!Number.isInteger(companyCode) || companyCode <= 0) {
       return jsonResponse({ error: "Empresa do associado nao identificada no ERP", code: "MEMBER_COMPANY_NOT_FOUND" }, 409);
     }

@@ -1,4 +1,4 @@
-import { loadCadastroRules, isBlockedByCadastroRules, isHiddenCadastroPlan, validateCurrentCompany, selectErpMemberCandidates, type CadastroRules } from "../_shared/cadastro-rules.ts";
+import { loadCadastroRules, isHiddenCadastroPlan, validateCurrentCompany, evaluateNewAdhesionEligibility, type CadastroRules } from "../_shared/cadastro-rules.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, createServiceClient, jsonResponse, requireInternalUser } from "../_shared/public-flow.ts";
 import { duplicateParticipantCpfResponse, findDuplicateParticipantCpf } from "../_shared/cpf-uniqueness.ts";
@@ -549,16 +549,6 @@ const enqueueAttachment = async (
   return { queued: true, queue_id: created.id };
 };
 
-const isActiveErpDependent = (dep: any) => {
-  const code = Number(dep?.codigoSituacao);
-  const name = String(dep?.nomeSituacao || "")
-    .trim()
-    .toUpperCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-  return code === 1 || name === "ATIVO";
-};
-
 const assertNewMemberNotAlreadyActive = async (
   cpfValue: string | null,
   empresaCodigo: number,
@@ -583,23 +573,15 @@ const assertNewMemberNotAlreadyActive = async (
   const payload = await response.json().catch(() => ({}));
   const records = Array.isArray(payload?.dados) ? payload.dados : [];
 
-  for (const associado of records) {
-    // A elegibilidade considera o CPF em todos os vínculos do ERP,
-    // não apenas a empresa escolhida nesta adesão.
-    const candidates = selectErpMemberCandidates(associado, cpf);
-    const active = candidates.some(isActiveErpDependent);
-    const shouldBlock = candidates.some((dep: any) =>
-      isBlockedByCadastroRules(dep?.codigoSituacao, dep?.codigoPlano, rules));
-    if (active || shouldBlock) {
-      return {
-        active, shouldBlock,
-        codigoAssociado: associado?.codigo ?? null,
-        codigoEmpresa: associado?.codigoDaEmpresa ?? null,
-      };
-    }
-  }
-
-  return { active: false, shouldBlock: false };
+  // A elegibilidade considera TODOS os vínculos do CPF, não apenas a empresa
+  // escolhida. Se existir algum ativo, bloqueia mesmo com plano válido.
+  const eligibility = evaluateNewAdhesionEligibility(records, cpf, rules);
+  return {
+    active: eligibility.reason === "ACTIVE_IN_ERP",
+    shouldBlock: eligibility.blocked,
+    codigoAssociado: eligibility.matched?.associado?.codigo ?? null,
+    codigoEmpresa: eligibility.matched?.associado?.codigoDaEmpresa ?? null,
+  };
 };
 
 const queueAllPendingFiles = async (
@@ -1023,10 +1005,11 @@ Deno.serve(async (req: Request) => {
           rules,
         );
       } catch (preflightError) {
-        console.warn(
-          "[erp-novo-usuario2] Preflight regular indisponivel; mantendo envio normal:",
-          preflightError,
-        );
+        console.error("[erp-novo-usuario2] Pré-validação indisponível; envio bloqueado:", preflightError);
+        return jsonResponse({
+          error: "Nao foi possivel confirmar a situacao atual do CPF no ERP. Tente novamente.",
+          code: "ERP_PREFLIGHT_UNAVAILABLE",
+        }, 503);
       }
 
       if (regularPreflightBeforeSend?.shouldBlock) {
