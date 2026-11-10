@@ -87,17 +87,6 @@ const mapLemmitPessoa = (pessoa: any) => {
   };
 };
 
-const isActiveErpStatus = (dep: any) => {
-  const statusCode = Number(dep?.codigoSituacao);
-  const statusName = String(dep?.nomeSituacao || "")
-    .trim()
-    .toUpperCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-
-  return statusCode === 1 || statusName === "ATIVO";
-};
-
 const normalizeErpMemberPhone = (value: unknown) => {
   const digits = normalizeDigits(String(value || ""));
   if (digits.startsWith("55") && digits.length >= 12) return digits.slice(2);
