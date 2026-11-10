@@ -1,3 +1,4 @@
+import { loadCadastroRules, isBlockedByCadastroRules, isHiddenCadastroPlan, isInvalidCadastroCompany, validateCurrentCompany, selectErpMemberCandidates } from "../_shared/cadastro-rules.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
   corsHeaders,
@@ -147,7 +148,7 @@ const extractErpMemberContacts = (associado: any) => {
   };
 };
 
-const checkErpEligibility = async (cpf: string) => {
+const checkErpEligibility = async (cpf: string, rules: Awaited<ReturnType<typeof loadCadastroRules>>) => {
   const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
   let ERP_BASE_URL = Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
   if (!ERP_TOKEN) throw new Error("ERP_TOKEN not configured");
@@ -160,23 +161,18 @@ const checkErpEligibility = async (cpf: string) => {
   const result = await response.json();
   const records = Array.isArray(result?.dados) ? result.dados : [];
   const activeRecords: any[] = [];
+  const blockedRecords: any[] = [];
 
   for (const associado of records) {
     const dependentes = Array.isArray(associado?.dependentes) ? associado.dependentes : [];
     const isResponsible = normalizeDigits(associado?.cpf) === cpf;
-    const exactMatches = dependentes.filter(
-      (dep: any) => normalizeDigits(dep?.numeroCpfDependente) === cpf,
-    );
-    const candidates = exactMatches.length > 0
-      ? exactMatches
-      : isResponsible && dependentes.length > 0
-        ? [dependentes[0]]
-        : [];
+    const candidates = selectErpMemberCandidates(associado, cpf);
 
     for (const dep of candidates) {
-      if (!isActiveErpStatus(dep)) continue;
+      const blocked = isBlockedByCadastroRules(dep?.codigoSituacao, dep?.codigoPlano, rules);
+      if (!blocked && !isActiveErpStatus(dep)) continue;
       const memberContacts = extractErpMemberContacts(associado);
-      activeRecords.push({
+      const record = {
         codigoAssociado: associado?.codigo ?? null,
         codigoEmpresa: associado?.codigoDaEmpresa ?? null,
         codigoDependente: dep?.codigoDependente ?? null,
@@ -189,17 +185,20 @@ const checkErpEligibility = async (cpf: string) => {
         telefone: memberContacts.telefone,
         email: memberContacts.email,
         isResponsible,
-      });
+      };
+      if (blocked) blockedRecords.push(record);
+      else activeRecords.push(record);
     }
   }
 
+  if (blockedRecords.length) return { eligible: false, blocked: true, activeRecord: blockedRecords[0] };
   activeRecords.sort((a, b) => Number(Boolean(b.isResponsible)) - Number(Boolean(a.isResponsible)));
   return activeRecords.length > 0
     ? { eligible: false, activeRecord: activeRecords[0] }
     : { eligible: true, activeRecord: null };
 };
 
-const fetchExistingMemberPlans = async (supabase: any, companyCode: number) => {
+const fetchExistingMemberPlans = async (supabase: any, companyCode: number, rules: Awaited<ReturnType<typeof loadCadastroRules>>) => {
   const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
   let ERP_BASE_URL = Deno.env.get("ERP_BASE_URL") || "https://odontoart.s4e.com.br";
   if (!ERP_TOKEN) throw new Error("ERP_TOKEN not configured");
@@ -230,7 +229,8 @@ const fetchExistingMemberPlans = async (supabase: any, companyCode: number) => {
     .filter((item: any) =>
       item.Plano > 0 &&
       item.ValorTitular > 0 &&
-      item.ValorDependente > 0
+      item.ValorDependente > 0 &&
+      !isHiddenCadastroPlan(item.Plano, rules)
     );
 
   const planIds = [...new Set(plans.map((item: any) => Number(item.Plano)))];
@@ -259,12 +259,16 @@ const finishAuthentication = async (
   attemptToken: string,
   person: any,
   erpEligibility: Awaited<ReturnType<typeof checkErpEligibility>>,
+  rules: Awaited<ReturnType<typeof loadCadastroRules>>,
   link: any,
   cpfHash: string,
 ) => {
   const now = new Date().toISOString();
   const activeRecord = erpEligibility.activeRecord;
 
+  if (erpEligibility.blocked) {
+    return jsonResponse({ ok: true, state: "not_eligible", reason: "BLOCKED_BY_CADASTRO_CONFIG", requiresAuthorization: link.requires_authorization === true });
+  }
   if (activeRecord && !activeRecord.isResponsible) {
     await supabase.from("public_adesao_attempts").update({
       profile_snapshot: person,
@@ -284,7 +288,7 @@ const finishAuthentication = async (
 
   if (activeRecord?.isResponsible) {
     const companyCode = Number(activeRecord.codigoEmpresa);
-    const plans = await fetchExistingMemberPlans(supabase, companyCode);
+    const plans = await fetchExistingMemberPlans(supabase, companyCode, rules);
     if (!Number.isInteger(companyCode) || companyCode <= 0 || plans.length === 0) {
       return jsonResponse({
         error: "Nao foi possivel localizar os planos disponiveis para seu vinculo atual.",
@@ -419,7 +423,11 @@ Deno.serve(async (req: Request) => {
       .select("id", { count: "exact", head: true }).eq("link_id", link.id).eq("ip_hash", ipHash).gte("created_at", oneHourAgo);
     if ((ipAttempts || 0) >= 25) return jsonResponse({ error: "Muitas tentativas neste dispositivo/rede. Tente novamente mais tarde.", code: "RATE_LIMITED" }, 429);
 
-    const erpEligibility = await checkErpEligibility(cpf);
+    const rules = await loadCadastroRules(supabase);
+    if ((await validateCurrentCompany(Number(link.empresa_codigo), rules)).blocked) {
+      return jsonResponse({ error: "Empresa bloqueada para cadastro", code: "COMPANY_BLOCKED" }, 409);
+    }
+    const erpEligibility = await checkErpEligibility(cpf, rules);
     await safeInsertLog(supabase, {
       endpoint: "cadastro-public-authenticate:erp-eligibility",
       method: "POST",
@@ -463,6 +471,7 @@ Deno.serve(async (req: Request) => {
         attemptToken,
         cachedAttempt.profile_snapshot,
         erpEligibility,
+        rules,
         link,
         cpfHash,
       );
@@ -529,6 +538,7 @@ Deno.serve(async (req: Request) => {
         attemptToken,
         erpPerson,
         erpEligibility,
+        rules,
         link,
         cpfHash,
       );
@@ -593,6 +603,7 @@ Deno.serve(async (req: Request) => {
       attemptToken,
       person,
       erpEligibility,
+      rules,
       link,
       cpfHash,
     );

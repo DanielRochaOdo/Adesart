@@ -1,3 +1,4 @@
+import { loadCadastroRules, isBlockedByCadastroRules, isHiddenCadastroPlan, validateCurrentCompany, selectErpMemberCandidates, type CadastroRules } from "../_shared/cadastro-rules.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, createServiceClient, jsonResponse, requireInternalUser } from "../_shared/public-flow.ts";
 import { duplicateParticipantCpfResponse, findDuplicateParticipantCpf } from "../_shared/cpf-uniqueness.ts";
@@ -563,6 +564,7 @@ const assertNewMemberNotAlreadyActive = async (
   empresaCodigo: number,
   erpToken: string,
   erpBaseUrl: string,
+  rules: CadastroRules,
 ) => {
   const cpf = normalizeDigits(cpfValue);
   if (cpf.length !== 11) throw new Error("LINK_PENDING_CPF_INVALID");
@@ -582,33 +584,22 @@ const assertNewMemberNotAlreadyActive = async (
   const records = Array.isArray(payload?.dados) ? payload.dados : [];
 
   for (const associado of records) {
-    if (
-      empresaCodigo > 0 &&
-      Number(associado?.codigoDaEmpresa || 0) !== Number(empresaCodigo)
-    ) {
-      continue;
-    }
-
-    const deps = Array.isArray(associado?.dependentes) ? associado.dependentes : [];
-    const exact = deps.filter(
-      (dep: any) => normalizeDigits(dep?.numeroCpfDependente ?? dep?.cpf) === cpf,
-    );
-    const candidates = exact.length > 0
-      ? exact
-      : normalizeDigits(associado?.cpf) === cpf
-        ? deps.slice(0, 1)
-        : [];
-
-    if (candidates.some(isActiveErpDependent)) {
+    // A elegibilidade considera o CPF em todos os vínculos do ERP,
+    // não apenas a empresa escolhida nesta adesão.
+    const candidates = selectErpMemberCandidates(associado, cpf);
+    const active = candidates.some(isActiveErpDependent);
+    const shouldBlock = candidates.some((dep: any) =>
+      isBlockedByCadastroRules(dep?.codigoSituacao, dep?.codigoPlano, rules));
+    if (active || shouldBlock) {
       return {
-        active: true,
+        active, shouldBlock,
         codigoAssociado: associado?.codigo ?? null,
         codigoEmpresa: associado?.codigoDaEmpresa ?? null,
       };
     }
   }
 
-  return { active: false };
+  return { active: false, shouldBlock: false };
 };
 
 const queueAllPendingFiles = async (
@@ -843,6 +834,15 @@ Deno.serve(async (req: Request) => {
     }));
     requestBody.dados.dependente = requestedDependents;
 
+    const rules = await loadCadastroRules(supabase);
+    if (requestedDependents.some((dep: any) => isHiddenCadastroPlan(dep?.plano, rules))) {
+      return jsonResponse({ error: "Plano oculto nas configurações. Selecione outro plano.", code: "PLAN_HIDDEN" }, 409);
+    }
+    const currentCompanyCode = Number(requestBody.empresa || requestBody?.dados?.responsavelFinanceiro?.codigoContrato || empresaCodigoPayload);
+    if ((await validateCurrentCompany(currentCompanyCode, rules)).blocked) {
+      return jsonResponse({ error: "Empresa com situação bloqueada para cadastro.", code: "COMPANY_BLOCKED" }, 409);
+    }
+
     const duplicateCpf = findDuplicateParticipantCpf(
       responsavel?.cpf ?? requestBody?.dados?.responsavelFinanceiro?.cpf,
       requestedDependents,
@@ -926,13 +926,14 @@ Deno.serve(async (req: Request) => {
         }, 409);
       }
 
-      let preflight: { active: boolean; codigoAssociado?: unknown; codigoEmpresa?: unknown };
+      let preflight: { active: boolean; shouldBlock: boolean; codigoAssociado?: unknown; codigoEmpresa?: unknown };
       try {
         preflight = await assertNewMemberNotAlreadyActive(
           textValue(existing?.cpf, responsavel?.cpf),
           Number(existing?.empresa_codigo || existing?.empresa_id || empresaCodigoPayload || 0),
           ERP_TOKEN,
           ERP_BASE_URL,
+          rules,
         );
       } catch (preflightError) {
         const message = preflightError instanceof Error ? preflightError.message : "ERP_PREFLIGHT_UNAVAILABLE";
@@ -953,7 +954,7 @@ Deno.serve(async (req: Request) => {
         }, message === "ERP_PREFLIGHT_UNAVAILABLE" ? 503 : 409);
       }
 
-      if (preflight.active) {
+      if (preflight.shouldBlock) {
         const now = new Date().toISOString();
         await supabase.from("link_pendencias").update({
           status: "encerrado",
@@ -1007,6 +1008,7 @@ Deno.serve(async (req: Request) => {
 
     let regularPreflightBeforeSend: {
       active: boolean;
+      shouldBlock: boolean;
       codigoAssociado?: unknown;
       codigoEmpresa?: unknown;
     } | null = null;
@@ -1018,6 +1020,7 @@ Deno.serve(async (req: Request) => {
           Number(existing?.empresa_codigo || existing?.empresa_id || empresaCodigoPayload || 0),
           ERP_TOKEN,
           ERP_BASE_URL,
+          rules,
         );
       } catch (preflightError) {
         console.warn(
@@ -1026,7 +1029,7 @@ Deno.serve(async (req: Request) => {
         );
       }
 
-      if (regularPreflightBeforeSend?.active) {
+      if (regularPreflightBeforeSend?.shouldBlock) {
         return jsonResponse({
           error: "Este CPF ja possui uma adesao ativa no S4E. Nenhum novo cadastro foi enviado.",
           code: "CPF_ACTIVE_IN_ERP",
@@ -1058,6 +1061,7 @@ Deno.serve(async (req: Request) => {
           Number(existing?.empresa_codigo || existing?.empresa_id || empresaCodigoPayload || 0),
           ERP_TOKEN,
           ERP_BASE_URL,
+          rules,
         );
 
         const reconciledCode = positiveInt(postflight.codigoAssociado);

@@ -1,3 +1,4 @@
+import { loadCadastroRules, isBlockedByCadastroRules, isHiddenCadastroPlan, isInvalidCadastroCompany, validateCurrentCompany, selectErpMemberCandidates } from "../_shared/cadastro-rules.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
   corsHeaders,
@@ -38,6 +39,10 @@ Deno.serve(async (req: Request) => {
       });
     }
     const link = resolved.link!;
+    const rules = await loadCadastroRules(supabase);
+    if ((await validateCurrentCompany(Number(link.empresa_codigo), rules)).blocked) {
+      return jsonResponse({ error: "Empresa bloqueada para cadastro", code: "COMPANY_BLOCKED" }, 409);
+    }
 
     const rawPlans = (Array.isArray(link.planos_raw) ? link.planos_raw : [])
       .map(sanitizePlan)
@@ -47,7 +52,8 @@ Deno.serve(async (req: Request) => {
       .filter((item: any) =>
         item.Plano > 0 &&
         Number(item.ValorTitular) > 0 &&
-        Number(item.ValorDependente) > 0
+        Number(item.ValorDependente) > 0 &&
+        !isHiddenCadastroPlan(item.Plano, rules)
       );
 
     // O ERP retorna PrecoPlano principalmente com o codigo do plano e os valores.
@@ -146,6 +152,7 @@ Deno.serve(async (req: Request) => {
         empresaExigeMatricula: Number(link.empresa_exige_matricula || 0),
         requiresAuthorization: link.requires_authorization === true,
         planos: plans,
+        planosOcultos: rules.planos_ocultos,
         vendedorNome: String(link.vendedor_nome || ""),
         vendedorTelefone,
         coberturaPlanos,

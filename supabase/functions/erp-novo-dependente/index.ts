@@ -1,3 +1,4 @@
+import { loadCadastroRules, isBlockedByCadastroRules, isHiddenCadastroPlan, validateCurrentCompany, selectErpMemberCandidates, type CadastroRules } from "../_shared/cadastro-rules.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { corsHeaders, createServiceClient, jsonResponse, requireInternalUser } from "../_shared/public-flow.ts";
 import { duplicateParticipantCpfResponse, findDuplicateParticipantCpf } from "../_shared/cpf-uniqueness.ts";
@@ -95,16 +96,20 @@ const preflightPendingDependentInclusion = async (
   erpToken: string,
   holderCode: number,
   requestedDependents: any[],
+  rules: CadastroRules,
 ) => {
   const holderRecords = await fetchAssociados(erpToken, { codigoAssociado: String(holderCode) });
   const holder = holderRecords.find((item: any) => Number(item?.codigo) === holderCode) || holderRecords[0] || null;
   if (!holder) {
-    return { holderActive: false, holderCpf: "", duplicates: [] as ExistingDependent[] };
+    return { holderActive: false, holderCpf: "", holderBlocked: false, companyBlocked: false, duplicates: [] as ExistingDependent[] };
   }
 
   const holderDeps = Array.isArray(holder?.dependentes) ? holder.dependentes : [];
   const holderActive = holderDeps.some((dep: any) => isActive(dep));
   const holderCpf = digits(holder?.cpf);
+  const holderBlocked = selectErpMemberCandidates(holder, holderCpf).some((dep: any) =>
+    isBlockedByCadastroRules(dep?.codigoSituacao, dep?.codigoPlano, rules));
+  const companyBlocked = (await validateCurrentCompany(Number(holder?.codigoDaEmpresa), rules)).blocked;
   const duplicates: ExistingDependent[] = [];
 
   for (let requestIndex = 0; requestIndex < requestedDependents.length; requestIndex += 1) {
@@ -150,7 +155,7 @@ const preflightPendingDependentInclusion = async (
     }
   }
 
-  return { holderActive, holderCpf, duplicates };
+  return { holderActive, holderCpf, holderBlocked, companyBlocked, duplicates };
 };
 
 const resolveDependentTarget = async (
@@ -464,6 +469,7 @@ Deno.serve(async (req: Request) => {
     const ERP_TOKEN = Deno.env.get("ERP_TOKEN");
     const ERP_URL = Deno.env.get("ERP_URL_NOVO_DEPENDENTE") || "https://odontoart.s4e.com.br/api/vendedor/NovoDependente";
     if (!ERP_TOKEN) throw new Error("ERP_TOKEN not configured");
+    const rules = await loadCadastroRules(supabase);
 
     const startedAt = Date.now();
 
@@ -500,6 +506,9 @@ Deno.serve(async (req: Request) => {
 
       const duplicateInRequest = findDuplicateParticipantCpf(null, requestedDependents);
       if (duplicateInRequest) return jsonResponse(duplicateParticipantCpfResponse(duplicateInRequest), 409);
+      if (requestedDependents.some((dep: any) => isHiddenCadastroPlan(dep?.plano, rules))) {
+        return jsonResponse({ error: "Plano oculto nas configurações. Selecione outro plano.", code: "PLAN_HIDDEN" }, 409);
+      }
 
       let pendingFiles: any[];
       try {
@@ -525,12 +534,13 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: friendly, code: message.split(":")[0] }, 409);
       }
 
-      let preflight: { holderActive: boolean; holderCpf: string; duplicates: ExistingDependent[] };
+      let preflight: { holderActive: boolean; holderCpf: string; holderBlocked: boolean; companyBlocked: boolean; duplicates: ExistingDependent[] };
       try {
         preflight = await preflightPendingDependentInclusion(
           ERP_TOKEN,
           holderCode,
           requestedDependents,
+          rules,
         );
       } catch (_preflightError) {
         const now = new Date().toISOString();
@@ -554,6 +564,13 @@ Deno.serve(async (req: Request) => {
       }
       const duplicateCpf = findDuplicateParticipantCpf(preflight.holderCpf, requestedDependents);
       if (duplicateCpf) return jsonResponse(duplicateParticipantCpfResponse(duplicateCpf), 409);
+
+      if (preflight.holderBlocked || preflight.companyBlocked) {
+        return jsonResponse({
+          error: preflight.companyBlocked ? "Empresa bloqueada para cadastro." : "A situação e o plano do titular impedem esta inclusão.",
+          code: preflight.companyBlocked ? "COMPANY_BLOCKED" : "MEMBER_BLOCKED_BY_CONFIG",
+        }, 409);
+      }
 
       if (!preflight.holderActive) {
         const now = new Date().toISOString();
@@ -795,6 +812,7 @@ Deno.serve(async (req: Request) => {
           ERP_TOKEN,
           holderCode,
           requestedDependents,
+          rules,
         );
         const queued = await queueAllPendingDependentFiles(
           supabase,
@@ -902,10 +920,15 @@ Deno.serve(async (req: Request) => {
 
     const duplicateInRequest = findDuplicateParticipantCpf(null, requestedDependents);
     if (duplicateInRequest) return jsonResponse(duplicateParticipantCpfResponse(duplicateInRequest), 409);
+    if (requestedDependents.some((dep: any) => isHiddenCadastroPlan(dep?.plano, rules))) {
+      return jsonResponse({ error: "Plano oculto nas configurações. Selecione outro plano.", code: "PLAN_HIDDEN" }, 409);
+    }
 
     let regularPreflightBeforeSend: {
       holderActive: boolean;
       holderCpf: string;
+      holderBlocked: boolean;
+      companyBlocked: boolean;
       duplicates: ExistingDependent[];
     } | null = null;
 
@@ -915,6 +938,7 @@ Deno.serve(async (req: Request) => {
           ERP_TOKEN,
           holderCode,
           requestedDependents,
+          rules,
         );
       } catch (preflightError) {
         console.warn(
@@ -933,6 +957,12 @@ Deno.serve(async (req: Request) => {
         error: "Nao foi possivel confirmar o CPF do titular no S4E. Tente novamente.",
         code: "HOLDER_CPF_UNAVAILABLE",
       }, 503);
+    }
+    if (regularPreflightBeforeSend.holderBlocked || regularPreflightBeforeSend.companyBlocked) {
+      return jsonResponse({
+        error: regularPreflightBeforeSend.companyBlocked ? "Empresa bloqueada para cadastro." : "A situação e o plano do titular impedem esta inclusão.",
+        code: regularPreflightBeforeSend.companyBlocked ? "COMPANY_BLOCKED" : "MEMBER_BLOCKED_BY_CONFIG",
+      }, 409);
     }
     const duplicateCpf = findDuplicateParticipantCpf(regularPreflightBeforeSend.holderCpf, requestedDependents);
     if (duplicateCpf) return jsonResponse(duplicateParticipantCpfResponse(duplicateCpf), 409);
@@ -974,6 +1004,7 @@ Deno.serve(async (req: Request) => {
           ERP_TOKEN,
           holderCode,
           requestedDependents,
+          rules,
         );
         const linkedNow = postflight.duplicates.filter(
           (item) => item.reason === "already_linked_to_holder" && item.codigoDependente,
