@@ -830,8 +830,9 @@ fun InclusaoDependenteDialog(
             cadastroId = cadastroId,
         )
 
-        if ((response as? JsonObject)?.get("success")?.jsonPrimitive?.booleanOrNull != true ||
-            response["data"] == null || response["data"] == JsonNull) {
+        val confirmedResponse = response as? JsonObject
+        if (confirmedResponse?.get("success")?.jsonPrimitive?.booleanOrNull != true ||
+            confirmedResponse["data"] == null || confirmedResponse["data"] == JsonNull) {
             throw IllegalStateException("Não foi possível confirmar a inclusão no ERP. Confira a situação antes de reenviar.")
         }
 
