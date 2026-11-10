@@ -15,6 +15,8 @@ on:
       - 'supabase/functions/cadastro-public-contract-prepare/**'
       - 'supabase/functions/cadastro-public-dependent-submit/**'
       - 'supabase/functions/cadastro-public-submit/**'
+      - 'supabase/functions/erp-check-associado/**'
+      - 'supabase/functions/erp-novo-dependente/**'
       - 'supabase/migrations/20261007103000_public_link_existing_member_dependents.sql'
       - 'supabase/functions/process-contract-deliveries/**'
       - '.github/workflows/validate-link-web.yml'
@@ -47,5 +49,7 @@ jobs:
             supabase/functions/cadastro-public-contract-prepare/index.ts \
             supabase/functions/cadastro-public-dependent-submit/index.ts \
             supabase/functions/cadastro-public-submit/index.ts \
+            supabase/functions/erp-check-associado/index.ts \
+            supabase/functions/erp-novo-dependente/index.ts \
             supabase/functions/process-contract-deliveries/index.ts
-      - run: deno test --node-modules-dir=auto supabase/functions/_shared/plan-coverages.test.ts supabase/functions/_shared/contract-duration.test.ts supabase/functions/_shared/link-visits.test.ts
+      - run: deno test --node-modules-dir=auto supabase/functions/_shared/plan-coverages.test.ts supabase/functions/_shared/contract-duration.test.ts supabase/functions/_shared/link-visits.test.ts supabase/functions/_shared/cadastro-rules.test.ts

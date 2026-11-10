@@ -80,8 +80,37 @@ export type LinkCpfFlow =
   | "existing_member"
   | "blocked"
   | "active_dependent"
+  | "company_mismatch"
   | "new_member";
 export type LinkCpfMatch = { associado: any; dep: any; isResponsible: boolean };
+
+/** Nova adesão: qualquer vínculo ATIVO do CPF impede contratar novamente,
+ * independentemente do plano. Se nenhum vínculo estiver ativo, aplica-se
+ * a configuração dinâmica de bloqueio de recadastro. */
+export function evaluateNewAdhesionEligibility(
+  records: any[],
+  cpfValue: string,
+  rules: CadastroRules,
+): { blocked: boolean; reason: "ACTIVE_IN_ERP" | "BLOCKED_BY_CADASTRO_CONFIG" | null; matched: LinkCpfMatch | null } {
+  const cpf = digits(cpfValue);
+  let configuredBlock: LinkCpfMatch | null = null;
+  for (const associado of Array.isArray(records) ? records : []) {
+    for (const dep of selectErpMemberCandidates(associado, cpf)) {
+      const isResponsible = digits(associado?.cpf) === cpf &&
+        Number(dep?.tipo ?? dep?.Tipo ?? 1) === 1;
+      const candidate = { associado, dep, isResponsible };
+      if (isActiveErpMember(dep)) {
+        return { blocked: true, reason: "ACTIVE_IN_ERP", matched: candidate };
+      }
+      if (!configuredBlock && isBlockedByCadastroRules(dep?.codigoSituacao, dep?.codigoPlano, rules)) {
+        configuredBlock = candidate;
+      }
+    }
+  }
+  return configuredBlock
+    ? { blocked: true, reason: "BLOCKED_BY_CADASTRO_CONFIG", matched: configuredBlock }
+    : { blocked: false, reason: null, matched: null };
+}
 
 /**
  * A inclusão de dependentes é determinada PRIMEIRO pela existência de titular
@@ -119,13 +148,12 @@ export function resolveLinkCpfFlow(
     }
   }
 
-  // Em múltiplos vínculos, priorizar titular ativo da empresa do Link.
-  // Um outro vínculo bloqueado para RECADAStRO não invalida esta inclusão.
-  activeHolders.sort((a, b) =>
-    Number(Number(b.associado?.codigoDaEmpresa) === Number(preferredCompanyCode)) -
-    Number(Number(a.associado?.codigoDaEmpresa) === Number(preferredCompanyCode))
-  );
-  if (activeHolders.length) return { kind: "existing_member", matched: activeHolders[0] };
+  // A inclusão pelo Link pertence exclusivamente à empresa do próprio Link.
+  // Titular ativo de outra empresa não pode incluir dependentes neste contrato.
+  const selectedHolder = activeHolders.find((candidate) =>
+    Number(candidate.associado?.codigoDaEmpresa) === Number(preferredCompanyCode));
+  if (selectedHolder) return { kind: "existing_member", matched: selectedHolder };
+  if (activeHolders.length) return { kind: "company_mismatch", matched: activeHolders[0] };
   if (blocked.length) return { kind: "blocked", matched: blocked[0] };
   if (activeDependents.length) return { kind: "active_dependent", matched: activeDependents[0] };
   return { kind: "new_member", matched: null };
