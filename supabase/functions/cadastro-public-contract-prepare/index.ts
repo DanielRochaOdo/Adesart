@@ -1,3 +1,4 @@
+import { loadCadastroRules, isBlockedByCadastroRules, isHiddenCadastroPlan, isInvalidCadastroCompany, validateCurrentCompany, selectErpMemberCandidates } from "../_shared/cadastro-rules.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
   corsHeaders,
@@ -92,7 +93,7 @@ const fetchCurrentPlans = async (companyCode: number) => {
   const plans = Array.isArray(empresa?.PrecoPlano) ? empresa.PrecoPlano : Array.isArray(empresa?.precoPlano) ? empresa.precoPlano : [];
   const vigenciaMeses = Number(empresa.Vigencia);
   if (!Number.isInteger(vigenciaMeses) || vigenciaMeses <= 0) throw new Error("ERP_INVALID_VIGENCIA");
-  return { plans: plans.map(sanitizePlan).filter((item: any) => item.Plano > 0), vigenciaMeses };
+  return { plans: plans.map(sanitizePlan).filter((item: any) => item.Plano > 0), vigenciaMeses, codigoSituacao: empresa.CodigoSituacao ?? empresa.codigoSituacao };
 };
 
 const renderTemplate = (body: string, values: Record<string, string>) => {
@@ -402,6 +403,7 @@ Deno.serve(async (req: Request) => {
     if (!emailRegex.test(confirmedEmail)) return jsonResponse({ error: "E-mail invalido" }, 400);
 
     const supabase = createServiceClient();
+    const rules = await loadCadastroRules(supabase);
     const attempt = await resolveAttempt(supabase, attemptToken);
     if (!attempt || attempt.status !== "authenticated" || !attempt.profile_snapshot) return jsonResponse({ error: "Sessao expirada. Inicie novamente.", code: "SESSION_EXPIRED" }, 401);
     const flowMode = String(attempt.flow_mode || "new_member");
@@ -411,6 +413,15 @@ Deno.serve(async (req: Request) => {
 
     const { data: link, error: linkError } = await supabase.from("cadastro_links").select("*").eq("id", attempt.link_id).maybeSingle();
     if (linkError || !link || !link.is_active) return jsonResponse({ error: "Link indisponivel" }, 410);
+    const companyCode = Number(attempt.erp_member_snapshot?.codigoEmpresa || link.empresa_codigo);
+    if ((await validateCurrentCompany(companyCode, rules)).blocked) {
+      return jsonResponse({ error: "Empresa bloqueada para cadastro", code: "COMPANY_BLOCKED" }, 409);
+    }
+    const selectedPlanCodes = [Number(body.cadastro?.titularPlano || 0),
+      ...(Array.isArray(body.cadastro?.dependentes) ? body.cadastro.dependentes.map((d: any) => Number(d?.plano)) : [])];
+    if (selectedPlanCodes.some((code) => code > 0 && isHiddenCadastroPlan(code, rules))) {
+      return jsonResponse({ error: "Plano oculto nas configurações. Selecione outro plano.", code: "PLAN_HIDDEN" }, 409);
+    }
     if (flowMode === "existing_member") {
       return await prepareExistingMemberContract(
         supabase,

@@ -1,3 +1,4 @@
+import { loadCadastroRules, isBlockedByCadastroRules, isHiddenCadastroPlan, isInvalidCadastroCompany, validateCurrentCompany, selectErpMemberCandidates } from "../_shared/cadastro-rules.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import {
   corsHeaders,
@@ -37,13 +38,7 @@ Deno.serve(async (req: Request) => {
     if (!response.ok) return jsonResponse({ error: "Erro ao consultar ERP" }, 502);
     const result = await response.json();
 
-    const { data: config } = await supabase
-      .from("cadastro_config")
-      .select("situacoes_que_barram, planos_validos")
-      .eq("id", 1)
-      .maybeSingle();
-    const blockStatuses: number[] = config?.situacoes_que_barram || [1, 4, 6];
-    const validPlans: number[] = config?.planos_validos || [4, 11, 3, 26];
+    const rules = await loadCadastroRules(supabase);
     const records = Array.isArray(result?.dados) ? result.dados : [];
     const exists = Number(result?.totalRegistros || 0) > 0 || records.length > 0;
     let shouldBlock = false;
@@ -51,8 +46,8 @@ Deno.serve(async (req: Request) => {
     let summary: Record<string, unknown> = {};
 
     for (const associado of records) {
-      for (const dep of Array.isArray(associado?.dependentes) ? associado.dependentes : []) {
-        if (blockStatuses.includes(Number(dep?.codigoSituacao)) && !validPlans.includes(Number(dep?.codigoPlano))) {
+      for (const dep of selectErpMemberCandidates(associado, cpf || undefined)) {
+        if (isBlockedByCadastroRules(dep?.codigoSituacao, dep?.codigoPlano, rules)) {
           shouldBlock = true;
           blockReason = `Associado ja cadastrado na empresa ${associado?.nomeFantasiaDaEmpresa || "informada"} em situacao que nao permite recadastro`;
           summary = {
