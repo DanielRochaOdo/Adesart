@@ -3461,13 +3461,15 @@ class AppViewModel(
             val profile = _uiState.value.profile ?: throw IllegalStateException("Usuario nao autenticado.")
             val activeSession = ensureFreshSession(session)
             val created = workflowRepository.createCadastroDraft(activeSession, profile, payload)
-            val cadastrosAtualizados = repository.fetchCadastros(activeSession)
-            val statsAtualizadas = repository.fetchCadastroStats(activeSession)
+            // O ID persistido é a confirmação da criação. Uma falha de refresh
+            // não pode fazer o Android criar outro rascunho e outra operação.
+            val cadastrosAtualizados = runCatching { repository.fetchCadastros(activeSession) }.getOrNull()
+            val statsAtualizadas = runCatching { repository.fetchCadastroStats(activeSession) }.getOrNull()
             _uiState.update {
                 it.copy(
                     selectedCadastro = created,
-                    cadastros = cadastrosAtualizados,
-                    cadastroStats = statsAtualizadas,
+                    cadastros = cadastrosAtualizados ?: it.cadastros,
+                    cadastroStats = statsAtualizadas ?: it.cadastroStats,
                 )
             }
             created

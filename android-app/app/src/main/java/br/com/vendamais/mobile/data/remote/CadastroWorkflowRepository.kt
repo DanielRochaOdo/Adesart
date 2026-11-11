@@ -1796,14 +1796,38 @@ class CadastroWorkflowRepository(
         payload: JsonObject,
     ): JsonElement {
         val idempotencyKey = buildCadastroSendIdempotencyKey(cadastroId, payload)
-        val response: JsonElement = client.safePost(
-            url = "${AppConfig.supabaseUrl}/functions/v1/erp-novo-usuario2",
-            json = json,
-            body = payload,
-        ) {
-            applyAuthHeaders(session)
-            header("X-Idempotency-Key", idempotencyKey)
-            header("X-Cadastro-Id", cadastroId)
+        val response: JsonElement = try {
+            client.safePost(
+                url = "${AppConfig.supabaseUrl}/functions/v1/erp-novo-usuario2",
+                json = json,
+                body = payload,
+            ) {
+                applyAuthHeaders(session)
+                header("X-Idempotency-Key", idempotencyKey)
+                header("X-Cadastro-Id", cadastroId)
+            }
+        } catch (sendError: Exception) {
+            // A resposta pode se perder depois do ERP efetivar o cadastro.
+            // Apenas o MESMO cadastro confirmado no banco permite tratar
+            // a tentativa como sucesso, evitando falso positivo por CPF alheio.
+            val priorSuccess = runCatching {
+                getList<JsonObject>(
+                    path = "cadastros",
+                    session = session,
+                    query = {
+                        parameter("id", "eq.$cadastroId")
+                        parameter("select", "status,erp_response")
+                        parameter("limit", 1)
+                    },
+                ).firstOrNull()
+            }.getOrNull()
+            val confirmedResponse = ErpSendOperation.confirmedSameCadastro(priorSuccess)
+            if (confirmedResponse != null) {
+                Log.w(logTag, "Resposta perdida; concluido no ERP para cadastro=$cadastroId", sendError)
+                confirmedResponse
+            } else {
+                throw sendError
+            }
         }
 
         if (response is JsonObject && response["error"] != null) {
@@ -1826,13 +1850,7 @@ class CadastroWorkflowRepository(
     private fun buildCadastroSendIdempotencyKey(
         cadastroId: String,
         payload: JsonObject,
-    ): String {
-        val hashBytes = MessageDigest
-            .getInstance("SHA-256")
-            .digest(payload.toString().toByteArray(Charsets.UTF_8))
-        val hashHex = hashBytes.joinToString("") { byte -> "%02x".format(byte) }
-        return "cadastro:$cadastroId:$hashHex"
-    }
+    ): String = ErpSendOperation.cadastroKey(cadastroId)
 
     private suspend fun syncCadastroAfterSend(
         session: SavedSession,
@@ -2365,15 +2383,34 @@ class CadastroWorkflowRepository(
         cadastroId: String? = null,
     ): JsonElement {
         val idempotencyKey = buildInclusaoDependenteIdempotencyKey(cadastroId, payload)
-        return client.safePost(
-            url = "${AppConfig.supabaseUrl}/functions/v1/erp-novo-dependente",
-            json = json,
-            body = payload,
-        ) {
-            applyAuthHeaders(session)
-            header("X-Idempotency-Key", idempotencyKey)
-            if (!cadastroId.isNullOrBlank()) {
-                header("X-Cadastro-Id", cadastroId)
+        return try {
+            client.safePost(
+                url = "${AppConfig.supabaseUrl}/functions/v1/erp-novo-dependente",
+                json = json,
+                body = payload,
+            ) {
+                applyAuthHeaders(session)
+                header("X-Idempotency-Key", idempotencyKey)
+                header("X-Cadastro-Id", cadastroId!!)
+            }
+        } catch (sendError: Exception) {
+            val priorSuccess = runCatching {
+                getList<JsonObject>(
+                    path = "cadastros",
+                    session = session,
+                    query = {
+                        parameter("id", "eq.$cadastroId")
+                        parameter("select", "status,erp_response")
+                        parameter("limit", 1)
+                    },
+                ).firstOrNull()
+            }.getOrNull()
+            val confirmedResponse = ErpSendOperation.confirmedSameCadastro(priorSuccess)
+            if (confirmedResponse != null) {
+                Log.w(logTag, "Resposta perdida; inclusao confirmada para cadastro=$cadastroId", sendError)
+                confirmedResponse
+            } else {
+                throw sendError
             }
         }
     }
@@ -2381,14 +2418,7 @@ class CadastroWorkflowRepository(
     private fun buildInclusaoDependenteIdempotencyKey(
         cadastroId: String?,
         payload: JsonObject,
-    ): String {
-        val cadastroPart = cadastroId?.trim()?.ifBlank { "sem-cadastro" } ?: "sem-cadastro"
-        val hashBytes = MessageDigest
-            .getInstance("SHA-256")
-            .digest(payload.toString().toByteArray(Charsets.UTF_8))
-        val hashHex = hashBytes.joinToString("") { byte -> "%02x".format(byte) }
-        return "inclusao-dependente:$cadastroPart:$hashHex"
-    }
+    ): String = ErpSendOperation.inclusaoKey(cadastroId)
 
     suspend fun closeDuplicateInclusaoPendentes(
         session: SavedSession,

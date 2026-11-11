@@ -3,6 +3,7 @@ package br.com.vendamais.mobile.ui.screens
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import android.provider.OpenableColumns
 import android.webkit.MimeTypeMap
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -192,6 +193,8 @@ fun InclusaoDependenteDialog(
     var loadingBusca by rememberSaveable { mutableStateOf(false) }
     var salvando by rememberSaveable { mutableStateOf(false) }
     var enviando by rememberSaveable { mutableStateOf(false) }
+    // O cadastro identifica esta operação mesmo quando a conexão cair.
+    var envioCadastroId by rememberSaveable(cadastro?.id) { mutableStateOf(cadastro?.id) }
     var localError by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingCompression by remember { mutableStateOf<PendingDependenteCompression?>(null) }
     var compressingFile by rememberSaveable { mutableStateOf(false) }
@@ -806,8 +809,13 @@ fun InclusaoDependenteDialog(
             dependentes = base,
         )
 
-        var cadastroId = cadastro?.id
-        if (cadastroId != null) {
+        var cadastroId = cadastro?.id ?: envioCadastroId
+        if (cadastroId == null) {
+            // Web usa uma operação estável; Android também precisa persistir
+            // a tentativa ANTES de enviar ao ERP para não perder a identidade.
+            cadastroId = viewModel.createCadastroRecord(prePayload).id
+            envioCadastroId = cadastroId
+        } else {
             viewModel.updateCadastroRecord(cadastroId, prePayload)
         }
 
@@ -822,7 +830,14 @@ fun InclusaoDependenteDialog(
             cadastroId = cadastroId,
         )
 
+        val confirmedResponse = response as? JsonObject
+        if (confirmedResponse?.get("success")?.jsonPrimitive?.booleanOrNull != true ||
+            confirmedResponse["data"] == null || confirmedResponse["data"] == JsonNull) {
+            throw IllegalStateException("Não foi possível confirmar a inclusão no ERP. Confira a situação antes de reenviar.")
+        }
+
         val hasAttachments = base.any { it.arquivo != null }
+        try {
         val finalPayloadBase = buildCadastroPayload(
             profileId = if (isLinkPending) cadastro?.createdBy.orEmpty() else profile?.id.orEmpty(),
             teamId = if (isLinkPending) cadastro?.teamId else profile?.teamId,
@@ -894,6 +909,13 @@ fun InclusaoDependenteDialog(
             "Dependentes incluidos. Os anexos estao sendo enviados ao ERP e o cadastro permanecera pendente ate a confirmacao."
         } else {
             "Dependentes incluidos com sucesso."
+        }
+        } catch (postCommitError: Exception) {
+            // O ERP já confirmou: falha gerencial/anexo NÃO transforma sucesso
+            // em erro nem autoriza novo envio. O rascunho e ID são preservados.
+            Log.e("InclusaoDependenteDialog", "ERP concluiu inclusao id=$cadastroId; pos-processamento pendente", postCommitError)
+            completionHasPendingAttachments = true
+            successDialogMessage = "Dependentes incluidos no ERP. A atualizacao do historico ou o envio de anexos ficou pendente. Nao envie a inclusao novamente."
         }
     }
 
