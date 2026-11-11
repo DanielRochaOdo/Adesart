@@ -127,7 +127,8 @@ data class CheckCpfExistenteResponse(
 
 @Serializable
 data class ErpAssociadoSummary(
-    val empresa: String? = null,
+    @Serializable(with = FlexibleNullableIntSerializer::class)
+    val empresa: Int? = null,
     @Serializable(with = FlexibleNullableIntSerializer::class)
     val codigo: Int? = null,
     @SerialName("nomeFantasiaDaEmpresa")
